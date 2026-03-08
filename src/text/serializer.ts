@@ -184,7 +184,7 @@ function parseNode(
       charCount += parseNode(child, offset + charCount, newActiveTypes, inlines)
     }
 
-    if (type !== undefined) {
+    if (type !== undefined && charCount > 0) {
       inlines.push({ type, start: offset, end: offset + charCount })
     }
 

@@ -166,4 +166,23 @@ describe('roundtrip: parse(render(text)) === text', () => {
     const result = textSerializer.parse(textSerializer.render(t))
     expect(JSON.stringify(result)).toBe(JSON.stringify(t))
   })
+
+  it('ignores empty inline element with <br> (browser Enter behaviour at start of bold text)', () => {
+    // What Chrome produces when Enter is pressed at position 0 in <strong>Hello</strong>
+    const emptyStrong = document.createElement('strong')
+    emptyStrong.appendChild(document.createElement('br'))
+    const contentStrong = document.createElement('strong')
+    contentStrong.textContent = 'Hello'
+
+    const result = textSerializer.parse([emptyStrong, contentStrong])
+    expect(result.text).toBe('Hello')
+    expect(result.inline).toEqual([{ type: 'Bold', start: 0, end: 5 }])
+  })
+
+  it('handles a bare <br> node without throwing (Enter in empty field)', () => {
+    const br = document.createElement('br')
+    const result = textSerializer.parse([br])
+    expect(result.text).toBe('')
+    expect(result.inline).toHaveLength(0)
+  })
 })
