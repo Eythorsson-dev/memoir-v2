@@ -186,6 +186,102 @@ export class Text implements TextDto {
    * @returns A new `Text` instance; the original is not mutated.
    * @throws {RangeError} if `start < 0`, `end <= start`, or `end > text.length`.
    */
+  /**
+   * Splits the Text at the given character offset into two new `Text` instances.
+   *
+   * - An inline entirely left of offset (`end <= offset`) goes to the left half unchanged.
+   * - An inline entirely right of offset (`start >= offset`) goes to the right half with offsets shifted by `-offset`.
+   * - An inline strictly spanning the boundary (`start < offset < end`) is split: left gets `[start, offset)`, right gets `[0, end - offset)`.
+   *
+   * @throws {RangeError} if offset < 0 or offset > text.length.
+   */
+  split(offset: number): [Text, Text] {
+    if (offset < 0) throw new RangeError(`offset must be >= 0, got ${offset}`)
+    if (offset > this.text.length)
+      throw new RangeError(`offset must be <= text.length (${this.text.length}), got ${offset}`)
+
+    const leftInlines: InlineDto[] = []
+    const rightInlines: InlineDto[] = []
+
+    for (const inline of this.inline) {
+      if (inline.end <= offset) {
+        leftInlines.push(inline)
+      } else if (inline.start >= offset) {
+        rightInlines.push({ type: inline.type, start: inline.start - offset, end: inline.end - offset })
+      } else {
+        // start < offset < end — spans boundary
+        leftInlines.push({ type: inline.type, start: inline.start, end: offset })
+        rightInlines.push({ type: inline.type, start: 0, end: inline.end - offset })
+      }
+    }
+
+    return [
+      new Text(this.text.substring(0, offset), leftInlines),
+      new Text(this.text.substring(offset), rightInlines),
+    ]
+  }
+
+  /**
+   * Concatenates two `Text` instances into one.
+   * Right inlines are shifted by `left.text.length`. Touching same-type inlines at the
+   * join boundary are merged automatically via `addInline`.
+   */
+  static merge(left: Text, right: Text): Text {
+    let result = new Text(left.text + right.text, [])
+    for (const inline of left.inline) {
+      result = result.addInline(inline.type, inline.start, inline.end)
+    }
+    const shift = left.text.length
+    for (const inline of right.inline) {
+      result = result.addInline(inline.type, inline.start + shift, inline.end + shift)
+    }
+    return result
+  }
+
+  /**
+   * Returns a new `Text` with `length` characters removed starting at `offset`.
+   * Inline annotations are adjusted according to their overlap with the removed range.
+   * Touching same-type inlines that result from the removal are merged automatically via `addInline`.
+   *
+   * @throws {RangeError} if offset < 0, length <= 0, or offset + length > text.length.
+   */
+  remove(offset: number, length: number): Text {
+    if (offset < 0) throw new RangeError(`offset must be >= 0, got ${offset}`)
+    if (length <= 0) throw new RangeError(`length must be > 0, got ${length}`)
+    if (offset + length > this.text.length)
+      throw new RangeError(
+        `offset + length (${offset + length}) must be <= text.length (${this.text.length})`
+      )
+
+    const newText = this.text.substring(0, offset) + this.text.substring(offset + length)
+    let result = new Text(newText, [])
+
+    for (const inline of this.inline) {
+      const end = offset + length
+
+      if (inline.end <= offset) {
+        // Entirely before — unchanged
+        result = result.addInline(inline.type, inline.start, inline.end)
+      } else if (inline.start >= end) {
+        // Entirely after — shift left
+        result = result.addInline(inline.type, inline.start - length, inline.end - length)
+      } else if (inline.start >= offset && inline.end <= end) {
+        // Entirely within removed range — drop
+      } else if (inline.start < offset && inline.end > end) {
+        // Spans entire removed range — shorten
+        result = result.addInline(inline.type, inline.start, inline.end - length)
+      } else if (inline.start < offset && inline.end <= end) {
+        // Overlaps left boundary only — trim right side
+        result = result.addInline(inline.type, inline.start, offset)
+      } else {
+        // Overlaps right boundary only (inline.start >= offset && inline.end > end)
+        result = result.addInline(inline.type, offset, inline.end - length)
+      }
+    }
+
+    return result
+  }
+
   removeInline(type: InlineTypes, start: number, end: number): Text {
     validateRange(start, end, this.text.length)
 

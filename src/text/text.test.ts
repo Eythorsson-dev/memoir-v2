@@ -10,6 +10,12 @@ describe('Text constructor – valid inputs', () => {
     expect(t.inline).toEqual([])
   })
 
+  it('allows empty string with no inlines', () => {
+    const t = new Text('', [])
+    expect(t.text).toBe('')
+    expect(t.inline).toEqual([])
+  })
+
   it('accepts valid inline that covers the full text', () => {
     const t = new Text('hi', [{ type: 'Bold', start: 0, end: 2 }])
     expect(t.inline).toHaveLength(1)
@@ -275,5 +281,221 @@ describe('removeInline', () => {
   it('throws if end > text.length', () => {
     const t = new Text('hello', [])
     expect(() => t.removeInline('Bold', 0, 6)).toThrow()
+  })
+})
+
+// ─── split ────────────────────────────────────────────────────────────────────
+
+describe('split', () => {
+  it('split(0) returns empty left and full right as new instances', () => {
+    const t = new Text('hello', [{ type: 'Bold', start: 1, end: 4 }])
+    const [left, right] = t.split(0)
+    expect(left.text).toBe('')
+    expect(left.inline).toEqual([])
+    expect(right.text).toBe('hello')
+    expect(right.inline).toEqual([{ type: 'Bold', start: 1, end: 4 }])
+    expect(left).not.toBe(t)
+    expect(right).not.toBe(t)
+  })
+
+  it('split(text.length) returns full left and empty right as new instances', () => {
+    const t = new Text('hello', [{ type: 'Bold', start: 1, end: 4 }])
+    const [left, right] = t.split(5)
+    expect(left.text).toBe('hello')
+    expect(left.inline).toEqual([{ type: 'Bold', start: 1, end: 4 }])
+    expect(right.text).toBe('')
+    expect(right.inline).toEqual([])
+    expect(left).not.toBe(t)
+    expect(right).not.toBe(t)
+  })
+
+  it('splits text string at offset', () => {
+    const t = new Text('hello world', [])
+    const [left, right] = t.split(5)
+    expect(left.text).toBe('hello')
+    expect(right.text).toBe(' world')
+  })
+
+  it('inline entirely left of offset goes to left unchanged', () => {
+    const t = new Text('hello world', [{ type: 'Bold', start: 0, end: 3 }])
+    const [left, right] = t.split(5)
+    expect(left.inline).toEqual([{ type: 'Bold', start: 0, end: 3 }])
+    expect(right.inline).toEqual([])
+  })
+
+  it('inline entirely right of offset goes to right with shifted offsets', () => {
+    const t = new Text('hello world', [{ type: 'Bold', start: 6, end: 11 }])
+    const [left, right] = t.split(5)
+    expect(left.inline).toEqual([])
+    expect(right.inline).toEqual([{ type: 'Bold', start: 1, end: 6 }])
+  })
+
+  it('inline touching boundary from left (end == offset) goes entirely to left', () => {
+    const t = new Text('hello world', [{ type: 'Bold', start: 2, end: 5 }])
+    const [left, right] = t.split(5)
+    expect(left.inline).toEqual([{ type: 'Bold', start: 2, end: 5 }])
+    expect(right.inline).toEqual([])
+  })
+
+  it('inline touching boundary from right (start == offset) goes entirely to right', () => {
+    const t = new Text('hello world', [{ type: 'Bold', start: 5, end: 9 }])
+    const [left, right] = t.split(5)
+    expect(left.inline).toEqual([])
+    expect(right.inline).toEqual([{ type: 'Bold', start: 0, end: 4 }])
+  })
+
+  it('inline spanning boundary is split into both halves', () => {
+    const t = new Text('hello world', [{ type: 'Bold', start: 2, end: 8 }])
+    const [left, right] = t.split(5)
+    expect(left.inline).toEqual([{ type: 'Bold', start: 2, end: 5 }])
+    expect(right.inline).toEqual([{ type: 'Bold', start: 0, end: 3 }])
+  })
+
+  it('plan example: inline [2,8) split at offsets 1,2,4,8', () => {
+    const t = new Text('0123456789', [{ type: 'Bold', start: 2, end: 8 }])
+
+    const [l1, r1] = t.split(1)
+    expect(l1.inline).toEqual([])
+    expect(r1.inline).toEqual([{ type: 'Bold', start: 1, end: 7 }])
+
+    const [l2, r2] = t.split(2)
+    expect(l2.inline).toEqual([])
+    expect(r2.inline).toEqual([{ type: 'Bold', start: 0, end: 6 }])
+
+    const [l4, r4] = t.split(4)
+    expect(l4.inline).toEqual([{ type: 'Bold', start: 2, end: 4 }])
+    expect(r4.inline).toEqual([{ type: 'Bold', start: 0, end: 4 }])
+
+    const [l8, r8] = t.split(8)
+    expect(l8.inline).toEqual([{ type: 'Bold', start: 2, end: 8 }])
+    expect(r8.inline).toEqual([])
+  })
+
+  it('throws if offset < 0', () => {
+    const t = new Text('hello', [])
+    expect(() => t.split(-1)).toThrow(RangeError)
+  })
+
+  it('throws if offset > text.length', () => {
+    const t = new Text('hello', [])
+    expect(() => t.split(6)).toThrow(RangeError)
+  })
+})
+
+// ─── merge ────────────────────────────────────────────────────────────────────
+
+describe('Text.merge', () => {
+  it('concatenates text strings', () => {
+    const left = new Text('hello', [])
+    const right = new Text(' world', [])
+    expect(Text.merge(left, right).text).toBe('hello world')
+  })
+
+  it('keeps left inlines unchanged', () => {
+    const left = new Text('hello', [{ type: 'Bold', start: 0, end: 5 }])
+    const right = new Text(' world', [])
+    const merged = Text.merge(left, right)
+    expect(merged.inline).toContainEqual({ type: 'Bold', start: 0, end: 5 })
+  })
+
+  it('shifts right inlines by left.text.length', () => {
+    const left = new Text('hello', [])
+    const right = new Text(' world', [{ type: 'Italic', start: 1, end: 6 }])
+    const merged = Text.merge(left, right)
+    expect(merged.inline).toContainEqual({ type: 'Italic', start: 6, end: 11 })
+  })
+
+  it('merges touching same-type inlines at the join boundary', () => {
+    const left = new Text('hello', [{ type: 'Bold', start: 0, end: 5 }])
+    const right = new Text(' world', [{ type: 'Bold', start: 0, end: 6 }])
+    const merged = Text.merge(left, right)
+    expect(merged.inline).toEqual([{ type: 'Bold', start: 0, end: 11 }])
+  })
+
+  it('merge is the inverse of split', () => {
+    const original = new Text('hello world', [{ type: 'Bold', start: 2, end: 8 }])
+    const [left, right] = original.split(5)
+    const merged = Text.merge(left, right)
+    expect(merged.text).toBe(original.text)
+    expect(merged.inline).toEqual(original.inline)
+  })
+
+  it('merging with empty Text returns equivalent value', () => {
+    const t = new Text('hello', [{ type: 'Bold', start: 0, end: 5 }])
+    const empty = new Text('', [])
+    expect(Text.merge(t, empty).text).toBe('hello')
+    expect(Text.merge(t, empty).inline).toEqual(t.inline)
+    expect(Text.merge(empty, t).text).toBe('hello')
+    expect(Text.merge(empty, t).inline).toEqual(t.inline)
+  })
+})
+
+// ─── remove ───────────────────────────────────────────────────────────────────
+
+describe('remove', () => {
+  it('removes characters from text string', () => {
+    const t = new Text('hello world', [])
+    expect(t.remove(5, 6).text).toBe('hello')
+  })
+
+  it('removes characters in the middle', () => {
+    const t = new Text('hello world', [])
+    expect(t.remove(5, 1).text).toBe('helloworld')
+  })
+
+  it('inline entirely before removed range is unchanged', () => {
+    const t = new Text('hello world', [{ type: 'Bold', start: 0, end: 3 }])
+    expect(t.remove(5, 6).inline).toEqual([{ type: 'Bold', start: 0, end: 3 }])
+  })
+
+  it('inline entirely after removed range is shifted left', () => {
+    const t = new Text('hello world', [{ type: 'Bold', start: 6, end: 11 }])
+    expect(t.remove(0, 6).inline).toEqual([{ type: 'Bold', start: 0, end: 5 }])
+  })
+
+  it('inline entirely within removed range is dropped', () => {
+    const t = new Text('hello world', [{ type: 'Bold', start: 6, end: 9 }])
+    expect(t.remove(5, 6).inline).toEqual([])
+  })
+
+  it('inline spanning the entire removed range is shortened', () => {
+    const t = new Text('hello world', [{ type: 'Bold', start: 3, end: 11 }])
+    expect(t.remove(5, 3).inline).toEqual([{ type: 'Bold', start: 3, end: 8 }])
+  })
+
+  it('inline overlapping left boundary only is trimmed on the right', () => {
+    const t = new Text('hello world', [{ type: 'Bold', start: 3, end: 7 }])
+    expect(t.remove(5, 6).inline).toEqual([{ type: 'Bold', start: 3, end: 5 }])
+  })
+
+  it('inline overlapping right boundary only is shifted and trimmed on left', () => {
+    const t = new Text('hello world', [{ type: 'Bold', start: 4, end: 9 }])
+    expect(t.remove(2, 4).inline).toEqual([{ type: 'Bold', start: 2, end: 5 }])
+  })
+
+  it('touching inlines merge after removal closes the gap', () => {
+    // Bold[5,10) and Bold[15,25), remove(10,5) → Bold[5,10) and Bold[10,20) → merged Bold[5,20)
+    const t = new Text('0123456789012345678901234', [
+      { type: 'Bold', start: 5, end: 10 },
+      { type: 'Bold', start: 15, end: 25 },
+    ])
+    const result = t.remove(10, 5)
+    expect(result.inline).toEqual([{ type: 'Bold', start: 5, end: 20 }])
+  })
+
+  it('throws if offset < 0', () => {
+    const t = new Text('hello', [])
+    expect(() => t.remove(-1, 2)).toThrow(RangeError)
+  })
+
+  it('throws if length <= 0', () => {
+    const t = new Text('hello', [])
+    expect(() => t.remove(0, 0)).toThrow(RangeError)
+    expect(() => t.remove(0, -1)).toThrow(RangeError)
+  })
+
+  it('throws if offset + length > text.length', () => {
+    const t = new Text('hello', [])
+    expect(() => t.remove(3, 3)).toThrow(RangeError)
   })
 })
