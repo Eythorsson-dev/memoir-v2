@@ -1,2 +1,5 @@
+export * from './serializer'
 export * from './text/text'
 export * from './text/serializer'
+export * from './blocks/blocks'
+export * from './blocks/serializer'
