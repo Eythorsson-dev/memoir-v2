@@ -170,6 +170,133 @@ function treeDelete(
   return found ? result : null
 }
 
+// ─── range helpers ────────────────────────────────────────────────────────────
+
+type TraversalEntry = { id: BlockId; depth: number }
+
+function flatTraversal(blocks: ReadonlyArray<Block>, depth = 0): TraversalEntry[] {
+  const result: TraversalEntry[] = []
+  for (const block of blocks) {
+    result.push({ id: block.id, depth })
+    result.push(...flatTraversal(block.children, depth + 1))
+  }
+  return result
+}
+
+function getBlocksInRange(
+  blocks: ReadonlyArray<Block>,
+  fromId: BlockId,
+  toId: BlockId
+): BlockId[] {
+  const entries = flatTraversal(blocks)
+  const fromIdx = entries.findIndex(e => e.id === fromId)
+  const toIdx = entries.findIndex(e => e.id === toId)
+  if (fromIdx === -1) throw new Error(`Block '${fromId}' not found`)
+  if (toIdx === -1) throw new Error(`Block '${toId}' not found`)
+  if (toIdx < fromIdx) throw new Error(`'${toId}' appears before '${fromId}' in document order`)
+  return entries.slice(fromIdx, toIdx + 1).map(e => e.id)
+}
+
+// ─── indent helpers ────────────────────────────────────────────────────────────
+
+function treeIndentBlock(
+  blocks: ReadonlyArray<Block>,
+  id: BlockId,
+  rangeSet: ReadonlySet<BlockId>,
+  moved: Set<BlockId>
+): { result: ReadonlyArray<Block>; found: boolean } {
+  for (let i = 0; i < blocks.length; i++) {
+    if (blocks[i].id === id) {
+      if (i === 0) return { result: blocks, found: true } // no previous sibling
+
+      const blockToMove = blocks[i]
+      const prevSib = blocks[i - 1]
+
+      // Partition children: range children travel with the block;
+      // non-range children are extracted to the new parent after the block.
+      const rangeChildren = blockToMove.children.filter(c => rangeSet.has(c.id))
+      const nonRangeChildren = blockToMove.children.filter(c => !rangeSet.has(c.id))
+
+      // Mark range children (and their descendants) as already moved
+      function markMoved(bs: ReadonlyArray<Block>) {
+        for (const b of bs) {
+          moved.add(b.id)
+          markMoved(b.children)
+        }
+      }
+      markMoved(rangeChildren)
+
+      const newBlock = new Block(blockToMove.id, blockToMove.data, rangeChildren)
+      const newPrevSib = new Block(
+        prevSib.id,
+        prevSib.data,
+        [...prevSib.children, newBlock, ...nonRangeChildren]
+      )
+      const result: Block[] = [...blocks.slice(0, i - 1), newPrevSib, ...blocks.slice(i + 1)]
+      return { result, found: true }
+    }
+  }
+
+  for (let i = 0; i < blocks.length; i++) {
+    const { result: newChildren, found } = treeIndentBlock(
+      blocks[i].children, id, rangeSet, moved
+    )
+    if (found) {
+      const result: Block[] = [
+        ...blocks.slice(0, i),
+        new Block(blocks[i].id, blocks[i].data, newChildren),
+        ...blocks.slice(i + 1),
+      ]
+      return { result, found: true }
+    }
+  }
+
+  return { result: blocks, found: false }
+}
+
+// ─── unindent helpers ──────────────────────────────────────────────────────────
+
+function treeUnindentBlock(
+  blocks: ReadonlyArray<Block>,
+  id: BlockId
+): { result: ReadonlyArray<Block>; found: boolean } {
+  for (let i = 0; i < blocks.length; i++) {
+    const parent = blocks[i]
+    const childIdx = parent.children.findIndex(c => c.id === id)
+
+    if (childIdx !== -1) {
+      const blockToMove = parent.children[childIdx]
+      const followingSiblings = parent.children.slice(childIdx + 1)
+
+      const newBlock = new Block(
+        blockToMove.id,
+        blockToMove.data,
+        [...blockToMove.children, ...followingSiblings]
+      )
+      const newParent = new Block(parent.id, parent.data, parent.children.slice(0, childIdx))
+      const result: Block[] = [
+        ...blocks.slice(0, i),
+        newParent,
+        newBlock,
+        ...blocks.slice(i + 1),
+      ]
+      return { result, found: true }
+    }
+
+    const { result: newChildren, found } = treeUnindentBlock(parent.children, id)
+    if (found) {
+      const result: Block[] = [
+        ...blocks.slice(0, i),
+        new Block(parent.id, parent.data, newChildren),
+        ...blocks.slice(i + 1),
+      ]
+      return { result, found: true }
+    }
+  }
+
+  return { result: blocks, found: false }
+}
+
 // ─── Block class ──────────────────────────────────────────────────────────────
 
 export class Block {
@@ -258,6 +385,49 @@ export class Blocks {
   update(id: BlockId, data: Text): Blocks {
     const result = treeUpdate(this.blocks, id, data)
     if (result === null) throw new Error(`No block with id '${id}' found`)
+    return new Blocks(result)
+  }
+
+  /**
+   * Returns a new `Blocks` where each block in the pre-order range [`from`, `to`]
+   * (that is not already moved) is appended to its previous sibling.
+   * - Children in the range travel with the block.
+   * - Children not in the range are extracted and placed after the block in the new parent.
+   * - Blocks with no previous sibling are silently skipped.
+   * @throws if `from` or `to` are not found, or `to` precedes `from`.
+   */
+  indent(from: BlockId, to: BlockId): Blocks {
+    const ids = getBlocksInRange(this.blocks, from, to)
+    const rangeSet = new Set(ids)
+    const moved = new Set<BlockId>()
+    let result = this.blocks
+
+    for (const id of ids) {
+      if (moved.has(id)) continue
+      const { result: newResult, found } = treeIndentBlock(result, id, rangeSet, moved)
+      if (!found) throw new Error(`Block '${id}' not found during indent`)
+      result = newResult
+    }
+
+    return new Blocks(result)
+  }
+
+  /**
+   * Returns a new `Blocks` where each block in the pre-order range [`from`, `to`]
+   * is moved to be the immediate successor of its parent at the parent's level.
+   * Following siblings of the block become its new children (appended after existing ones).
+   * Root-level blocks are silently skipped.
+   * @throws if `from` or `to` are not found, or `to` precedes `from`.
+   */
+  unindent(from: BlockId, to: BlockId): Blocks {
+    const ids = getBlocksInRange(this.blocks, from, to)
+    let result = this.blocks
+
+    for (const id of ids) {
+      const { result: newResult } = treeUnindentBlock(result, id)
+      result = newResult
+    }
+
     return new Blocks(result)
   }
 

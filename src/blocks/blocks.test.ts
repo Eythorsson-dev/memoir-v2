@@ -287,6 +287,262 @@ describe('update', () => {
   })
 })
 
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function preorder(blocks: Blocks): string[] {
+  function walk(bs: ReadonlyArray<Block>): string[] {
+    const result: string[] = []
+    for (const b of bs) {
+      result.push(b.id)
+      result.push(...walk(b.children))
+    }
+    return result
+  }
+  return walk(blocks.blocks)
+}
+
+/** Find a block anywhere in the tree */
+function find(blocks: Blocks, id: string): Block {
+  function search(bs: ReadonlyArray<Block>): Block | undefined {
+    for (const b of bs) {
+      if (b.id === id) return b
+      const found = search(b.children)
+      if (found) return found
+    }
+  }
+  const result = search(blocks.blocks)
+  if (!result) throw new Error(`Block '${id}' not found`)
+  return result
+}
+
+// ─── indent ───────────────────────────────────────────────────────────────────
+
+describe('indent', () => {
+  // S1 – no previous sibling → no change
+  it('skips a block that has no previous sibling (S1)', () => {
+    // Before: A, B[C, D], E
+    const before = new Blocks([
+      block('A'),
+      new Block('B', emptyText, [block('C'), block('D')]),
+      block('E'),
+    ])
+    const result = before.indent('C', 'C')
+    expect(preorder(result)).toEqual(['A', 'B', 'C', 'D', 'E'])
+    expect(find(result, 'B').children.map((x) => x.id)).toEqual(['C', 'D'])
+  })
+
+  // S2 – single block with previous sibling
+  it('indents a single block into its predecessor (S2)', () => {
+    // Before: A, B, C
+    const before = new Blocks([block('A'), block('B'), block('C')])
+    const result = before.indent('B', 'B')
+    expect(preorder(result)).toEqual(['A', 'B', 'C'])
+    expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B'])
+  })
+
+  // S3 – range stops before a nested block → child extracted
+  it('extracts non-range children and places them after the moved block (S3)', () => {
+    // Before: A[B], C[D], E   indent(B,C)  range=[B,C], D not in range
+    const before = new Blocks([
+      new Block('A', emptyText, [block('B')]),
+      new Block('C', emptyText, [block('D')]),
+      block('E'),
+    ])
+    const result = before.indent('B', 'C')
+    // After: A[B, C, D], E
+    expect(preorder(result)).toEqual(['A', 'B', 'C', 'D', 'E'])
+    expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B', 'C', 'D'])
+    expect(find(result, 'C').children).toHaveLength(0)
+  })
+
+  // S4 – range includes nested block → child travels with parent
+  it('keeps range children with their parent when block moves (S4)', () => {
+    // Before: A[B], C[D], E   indent(B,D)  range=[B,C,D], D in range
+    const before = new Blocks([
+      new Block('A', emptyText, [block('B')]),
+      new Block('C', emptyText, [block('D')]),
+      block('E'),
+    ])
+    const result = before.indent('B', 'D')
+    // After: A[B, C[D]], E
+    expect(preorder(result)).toEqual(['A', 'B', 'C', 'D', 'E'])
+    expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B', 'C'])
+    expect(find(result, 'C').children.map((x) => x.id)).toEqual(['D'])
+  })
+
+  // S5 – multiple flat blocks all indent into the same predecessor
+  it('indents multiple consecutive flat blocks (S5)', () => {
+    // Before: A, B, C, D, E   indent(B,C)
+    const before = new Blocks([
+      block('A'), block('B'), block('C'), block('D'), block('E'),
+    ])
+    const result = before.indent('B', 'C')
+    // After: A[B, C], D, E
+    expect(result.blocks.map((x) => x.id)).toEqual(['A', 'D', 'E'])
+    expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B', 'C'])
+  })
+
+  // S6 – block's children are all in range → all travel with block
+  it('moves a block with all children when they are all in range (S6)', () => {
+    // Before: A, B[C, D], E   indent(B,D)
+    const before = new Blocks([
+      block('A'),
+      new Block('B', emptyText, [block('C'), block('D')]),
+      block('E'),
+    ])
+    const result = before.indent('B', 'D')
+    // After: A[B[C, D]], E
+    expect(preorder(result)).toEqual(['A', 'B', 'C', 'D', 'E'])
+    expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B'])
+    expect(find(result, 'B').children.map((x) => x.id)).toEqual(['C', 'D'])
+  })
+
+  // S7 – first block skipped, rest indent
+  it('skips the first block when it has no predecessor and indents the rest (S7)', () => {
+    // Before: A, B, C, D   indent(A,C)
+    const before = new Blocks([block('A'), block('B'), block('C'), block('D')])
+    const result = before.indent('A', 'C')
+    // A skipped, B→A, C→A
+    expect(result.blocks.map((x) => x.id)).toEqual(['A', 'D'])
+    expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B', 'C'])
+  })
+
+  it('throws if from is not found', () => {
+    const b = new Blocks([block('A')])
+    expect(() => b.indent('X', 'A')).toThrow()
+  })
+
+  it('throws if to is not found', () => {
+    const b = new Blocks([block('A')])
+    expect(() => b.indent('A', 'X')).toThrow()
+  })
+
+  it('throws if to comes before from in document order', () => {
+    const b = new Blocks([block('A'), block('B'), block('C')])
+    expect(() => b.indent('C', 'A')).toThrow()
+  })
+
+  it('returns a new Blocks instance (immutable)', () => {
+    const b = new Blocks([block('A'), block('B')])
+    const result = b.indent('B', 'B')
+    expect(result).not.toBe(b)
+  })
+})
+
+// ─── unindent ─────────────────────────────────────────────────────────────────
+
+describe('unindent', () => {
+  // U1 – simple unindent, no following siblings
+  it('moves a block to after its parent when it has no following siblings (U1)', () => {
+    // Before: A[B[C]]   unindent(C,C)
+    const before = new Blocks([
+      new Block('A', emptyText, [
+        new Block('B', emptyText, [block('C')]),
+      ]),
+    ])
+    const result = before.unindent('C', 'C')
+    // After: A[B, C]
+    expect(preorder(result)).toEqual(['A', 'B', 'C'])
+    expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B', 'C'])
+    expect(find(result, 'B').children).toHaveLength(0)
+  })
+
+  // U2 – following siblings become children
+  it('makes following siblings children of the unindented block (U2)', () => {
+    // Before: A[B, C, D], E   unindent(B,B)
+    const before = new Blocks([
+      new Block('A', emptyText, [block('B'), block('C'), block('D')]),
+      block('E'),
+    ])
+    const result = before.unindent('B', 'B')
+    // After: A, B[C, D], E
+    expect(preorder(result)).toEqual(['A', 'B', 'C', 'D', 'E'])
+    expect(find(result, 'A').children).toHaveLength(0)
+    expect(find(result, 'B').children.map((x) => x.id)).toEqual(['C', 'D'])
+  })
+
+  // U3 – partial following siblings
+  it('only takes following siblings, not preceding ones (U3)', () => {
+    // Before: A[B[C, D, E]]   unindent(C,C)
+    const before = new Blocks([
+      new Block('A', emptyText, [
+        new Block('B', emptyText, [block('C'), block('D'), block('E')]),
+      ]),
+    ])
+    const result = before.unindent('C', 'C')
+    // After: A[B, C[D, E]]
+    expect(preorder(result)).toEqual(['A', 'B', 'C', 'D', 'E'])
+    expect(find(result, 'B').children).toHaveLength(0)
+    expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B', 'C'])
+    expect(find(result, 'C').children.map((x) => x.id)).toEqual(['D', 'E'])
+  })
+
+  // U4 – range unindent (two consecutive children)
+  it('processes a range of siblings sequentially (U4)', () => {
+    // Before: A[B, C, D], E   unindent(B,C)
+    const before = new Blocks([
+      new Block('A', emptyText, [block('B'), block('C'), block('D')]),
+      block('E'),
+    ])
+    const result = before.unindent('B', 'C')
+    // After: A, B, C[D], E
+    expect(preorder(result)).toEqual(['A', 'B', 'C', 'D', 'E'])
+    expect(find(result, 'A').children).toHaveLength(0)
+    expect(find(result, 'B').children).toHaveLength(0)
+    expect(find(result, 'C').children.map((x) => x.id)).toEqual(['D'])
+  })
+
+  // U5 – existing children + following siblings merge
+  it('appends following siblings after existing children (U5)', () => {
+    // Before: A[B[X, Y], C], D   unindent(B,B)
+    const before = new Blocks([
+      new Block('A', emptyText, [
+        new Block('B', emptyText, [block('X'), block('Y')]),
+        block('C'),
+      ]),
+      block('D'),
+    ])
+    const result = before.unindent('B', 'B')
+    // After: A, B[X, Y, C], D
+    expect(preorder(result)).toEqual(['A', 'B', 'X', 'Y', 'C', 'D'])
+    expect(find(result, 'A').children).toHaveLength(0)
+    expect(find(result, 'B').children.map((x) => x.id)).toEqual(['X', 'Y', 'C'])
+  })
+
+  // U6 – root-level blocks skipped
+  it('silently skips root-level blocks (U6)', () => {
+    // Before: A, B
+    const before = new Blocks([block('A'), block('B')])
+    const result = before.unindent('A', 'A')
+    expect(preorder(result)).toEqual(['A', 'B'])
+  })
+
+  it('throws if from is not found', () => {
+    const b = new Blocks([block('A')])
+    expect(() => b.unindent('X', 'A')).toThrow()
+  })
+
+  it('throws if to is not found', () => {
+    const b = new Blocks([block('A')])
+    expect(() => b.unindent('A', 'X')).toThrow()
+  })
+
+  it('throws if to comes before from in document order', () => {
+    const b = new Blocks([
+      new Block('A', emptyText, [block('B'), block('C')]),
+    ])
+    expect(() => b.unindent('C', 'B')).toThrow()
+  })
+
+  it('returns a new Blocks instance (immutable)', () => {
+    const b = new Blocks([
+      new Block('A', emptyText, [block('B')]),
+    ])
+    const result = b.unindent('B', 'B')
+    expect(result).not.toBe(b)
+  })
+})
+
 // ─── delete ───────────────────────────────────────────────────────────────────
 
 describe('delete', () => {
