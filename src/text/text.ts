@@ -25,7 +25,7 @@ export type InlineDto<Type extends InlineTypes = InlineTypes> = {
 /** Plain-data shape of a Text value object; safe for JSON serialization. */
 export type TextDto = {
   text: string
-  inline: InlineDto[]
+  inline: ReadonlyArray<InlineDto>
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
