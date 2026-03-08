@@ -31,6 +31,12 @@ pnpm vitest run
 
 Use small, atomic commits with [Conventional Commits](https://www.conventionalcommits.org/) messages (`feat:`, `fix:`, `test:`, `refactor:`, `chore:`).
 
+**Commit after each completed and verified step** — do not batch multiple steps into one commit.
+
+**Never commit plan documents** (`plans/` directory). These are local planning notes only.
+
+**Errors must never fail silently.** All unexpected errors must throw. Never swallow exceptions or use empty catch blocks.
+
 ## Architecture
 
 The project is a TypeScript library for a rich-text block editor. Three distinct layers:

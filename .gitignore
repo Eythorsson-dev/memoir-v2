@@ -30,6 +30,9 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 
+# Planning documents (local only)
+plans/
+
 # Editor
 .vscode/
 .idea/
