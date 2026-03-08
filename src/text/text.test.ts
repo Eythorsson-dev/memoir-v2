@@ -16,15 +16,16 @@ describe('Text constructor – valid inputs', () => {
   })
 
   it('auto-sorts inline by start asc, then end desc', () => {
+    // Bold[0,4] and Bold[6,11] do not touch; Italic[0,8] overlaps with both (allowed for different types)
     const t = new Text('hello world', [
-      { type: 'Bold', start: 5, end: 10 },
+      { type: 'Bold', start: 6, end: 11 },
       { type: 'Italic', start: 0, end: 8 },
-      { type: 'Bold', start: 0, end: 5 },
+      { type: 'Bold', start: 0, end: 4 },
     ])
-    // start 0 comes before start 5; among start=0: end=8 > end=5 so Italic first
+    // start 0 comes before start 6; among start=0: end=8 > end=4 so Italic first
     expect(t.inline[0]).toMatchObject({ type: 'Italic', start: 0, end: 8 })
-    expect(t.inline[1]).toMatchObject({ type: 'Bold', start: 0, end: 5 })
-    expect(t.inline[2]).toMatchObject({ type: 'Bold', start: 5, end: 10 })
+    expect(t.inline[1]).toMatchObject({ type: 'Bold', start: 0, end: 4 })
+    expect(t.inline[2]).toMatchObject({ type: 'Bold', start: 6, end: 11 })
   })
 })
 
