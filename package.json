@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "dev": "vite",
     "test": "vitest",
     "vitest": "vitest",
     "build": "tsc && vite build",
