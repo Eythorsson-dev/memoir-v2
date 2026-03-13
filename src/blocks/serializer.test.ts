@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { blocksSerializer } from './serializer'
-import { Blocks, Block, BlockDto } from './blocks'
+import { Blocks, BlockDto } from './blocks'
 import { Text } from '../text/text'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -11,23 +11,21 @@ function nodesToHtml(nodes: Node[]): string {
   return div.innerHTML
 }
 
-const emptyText = new Text('', [])
-
-function block(id: string, text = '', children: Block[] = []): Block {
-  return new Block(id, new Text(text, []), children)
+function dto(id: string, text = '', children: BlockDto[] = []): BlockDto {
+  return { id, data: { text, inline: [] }, children }
 }
 
 // ─── render ───────────────────────────────────────────────────────────────────
 
 describe('blocksSerializer.render', () => {
   it('renders a single block with a <p> element', () => {
-    const blocks = new Blocks([block('b1', 'Hello')])
+    const blocks = Blocks.from([dto('b1', 'Hello')])
     const html = nodesToHtml(blocksSerializer.render(blocks))
     expect(html).toBe('<div class="block" id="b1"><p>Hello</p></div>')
   })
 
   it('renders multiple root blocks', () => {
-    const blocks = new Blocks([block('b1', 'Hello'), block('b2', 'World')])
+    const blocks = Blocks.from([dto('b1', 'Hello'), dto('b2', 'World')])
     const html = nodesToHtml(blocksSerializer.render(blocks))
     expect(html).toBe(
       '<div class="block" id="b1"><p>Hello</p></div>' +
@@ -36,8 +34,7 @@ describe('blocksSerializer.render', () => {
   })
 
   it('renders nested children inside <div class="children">', () => {
-    const parent = new Block('p1', new Text('Parent', []), [block('c1', 'Child')])
-    const blocks = new Blocks([parent])
+    const blocks = Blocks.from([dto('p1', 'Parent', [dto('c1', 'Child')])])
     const html = nodesToHtml(blocksSerializer.render(blocks))
     expect(html).toBe(
       '<div class="block" id="p1"><p>Parent</p>' +
@@ -46,7 +43,7 @@ describe('blocksSerializer.render', () => {
   })
 
   it('omits <div class="children"> for leaf blocks', () => {
-    const blocks = new Blocks([block('b1', 'Hello')])
+    const blocks = Blocks.from([dto('b1', 'Hello')])
     const html = nodesToHtml(blocksSerializer.render(blocks))
     expect(html).not.toContain('children')
   })
@@ -71,8 +68,9 @@ describe('blocksSerializer.render', () => {
   })
 
   it('renders inline formatting inside <p>', () => {
-    const boldText = new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }])
-    const blocks = new Blocks([new Block('b1', boldText, [])])
+    const blocks = Blocks.from([
+      { id: 'b1', data: { text: 'Hello', inline: [{ type: 'Bold', start: 0, end: 5 }] }, children: [] },
+    ])
     const html = nodesToHtml(blocksSerializer.render(blocks))
     expect(html).toBe('<div class="block" id="b1"><p><strong>Hello</strong></p></div>')
   })
@@ -198,31 +196,27 @@ describe('roundtrip: parse(render(blocks)) === blocks', () => {
   function roundtrip(blocks: Blocks): void {
     const rendered = blocksSerializer.render(blocks)
     const parsed = blocksSerializer.parse(rendered)
-    expect(JSON.stringify(parsed)).toBe(JSON.stringify(blocks))
+    expect(JSON.stringify(parsed.blocks)).toBe(JSON.stringify(blocks.blocks))
   }
 
   it('single plain block roundtrip', () => {
-    roundtrip(new Blocks([block('b1', 'Hello')]))
+    roundtrip(Blocks.from([dto('b1', 'Hello')]))
   })
 
   it('multiple root blocks roundtrip', () => {
-    roundtrip(new Blocks([block('b1', 'Hello'), block('b2', 'World')]))
+    roundtrip(Blocks.from([dto('b1', 'Hello'), dto('b2', 'World')]))
   })
 
   it('nested blocks roundtrip', () => {
-    const parent = new Block('p1', new Text('Parent', []), [block('c1', 'Child')])
-    roundtrip(new Blocks([parent]))
+    roundtrip(Blocks.from([dto('p1', 'Parent', [dto('c1', 'Child')])]))
   })
 
   it('deeply nested blocks roundtrip', () => {
-    const grandchild = block('gc1', 'Grandchild')
-    const child = new Block('c1', new Text('Child', []), [grandchild])
-    const parent = new Block('p1', new Text('Parent', []), [child])
-    roundtrip(new Blocks([parent]))
+    roundtrip(Blocks.from([dto('p1', 'Parent', [dto('c1', 'Child', [dto('gc1', 'Grandchild')])])]))
   })
 
   it('plan example roundtrip', () => {
-    const dto: BlockDto[] = [
+    const dtos: BlockDto[] = [
       {
         id: 'block-1',
         data: { text: 'Hello World', inline: [] },
@@ -232,15 +226,16 @@ describe('roundtrip: parse(render(blocks)) === blocks', () => {
       },
       { id: 'block-3', data: { text: 'This is another', inline: [] }, children: [] },
     ]
-    roundtrip(Blocks.from(dto))
+    roundtrip(Blocks.from(dtos))
   })
 
   it('block with inline formatting roundtrip', () => {
-    const boldText = new Text('Hello World', [{ type: 'Bold', start: 0, end: 5 }])
-    roundtrip(new Blocks([new Block('b1', boldText, [])]))
+    roundtrip(Blocks.from([
+      { id: 'b1', data: { text: 'Hello World', inline: [{ type: 'Bold', start: 0, end: 5 }] }, children: [] },
+    ]))
   })
 
   it('empty text block roundtrip', () => {
-    roundtrip(new Blocks([block('b1', '')]))
+    roundtrip(Blocks.from([dto('b1', '')]))
   })
 })

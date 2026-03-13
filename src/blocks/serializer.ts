@@ -1,16 +1,18 @@
 import { Serializer } from '../serializer'
-import { Blocks, Block, BlockId } from './blocks'
+import { Blocks, BlockDto, BlockId } from './blocks'
+import { Text, InlineDto } from '../text/text'
 import { textSerializer } from '../text/serializer'
 
 // ─── Render ───────────────────────────────────────────────────────────────────
 
-function renderBlock(block: Block): Element {
+function renderBlock(block: BlockDto): Element {
   const div = document.createElement('div')
   div.className = 'block'
   div.id = block.id
 
   const p = document.createElement('p')
-  textSerializer.render(block.data).forEach((node) => p.appendChild(node))
+  const text = new Text(block.data.text, [...block.data.inline] as InlineDto[])
+  textSerializer.render(text).forEach((node) => p.appendChild(node))
   div.appendChild(p)
 
   if (block.children.length > 0) {
@@ -29,7 +31,7 @@ function render(blocks: Blocks): Node[] {
 
 // ─── Parse ────────────────────────────────────────────────────────────────────
 
-function parseBlock(el: Element): Block {
+function parseBlock(el: Element): BlockDto {
   const id: BlockId | null = el.getAttribute('id')
   if (!id) throw new Error('Block element missing id attribute')
 
@@ -59,7 +61,7 @@ function parseBlock(el: Element): Block {
 
   const data = textSerializer.parse(Array.from(pElement.childNodes))
 
-  const children: Block[] = []
+  const children: BlockDto[] = []
   if (childrenElement) {
     for (const node of Array.from(childrenElement.childNodes)) {
       if (node.nodeType === Node.TEXT_NODE) {
@@ -76,17 +78,17 @@ function parseBlock(el: Element): Block {
     }
   }
 
-  return new Block(id, data, children)
+  return { id, data: data.toJSON(), children }
 }
 
 function parse(nodes: Node[]): Blocks {
-  const blocks: Block[] = []
+  const dtos: BlockDto[] = []
   for (const node of nodes) {
     if (node.nodeType === Node.ELEMENT_NODE) {
-      blocks.push(parseBlock(node as Element))
+      dtos.push(parseBlock(node as Element))
     }
   }
-  return new Blocks(blocks)
+  return Blocks.from(dtos)
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────

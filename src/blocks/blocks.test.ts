@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Block, Blocks, BlockDto } from './blocks'
+import { Blocks, BlockDto } from './blocks'
 import { Text } from '../text/text'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -8,289 +8,19 @@ const emptyText = new Text('', [])
 const helloText = new Text('Hello', [])
 const worldText = new Text('World', [])
 
-function block(id: string, children: Block[] = []): Block {
-  return new Block(id, emptyText, children)
+/** Build a BlockDto (tree format) for use with Blocks.from */
+function dto(id: string, text = '', children: BlockDto[] = []): BlockDto {
+  return { id, data: { text, inline: [] }, children }
 }
 
-// ─── Block constructor ────────────────────────────────────────────────────────
+/** Build a block arg for use with mutation methods (addBefore, addAfter, etc.) */
+function block(id: string, data: Text = emptyText): { id: string; data: Text } {
+  return { id, data }
+}
 
-describe('Block constructor', () => {
-  it('creates a block with id, data, and children', () => {
-    const b = new Block('a', helloText, [])
-    expect(b.id).toBe('a')
-    expect(b.data).toBe(helloText)
-    expect(b.children).toEqual([])
-  })
-
-  it('creates a block with nested children', () => {
-    const child = block('child')
-    const parent = new Block('parent', emptyText, [child])
-    expect(parent.children).toHaveLength(1)
-    expect(parent.children[0].id).toBe('child')
-  })
-
-  it('throws if id is empty string', () => {
-    expect(() => new Block('', emptyText, [])).toThrow()
-  })
-})
-
-// ─── Blocks constructor ───────────────────────────────────────────────────────
-
-describe('Blocks constructor', () => {
-  it('creates a Blocks instance with one block', () => {
-    const b = new Blocks([block('a')])
-    expect(b.blocks).toHaveLength(1)
-  })
-
-  it('creates a Blocks instance with multiple blocks', () => {
-    const b = new Blocks([block('a'), block('b')])
-    expect(b.blocks).toHaveLength(2)
-  })
-
-  it('throws if the array is empty', () => {
-    expect(() => new Blocks([])).toThrow()
-  })
-
-  it('throws if root-level blocks have duplicate IDs', () => {
-    expect(() => new Blocks([block('a'), block('a')])).toThrow()
-  })
-
-  it('throws if a nested block has the same ID as a root block', () => {
-    const child = block('a')
-    expect(() => new Blocks([new Block('a', emptyText, [child])])).toThrow()
-  })
-
-  it('throws if two nested blocks share an ID', () => {
-    const child1 = block('dup')
-    const child2 = block('dup')
-    expect(() =>
-      new Blocks([new Block('parent', emptyText, [child1, child2])])
-    ).toThrow()
-  })
-})
-
-// ─── Blocks.from ──────────────────────────────────────────────────────────────
-
-describe('Blocks.from', () => {
-  it('creates a Blocks instance from DTO', () => {
-    const dto: BlockDto[] = [
-      { id: 'a', data: { text: 'Hello', inline: [] }, children: [] },
-    ]
-    const b = Blocks.from(dto)
-    expect(b.blocks).toHaveLength(1)
-    expect(b.blocks[0].id).toBe('a')
-    expect(b.blocks[0].data).toBeInstanceOf(Text)
-    expect(b.blocks[0].data.text).toBe('Hello')
-  })
-
-  it('recursively converts nested children', () => {
-    const dto: BlockDto[] = [
-      {
-        id: 'parent',
-        data: { text: 'Parent', inline: [] },
-        children: [
-          { id: 'child', data: { text: 'Child', inline: [] }, children: [] },
-        ],
-      },
-    ]
-    const b = Blocks.from(dto)
-    expect(b.blocks[0].children).toHaveLength(1)
-    expect(b.blocks[0].children[0]).toBeInstanceOf(Block)
-    expect(b.blocks[0].children[0].id).toBe('child')
-  })
-
-  it('matches the plan example structure', () => {
-    const dto: BlockDto[] = [
-      {
-        id: 'block-1',
-        data: { text: 'Hello World', inline: [] },
-        children: [
-          { id: 'block-2', data: { text: 'This is a test', inline: [] }, children: [] },
-        ],
-      },
-      { id: 'block-3', data: { text: 'This is another', inline: [] }, children: [] },
-    ]
-    const b = Blocks.from(dto)
-    expect(b.blocks).toHaveLength(2)
-    expect(b.blocks[0].id).toBe('block-1')
-    expect(b.blocks[0].children[0].id).toBe('block-2')
-    expect(b.blocks[1].id).toBe('block-3')
-  })
-
-  it('throws if array is empty', () => {
-    expect(() => Blocks.from([])).toThrow()
-  })
-})
-
-// ─── addBefore ────────────────────────────────────────────────────────────────
-
-describe('addBefore', () => {
-  it('inserts a block before the target at root level', () => {
-    const b = new Blocks([block('a'), block('b')])
-    const result = b.addBefore('b', block('new'))
-    expect(result.blocks.map((x) => x.id)).toEqual(['a', 'new', 'b'])
-  })
-
-  it('inserts a block before the first root block', () => {
-    const b = new Blocks([block('a')])
-    const result = b.addBefore('a', block('new'))
-    expect(result.blocks.map((x) => x.id)).toEqual(['new', 'a'])
-  })
-
-  it('inserts a block before a nested block', () => {
-    const b = new Blocks([new Block('parent', emptyText, [block('child')])])
-    const result = b.addBefore('child', block('new'))
-    expect(result.blocks[0].children.map((x) => x.id)).toEqual(['new', 'child'])
-  })
-
-  it('throws if target id does not exist', () => {
-    const b = new Blocks([block('a')])
-    expect(() => b.addBefore('missing', block('new'))).toThrow()
-  })
-
-  it('throws if new block id already exists in the tree', () => {
-    const b = new Blocks([block('a'), block('b')])
-    expect(() => b.addBefore('b', block('a'))).toThrow()
-  })
-
-  it('returns a new Blocks instance (immutable)', () => {
-    const b = new Blocks([block('a')])
-    const result = b.addBefore('a', block('new'))
-    expect(result).not.toBe(b)
-    expect(b.blocks).toHaveLength(1)
-  })
-})
-
-// ─── addAfter ─────────────────────────────────────────────────────────────────
-
-describe('addAfter', () => {
-  it('inserts a block after the target at root level', () => {
-    const b = new Blocks([block('a'), block('b')])
-    const result = b.addAfter('a', block('new'))
-    expect(result.blocks.map((x) => x.id)).toEqual(['a', 'new', 'b'])
-  })
-
-  it('inserts a block after the last root block', () => {
-    const b = new Blocks([block('a')])
-    const result = b.addAfter('a', block('new'))
-    expect(result.blocks.map((x) => x.id)).toEqual(['a', 'new'])
-  })
-
-  it('inserts a block after a nested block', () => {
-    const b = new Blocks([new Block('parent', emptyText, [block('child')])])
-    const result = b.addAfter('child', block('new'))
-    expect(result.blocks[0].children.map((x) => x.id)).toEqual(['child', 'new'])
-  })
-
-  it('throws if target id does not exist', () => {
-    const b = new Blocks([block('a')])
-    expect(() => b.addAfter('missing', block('new'))).toThrow()
-  })
-
-  it('throws if new block id already exists in the tree', () => {
-    const b = new Blocks([block('a'), block('b')])
-    expect(() => b.addAfter('a', block('b'))).toThrow()
-  })
-})
-
-// ─── appendChild ──────────────────────────────────────────────────────────────
-
-describe('appendChild', () => {
-  it('appends a block as the last child of the target', () => {
-    const b = new Blocks([new Block('parent', emptyText, [block('child1')])])
-    const result = b.appendChild('parent', block('child2'))
-    expect(result.blocks[0].children.map((x) => x.id)).toEqual(['child1', 'child2'])
-  })
-
-  it('appends to a block with no existing children', () => {
-    const b = new Blocks([block('parent')])
-    const result = b.appendChild('parent', block('child'))
-    expect(result.blocks[0].children.map((x) => x.id)).toEqual(['child'])
-  })
-
-  it('appends to a nested target', () => {
-    const inner = new Block('inner', emptyText, [block('grandchild')])
-    const b = new Blocks([new Block('outer', emptyText, [inner])])
-    const result = b.appendChild('inner', block('new'))
-    expect(result.blocks[0].children[0].children.map((x) => x.id)).toEqual(['grandchild', 'new'])
-  })
-
-  it('throws if target id does not exist', () => {
-    const b = new Blocks([block('a')])
-    expect(() => b.appendChild('missing', block('child'))).toThrow()
-  })
-
-  it('throws if new block id already exists', () => {
-    const b = new Blocks([block('a'), block('b')])
-    expect(() => b.appendChild('a', block('b'))).toThrow()
-  })
-})
-
-// ─── prependChild ─────────────────────────────────────────────────────────────
-
-describe('prependChild', () => {
-  it('prepends a block as the first child of the target', () => {
-    const b = new Blocks([new Block('parent', emptyText, [block('child1')])])
-    const result = b.prependChild('parent', block('new'))
-    expect(result.blocks[0].children.map((x) => x.id)).toEqual(['new', 'child1'])
-  })
-
-  it('prepends to a block with no existing children', () => {
-    const b = new Blocks([block('parent')])
-    const result = b.prependChild('parent', block('child'))
-    expect(result.blocks[0].children.map((x) => x.id)).toEqual(['child'])
-  })
-
-  it('throws if target id does not exist', () => {
-    const b = new Blocks([block('a')])
-    expect(() => b.prependChild('missing', block('child'))).toThrow()
-  })
-
-  it('throws if new block id already exists', () => {
-    const b = new Blocks([block('a'), block('b')])
-    expect(() => b.prependChild('a', block('b'))).toThrow()
-  })
-})
-
-// ─── update ───────────────────────────────────────────────────────────────────
-
-describe('update', () => {
-  it('updates the data of a root block', () => {
-    const b = new Blocks([new Block('a', helloText, [])])
-    const result = b.update('a', worldText)
-    expect(result.blocks[0].data).toBe(worldText)
-  })
-
-  it('updates the data of a nested block', () => {
-    const child = new Block('child', helloText, [])
-    const b = new Blocks([new Block('parent', emptyText, [child])])
-    const result = b.update('child', worldText)
-    expect(result.blocks[0].children[0].data).toBe(worldText)
-  })
-
-  it('does not mutate the original', () => {
-    const b = new Blocks([new Block('a', helloText, [])])
-    b.update('a', worldText)
-    expect(b.blocks[0].data).toBe(helloText)
-  })
-
-  it('preserves children when updating data', () => {
-    const child = block('child')
-    const b = new Blocks([new Block('parent', helloText, [child])])
-    const result = b.update('parent', worldText)
-    expect(result.blocks[0].children[0].id).toBe('child')
-  })
-
-  it('throws if target id does not exist', () => {
-    const b = new Blocks([block('a')])
-    expect(() => b.update('missing', worldText)).toThrow()
-  })
-})
-
-// ─── helpers ──────────────────────────────────────────────────────────────────
-
+/** Pre-order traversal of block IDs */
 function preorder(blocks: Blocks): string[] {
-  function walk(bs: ReadonlyArray<Block>): string[] {
+  function walk(bs: ReadonlyArray<BlockDto>): string[] {
     const result: string[] = []
     for (const b of bs) {
       result.push(b.id)
@@ -301,9 +31,9 @@ function preorder(blocks: Blocks): string[] {
   return walk(blocks.blocks)
 }
 
-/** Find a block anywhere in the tree */
-function find(blocks: Blocks, id: string): Block {
-  function search(bs: ReadonlyArray<Block>): Block | undefined {
+/** Find a BlockDto anywhere in the tree */
+function find(blocks: Blocks, id: string): BlockDto {
+  function search(bs: ReadonlyArray<BlockDto>): BlockDto | undefined {
     for (const b of bs) {
       if (b.id === id) return b
       const found = search(b.children)
@@ -315,115 +45,357 @@ function find(blocks: Blocks, id: string): Block {
   return result
 }
 
+// ─── Blocks.from ──────────────────────────────────────────────────────────────
+
+describe('Blocks.from', () => {
+  it('creates a Blocks instance from a flat DTO array', () => {
+    const b = Blocks.from([dto('a', 'Hello')])
+    expect(b.blocks).toHaveLength(1)
+    expect(b.blocks[0].id).toBe('a')
+    expect(b.blocks[0].data.text).toBe('Hello')
+  })
+
+  it('recursively converts nested children', () => {
+    const b = Blocks.from([
+      dto('parent', 'Parent', [dto('child', 'Child')]),
+    ])
+    expect(b.blocks[0].children).toHaveLength(1)
+    expect(b.blocks[0].children[0].id).toBe('child')
+    expect(b.blocks[0].children[0].data.text).toBe('Child')
+  })
+
+  it('preserves nested block structure with multiple root and child blocks', () => {
+    const b = Blocks.from([
+      dto('block-1', 'Hello World', [dto('block-2', 'This is a test')]),
+      dto('block-3', 'This is another'),
+    ])
+    expect(b.blocks).toHaveLength(2)
+    expect(b.blocks[0].id).toBe('block-1')
+    expect(b.blocks[0].children[0].id).toBe('block-2')
+    expect(b.blocks[1].id).toBe('block-3')
+  })
+
+  it('throws if array is empty', () => {
+    expect(() => Blocks.from([])).toThrow()
+  })
+
+  it('throws if root-level blocks have duplicate IDs', () => {
+    expect(() => Blocks.from([dto('a'), dto('a')])).toThrow()
+  })
+
+  it('throws if a nested block has the same ID as a root block', () => {
+    expect(() => Blocks.from([dto('a', '', [dto('a')])])).toThrow()
+  })
+
+  it('throws if two nested blocks share an ID', () => {
+    expect(() => Blocks.from([dto('parent', '', [dto('dup'), dto('dup')])])).toThrow()
+  })
+
+  it('throws if block id is empty string', () => {
+    expect(() => Blocks.from([{ id: '', data: { text: '', inline: [] }, children: [] }])).toThrow()
+  })
+})
+
+// ─── addBefore ────────────────────────────────────────────────────────────────
+
+describe('addBefore', () => {
+  it('inserts a block before the target at root level', () => {
+    const b = Blocks.from([dto('a'), dto('b')])
+    const result = b.addBefore('b', block('new'))
+    expect(result.blocks.map((x) => x.id)).toEqual(['a', 'new', 'b'])
+  })
+
+  it('inserts a block before the first root block', () => {
+    const b = Blocks.from([dto('a')])
+    const result = b.addBefore('a', block('new'))
+    expect(result.blocks.map((x) => x.id)).toEqual(['new', 'a'])
+  })
+
+  it('inserts a block before a nested block at the same indent', () => {
+    const b = Blocks.from([dto('parent', '', [dto('child')])])
+    const result = b.addBefore('child', block('new'))
+    expect(result.blocks[0].children.map((x) => x.id)).toEqual(['new', 'child'])
+  })
+
+  it('throws if target id does not exist', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.addBefore('missing', block('new'))).toThrow()
+  })
+
+  it('throws if new block id already exists in the tree', () => {
+    const b = Blocks.from([dto('a'), dto('b')])
+    expect(() => b.addBefore('b', block('a'))).toThrow()
+  })
+
+  it('returns a new Blocks instance (immutable)', () => {
+    const b = Blocks.from([dto('a')])
+    const result = b.addBefore('a', block('new'))
+    expect(result).not.toBe(b)
+    expect(b.blocks).toHaveLength(1)
+  })
+})
+
+// ─── addAfter ─────────────────────────────────────────────────────────────────
+
+describe('addAfter', () => {
+  it('inserts a block after the target at root level', () => {
+    const b = Blocks.from([dto('a'), dto('b')])
+    const result = b.addAfter('a', block('new'))
+    expect(result.blocks.map((x) => x.id)).toEqual(['a', 'new', 'b'])
+  })
+
+  it('inserts a block after the last root block', () => {
+    const b = Blocks.from([dto('a')])
+    const result = b.addAfter('a', block('new'))
+    expect(result.blocks.map((x) => x.id)).toEqual(['a', 'new'])
+  })
+
+  it('inserts a block after a nested block at the same indent', () => {
+    const b = Blocks.from([dto('parent', '', [dto('child')])])
+    const result = b.addAfter('child', block('new'))
+    expect(result.blocks[0].children.map((x) => x.id)).toEqual(['child', 'new'])
+  })
+
+  it('throws if target id does not exist', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.addAfter('missing', block('new'))).toThrow()
+  })
+
+  it('throws if new block id already exists in the tree', () => {
+    const b = Blocks.from([dto('a'), dto('b')])
+    expect(() => b.addAfter('a', block('b'))).toThrow()
+  })
+})
+
+// ─── appendChild ──────────────────────────────────────────────────────────────
+
+describe('appendChild', () => {
+  it('appends a block as the last child of the target', () => {
+    const b = Blocks.from([dto('parent', '', [dto('child1')])])
+    const result = b.appendChild('parent', block('child2'))
+    expect(result.blocks[0].children.map((x) => x.id)).toEqual(['child1', 'child2'])
+  })
+
+  it('appends to a block with no existing children', () => {
+    const b = Blocks.from([dto('parent')])
+    const result = b.appendChild('parent', block('child'))
+    expect(result.blocks[0].children.map((x) => x.id)).toEqual(['child'])
+  })
+
+  it('appends to a nested target (after its subtree)', () => {
+    const b = Blocks.from([dto('outer', '', [dto('inner', '', [dto('grandchild')])])])
+    const result = b.appendChild('inner', block('new'))
+    expect(result.blocks[0].children[0].children.map((x) => x.id)).toEqual(['grandchild', 'new'])
+  })
+
+  it('throws if target id does not exist', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.appendChild('missing', block('child'))).toThrow()
+  })
+
+  it('throws if new block id already exists', () => {
+    const b = Blocks.from([dto('a'), dto('b')])
+    expect(() => b.appendChild('a', block('b'))).toThrow()
+  })
+})
+
+// ─── prependChild ─────────────────────────────────────────────────────────────
+
+describe('prependChild', () => {
+  it('prepends a block as the first child of the target', () => {
+    const b = Blocks.from([dto('parent', '', [dto('child1')])])
+    const result = b.prependChild('parent', block('new'))
+    expect(result.blocks[0].children.map((x) => x.id)).toEqual(['new', 'child1'])
+  })
+
+  it('prepends to a block with no existing children', () => {
+    const b = Blocks.from([dto('parent')])
+    const result = b.prependChild('parent', block('child'))
+    expect(result.blocks[0].children.map((x) => x.id)).toEqual(['child'])
+  })
+
+  it('throws if target id does not exist', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.prependChild('missing', block('child'))).toThrow()
+  })
+
+  it('throws if new block id already exists', () => {
+    const b = Blocks.from([dto('a'), dto('b')])
+    expect(() => b.prependChild('a', block('b'))).toThrow()
+  })
+})
+
+// ─── update ───────────────────────────────────────────────────────────────────
+
+describe('update', () => {
+  it('updates the data of a root block', () => {
+    const b = Blocks.from([dto('a', 'Hello')])
+    const result = b.update('a', worldText)
+    expect(result.blocks[0].data.text).toBe('World')
+  })
+
+  it('updates the data of a nested block', () => {
+    const b = Blocks.from([dto('parent', '', [dto('child', 'Hello')])])
+    const result = b.update('child', worldText)
+    expect(result.blocks[0].children[0].data.text).toBe('World')
+  })
+
+  it('does not mutate the original', () => {
+    const b = Blocks.from([dto('a', 'Hello')])
+    b.update('a', worldText)
+    expect(b.blocks[0].data.text).toBe('Hello')
+  })
+
+  it('preserves children when updating data', () => {
+    const b = Blocks.from([dto('parent', 'Hello', [dto('child')])])
+    const result = b.update('parent', worldText)
+    expect(result.blocks[0].children[0].id).toBe('child')
+  })
+
+  it('throws if target id does not exist', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.update('missing', worldText)).toThrow()
+  })
+})
+
 // ─── indent ───────────────────────────────────────────────────────────────────
 
 describe('indent', () => {
-  // S1 – no previous sibling → no change
-  it('skips a block that has no previous sibling (S1)', () => {
-    // Before: A, B[C, D], E
-    const before = new Blocks([
-      block('A'),
-      new Block('B', emptyText, [block('C'), block('D')]),
-      block('E'),
-    ])
+  // S1 – block can't go deeper (already at max indent relative to predecessor)
+  it('skips a block whose indent already exceeds its predecessor (S1)', () => {
+    // Before: A, B[C, D], E — flat [A:0, B:0, C:1, D:1, E:0]
+    const before = Blocks.from([dto('A'), dto('B', '', [dto('C'), dto('D')]), dto('E')])
     const result = before.indent('C', 'C')
+    // C.indent(1) > A=prev... wait: C's prev is B(0), C.indent(1) <= 0? No → skip
     expect(preorder(result)).toEqual(['A', 'B', 'C', 'D', 'E'])
     expect(find(result, 'B').children.map((x) => x.id)).toEqual(['C', 'D'])
   })
 
   // S2 – single block with previous sibling
-  it('indents a single block into its predecessor (S2)', () => {
-    // Before: A, B, C
-    const before = new Blocks([block('A'), block('B'), block('C')])
+  it('indents a single block that has room to go deeper (S2)', () => {
+    // Before: A, B, C — flat [A:0, B:0, C:0]
+    const before = Blocks.from([dto('A'), dto('B'), dto('C')])
     const result = before.indent('B', 'B')
     expect(preorder(result)).toEqual(['A', 'B', 'C'])
     expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B'])
   })
 
-  // S3 – range stops before a nested block → child extracted
-  it('extracts non-range children and places them after the moved block (S3)', () => {
-    // Before: A[B], C[D], E   indent(B,C)  range=[B,C], D not in range
-    const before = new Blocks([
-      new Block('A', emptyText, [block('B')]),
-      new Block('C', emptyText, [block('D')]),
-      block('E'),
-    ])
+  // S3 – C is indented into A; D was already a sibling of B under A at indent=1,
+  //      so after C moves to indent=1 it and D become siblings of B under A
+  it('non-range block at same indent level becomes sibling of indented block (S3)', () => {
+    // Before: A[B], C[D], E — flat [A:0, B:1, C:0, D:1, E:0]
+    const before = Blocks.from([dto('A', '', [dto('B')]), dto('C', '', [dto('D')]), dto('E')])
     const result = before.indent('B', 'C')
-    // After: A[B, C, D], E
+    // B: prev=A(0), B.indent(1)<=0? No → skip
+    // C: prev=B(1), C.indent(0)<=1 → increment to 1
+    // After flat: [A:0, B:1, C:1, D:1, E:0] → A[B, C, D], E
+    // (C and D are at the same indent=1, so D is a sibling of C, both under A)
     expect(preorder(result)).toEqual(['A', 'B', 'C', 'D', 'E'])
     expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B', 'C', 'D'])
     expect(find(result, 'C').children).toHaveLength(0)
   })
 
-  // S4 – range includes nested block → child travels with parent
-  it('keeps range children with their parent when block moves (S4)', () => {
-    // Before: A[B], C[D], E   indent(B,D)  range=[B,C,D], D in range
-    const before = new Blocks([
-      new Block('A', emptyText, [block('B')]),
-      new Block('C', emptyText, [block('D')]),
-      block('E'),
-    ])
+  // S4 – range includes a nested block
+  it('indents a range that includes nested blocks (S4)', () => {
+    // Before: A[B], C[D], E — flat [A:0, B:1, C:0, D:1, E:0]
+    const before = Blocks.from([dto('A', '', [dto('B')]), dto('C', '', [dto('D')]), dto('E')])
     const result = before.indent('B', 'D')
-    // After: A[B, C[D]], E
+    // B: skip (1>0), C: →1, D: prev=C(1), D.indent(1)<=1 →2
+    // After flat: [A:0, B:1, C:1, D:2, E:0] → A[B, C[D]], E
     expect(preorder(result)).toEqual(['A', 'B', 'C', 'D', 'E'])
     expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B', 'C'])
     expect(find(result, 'C').children.map((x) => x.id)).toEqual(['D'])
   })
 
-  // S5 – multiple flat blocks all indent into the same predecessor
+  // S5 – multiple consecutive flat blocks
   it('indents multiple consecutive flat blocks (S5)', () => {
-    // Before: A, B, C, D, E   indent(B,C)
-    const before = new Blocks([
-      block('A'), block('B'), block('C'), block('D'), block('E'),
-    ])
+    // Before: A, B, C, D, E — flat all at 0
+    const before = Blocks.from([dto('A'), dto('B'), dto('C'), dto('D'), dto('E')])
     const result = before.indent('B', 'C')
-    // After: A[B, C], D, E
+    // B→1, C: prev=B(1), C.indent(0)<=1 → 1
     expect(result.blocks.map((x) => x.id)).toEqual(['A', 'D', 'E'])
     expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B', 'C'])
   })
 
-  // S6 – block's children are all in range → all travel with block
-  it('moves a block with all children when they are all in range (S6)', () => {
-    // Before: A, B[C, D], E   indent(B,D)
-    const before = new Blocks([
-      block('A'),
-      new Block('B', emptyText, [block('C'), block('D')]),
-      block('E'),
-    ])
+  // S6 – block's children are all in range → they follow their parent deeper
+  it('increments a block and its in-range children together (S6)', () => {
+    // Before: A, B[C, D], E — flat [A:0, B:0, C:1, D:1, E:0]
+    const before = Blocks.from([dto('A'), dto('B', '', [dto('C'), dto('D')]), dto('E')])
     const result = before.indent('B', 'D')
-    // After: A[B[C, D]], E
+    // B→1, C: prev=B(1), C.indent(1)<=1 →2, D: prev=C(2), D.indent(1)<=2 →2
     expect(preorder(result)).toEqual(['A', 'B', 'C', 'D', 'E'])
     expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B'])
     expect(find(result, 'B').children.map((x) => x.id)).toEqual(['C', 'D'])
   })
 
-  // S7 – first block skipped, rest indent
-  it('skips the first block when it has no predecessor and indents the rest (S7)', () => {
-    // Before: A, B, C, D   indent(A,C)
-    const before = new Blocks([block('A'), block('B'), block('C'), block('D')])
+  // S7 – first block in list is silently skipped; rest indent
+  it('silently skips the first block and indents the rest of the range (S7)', () => {
+    // Before: A, B, C, D — flat all at 0
+    const before = Blocks.from([dto('A'), dto('B'), dto('C'), dto('D')])
     const result = before.indent('A', 'C')
-    // A skipped, B→A, C→A
+    // A: i=0 → skip; B: prev=A(0), →1; C: prev=B(1), →1
     expect(result.blocks.map((x) => x.id)).toEqual(['A', 'D'])
     expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B', 'C'])
   })
 
+  // New: evolving-state skip — B is already deeper than A so it is skipped,
+  // but C still gets incremented using B's (unchanged) indent as the reference
+  it('uses evolving state: skips block whose indent exceeds updated predecessor (new-1)', () => {
+    // Before: A[B, C], D — flat [A:0, B:1, C:1, D:0]
+    const before = Blocks.from([dto('A', '', [dto('B'), dto('C')]), dto('D')])
+    const result = before.indent('A', 'C')
+    // A: i=0 → skip; B: prev=A(0), B.indent(1)<=0? No → skip; C: prev=B(1), C.indent(1)<=1 →2
+    expect(preorder(result)).toEqual(['A', 'B', 'C', 'D'])
+    expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B'])
+    expect(find(result, 'B').children.map((x) => x.id)).toEqual(['C'])
+  })
+
+  // New: cross-level range — range spans blocks at different indent levels
+  it('handles a range that crosses indent levels (new-2)', () => {
+    // Before: A[B, C], D, E — flat [A:0, B:1, C:1, D:0, E:0]
+    const before = Blocks.from([dto('A', '', [dto('B'), dto('C')]), dto('D'), dto('E')])
+    const result = before.indent('C', 'D')
+    // C: prev=B(1), C.indent(1)<=1 →2; D: prev=C(now 2), D.indent(0)<=2 →1
+    expect(preorder(result)).toEqual(['A', 'B', 'C', 'D', 'E'])
+    expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B', 'D'])
+    expect(find(result, 'B').children.map((x) => x.id)).toEqual(['C'])
+    expect(find(result, 'D').children).toHaveLength(0)
+  })
+
+  // New: single-block — first block in list is always skipped
+  it('single-block indent of the first block is a no-op (new-3)', () => {
+    const before = Blocks.from([dto('A'), dto('B')])
+    const result = before.indent('A', 'A')
+    expect(preorder(result)).toEqual(['A', 'B'])
+    expect(result.blocks[0].children).toHaveLength(0)
+  })
+
+  // New: single-block — block already at max indent relative to predecessor
+  it('single-block indent is a no-op when block is already at max depth (new-4)', () => {
+    // Before: A[B] — flat [A:0, B:1]; B.indent(1) > A.indent(0), skip
+    const before = Blocks.from([dto('A', '', [dto('B')])])
+    const result = before.indent('B', 'B')
+    expect(preorder(result)).toEqual(['A', 'B'])
+    expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B'])
+  })
+
   it('throws if from is not found', () => {
-    const b = new Blocks([block('A')])
+    const b = Blocks.from([dto('A')])
     expect(() => b.indent('X', 'A')).toThrow()
   })
 
   it('throws if to is not found', () => {
-    const b = new Blocks([block('A')])
+    const b = Blocks.from([dto('A')])
     expect(() => b.indent('A', 'X')).toThrow()
   })
 
   it('throws if to comes before from in document order', () => {
-    const b = new Blocks([block('A'), block('B'), block('C')])
+    const b = Blocks.from([dto('A'), dto('B'), dto('C')])
     expect(() => b.indent('C', 'A')).toThrow()
   })
 
   it('returns a new Blocks instance (immutable)', () => {
-    const b = new Blocks([block('A'), block('B')])
+    const b = Blocks.from([dto('A'), dto('B')])
     const result = b.indent('B', 'B')
     expect(result).not.toBe(b)
   })
@@ -432,112 +404,120 @@ describe('indent', () => {
 // ─── unindent ─────────────────────────────────────────────────────────────────
 
 describe('unindent', () => {
-  // U1 – simple unindent, no following siblings
-  it('moves a block to after its parent when it has no following siblings (U1)', () => {
-    // Before: A[B[C]]   unindent(C,C)
-    const before = new Blocks([
-      new Block('A', emptyText, [
-        new Block('B', emptyText, [block('C')]),
-      ]),
-    ])
+  // U1 – simple unindent: block's indent decrements and it becomes a sibling of its former parent
+  it('decrements a nested block to become a sibling of its parent (U1)', () => {
+    // Before: A[B[C]] — flat [A:0, B:1, C:2]
+    const before = Blocks.from([dto('A', '', [dto('B', '', [dto('C')])])])
     const result = before.unindent('C', 'C')
-    // After: A[B, C]
+    // C: 2→1. Clamp: C(1)≤B(1)+1=2 → stays 1
+    // After flat: [A:0, B:1, C:1] → A[B, C]
     expect(preorder(result)).toEqual(['A', 'B', 'C'])
     expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B', 'C'])
     expect(find(result, 'B').children).toHaveLength(0)
   })
 
-  // U2 – following siblings become children
-  it('makes following siblings children of the unindented block (U2)', () => {
-    // Before: A[B, C, D], E   unindent(B,B)
-    const before = new Blocks([
-      new Block('A', emptyText, [block('B'), block('C'), block('D')]),
-      block('E'),
-    ])
+  // U2 – unindent causes following blocks to be re-parented via tree reconstruction
+  it('re-parents following blocks when a block is unindented (U2)', () => {
+    // Before: A[B, C, D], E — flat [A:0, B:1, C:1, D:1, E:0]
+    const before = Blocks.from([dto('A', '', [dto('B'), dto('C'), dto('D')]), dto('E')])
     const result = before.unindent('B', 'B')
-    // After: A, B[C, D], E
+    // B: 1→0. Clamp: C(1)≤B(0)+1=1 → 1, D(1)≤C(1)+1=2 → 1
+    // After flat: [A:0, B:0, C:1, D:1, E:0] → A, B[C, D], E
     expect(preorder(result)).toEqual(['A', 'B', 'C', 'D', 'E'])
     expect(find(result, 'A').children).toHaveLength(0)
     expect(find(result, 'B').children.map((x) => x.id)).toEqual(['C', 'D'])
   })
 
-  // U3 – partial following siblings
-  it('only takes following siblings, not preceding ones (U3)', () => {
-    // Before: A[B[C, D, E]]   unindent(C,C)
-    const before = new Blocks([
-      new Block('A', emptyText, [
-        new Block('B', emptyText, [block('C'), block('D'), block('E')]),
-      ]),
-    ])
+  // U3 – only the targeted block's indent decrements; deeper descendants stay relative to it
+  it('keeps descendants relative to the unindented block (U3)', () => {
+    // Before: A[B[C, D, E]] — flat [A:0, B:1, C:2, D:2, E:2]
+    const before = Blocks.from([dto('A', '', [dto('B', '', [dto('C'), dto('D'), dto('E')])])])
     const result = before.unindent('C', 'C')
-    // After: A[B, C[D, E]]
+    // C: 2→1. D and E stay at 2. Clamp: D(2)≤C(1)+1=2 → 2, E(2)≤D(2)+1=3 → 2
+    // After: [A:0, B:1, C:1, D:2, E:2] → A[B, C[D, E]]
     expect(preorder(result)).toEqual(['A', 'B', 'C', 'D', 'E'])
     expect(find(result, 'B').children).toHaveLength(0)
     expect(find(result, 'A').children.map((x) => x.id)).toEqual(['B', 'C'])
     expect(find(result, 'C').children.map((x) => x.id)).toEqual(['D', 'E'])
   })
 
-  // U4 – range unindent (two consecutive children)
-  it('processes a range of siblings sequentially (U4)', () => {
-    // Before: A[B, C, D], E   unindent(B,C)
-    const before = new Blocks([
-      new Block('A', emptyText, [block('B'), block('C'), block('D')]),
-      block('E'),
-    ])
+  // U4 – range unindent: multiple blocks decremented together
+  it('decrements a range of blocks and clamps descendants (U4)', () => {
+    // Before: A[B, C, D], E — flat [A:0, B:1, C:1, D:1, E:0]
+    const before = Blocks.from([dto('A', '', [dto('B'), dto('C'), dto('D')]), dto('E')])
     const result = before.unindent('B', 'C')
-    // After: A, B, C[D], E
+    // B→0, C→0. Clamp: D(1)≤C(0)+1=1 → 1
+    // After: [A:0, B:0, C:0, D:1, E:0] → A, B, C[D], E
     expect(preorder(result)).toEqual(['A', 'B', 'C', 'D', 'E'])
     expect(find(result, 'A').children).toHaveLength(0)
     expect(find(result, 'B').children).toHaveLength(0)
     expect(find(result, 'C').children.map((x) => x.id)).toEqual(['D'])
   })
 
-  // U5 – existing children + following siblings merge
-  it('appends following siblings after existing children (U5)', () => {
-    // Before: A[B[X, Y], C], D   unindent(B,B)
-    const before = new Blocks([
-      new Block('A', emptyText, [
-        new Block('B', emptyText, [block('X'), block('Y')]),
-        block('C'),
-      ]),
-      block('D'),
+  // U5 – clamping cascade: descendants of unindented block are clamped down
+  //      (updated expectation vs old tree model — Y stays child of X after clamp)
+  it('clamps cascade preserves descendant relationships after unindent (U5)', () => {
+    // Before: A[B[X, Y], C], D — flat [A:0, B:1, X:2, Y:2, C:1, D:0]
+    const before = Blocks.from([
+      dto('A', '', [dto('B', '', [dto('X'), dto('Y')]), dto('C')]),
+      dto('D'),
     ])
     const result = before.unindent('B', 'B')
-    // After: A, B[X, Y, C], D
+    // B: 1→0. Clamp: X(2)>B(0)+1=1 → clamped to 1; Y(2)≤X(1)+1=2 → stays 2; C(1)≤Y(2)+1=3 → 1
+    // After flat: [A:0, B:0, X:1, Y:2, C:1, D:0] → A, B[X[Y], C], D
     expect(preorder(result)).toEqual(['A', 'B', 'X', 'Y', 'C', 'D'])
     expect(find(result, 'A').children).toHaveLength(0)
-    expect(find(result, 'B').children.map((x) => x.id)).toEqual(['X', 'Y', 'C'])
+    expect(find(result, 'B').children.map((x) => x.id)).toEqual(['X', 'C'])
+    expect(find(result, 'X').children.map((x) => x.id)).toEqual(['Y'])
   })
 
-  // U6 – root-level blocks skipped
+  // U6 – blocks already at indent 0 are silently skipped
   it('silently skips root-level blocks (U6)', () => {
-    // Before: A, B
-    const before = new Blocks([block('A'), block('B')])
+    // Before: A, B — flat [A:0, B:0]
+    const before = Blocks.from([dto('A'), dto('B')])
+    const result = before.unindent('A', 'A')
+    expect(preorder(result)).toEqual(['A', 'B'])
+  })
+
+  // New: clamping cascade example from the plan
+  it('cascades the clamp pass to restore max-step validity across the whole list (new-1)', () => {
+    // Before: A[B[C], D], E — flat [A:0, B:1, C:2, D:1, E:0]
+    const before = Blocks.from([
+      dto('A', '', [dto('B', '', [dto('C')]), dto('D')]),
+      dto('E'),
+    ])
+    const result = before.unindent('A', 'B')
+    // A: 0→0 (stays); B: 1→0. Clamp: C(2)>B(0)+1=1 → 1; D(1)≤C(1)+1=2 → 1
+    // After flat: [A:0, B:0, C:1, D:1, E:0] → A, B[C, D], E
+    expect(preorder(result)).toEqual(['A', 'B', 'C', 'D', 'E'])
+    expect(find(result, 'A').children).toHaveLength(0)
+    expect(find(result, 'B').children.map((x) => x.id)).toEqual(['C', 'D'])
+  })
+
+  // New: single-block unindent of a block already at indent 0
+  it('single-block unindent of a root-level block is a no-op (new-2)', () => {
+    const before = Blocks.from([dto('A'), dto('B')])
     const result = before.unindent('A', 'A')
     expect(preorder(result)).toEqual(['A', 'B'])
   })
 
   it('throws if from is not found', () => {
-    const b = new Blocks([block('A')])
+    const b = Blocks.from([dto('A')])
     expect(() => b.unindent('X', 'A')).toThrow()
   })
 
   it('throws if to is not found', () => {
-    const b = new Blocks([block('A')])
+    const b = Blocks.from([dto('A')])
     expect(() => b.unindent('A', 'X')).toThrow()
   })
 
   it('throws if to comes before from in document order', () => {
-    const b = new Blocks([
-      new Block('A', emptyText, [block('B'), block('C')]),
-    ])
+    const b = Blocks.from([dto('A', '', [dto('B'), dto('C')])])
     expect(() => b.unindent('C', 'B')).toThrow()
   })
 
   it('returns a new Blocks instance (immutable)', () => {
-    const b = new Blocks([
-      new Block('A', emptyText, [block('B')]),
-    ])
+    const b = Blocks.from([dto('A', '', [dto('B')])])
     const result = b.unindent('B', 'B')
     expect(result).not.toBe(b)
   })
@@ -547,21 +527,19 @@ describe('unindent', () => {
 
 describe('delete', () => {
   it('deletes a root leaf block', () => {
-    const b = new Blocks([block('a'), block('b')])
+    const b = Blocks.from([dto('a'), dto('b')])
     const result = b.delete('a')
     expect(result.blocks.map((x) => x.id)).toEqual(['b'])
   })
 
   it('deletes a nested leaf block', () => {
-    const b = new Blocks([new Block('parent', emptyText, [block('child')])])
+    const b = Blocks.from([dto('parent', '', [dto('child')])])
     const result = b.delete('child')
     expect(result.blocks[0].children).toHaveLength(0)
   })
 
   it('can delete all children one by one, leaving parent as a leaf', () => {
-    const b = new Blocks([
-      new Block('parent', emptyText, [block('c1'), block('c2'), block('c3')]),
-    ])
+    const b = Blocks.from([dto('parent', '', [dto('c1'), dto('c2'), dto('c3')])])
     const r1 = b.delete('c1')
     expect(r1.blocks[0].children.map((x) => x.id)).toEqual(['c2', 'c3'])
     const r2 = r1.delete('c2')
@@ -571,26 +549,23 @@ describe('delete', () => {
   })
 
   it('throws if the block has children', () => {
-    const b = new Blocks([new Block('parent', emptyText, [block('child')])])
+    const b = Blocks.from([dto('parent', '', [dto('child')])])
     expect(() => b.delete('parent')).toThrow()
   })
 
   it('throws if target id does not exist', () => {
-    const b = new Blocks([block('a')])
+    const b = Blocks.from([dto('a')])
     expect(() => b.delete('missing')).toThrow()
   })
 
   it('throws if deleting would leave the root Blocks empty', () => {
-    const b = new Blocks([block('a')])
+    const b = Blocks.from([dto('a')])
     expect(() => b.delete('a')).toThrow()
   })
 
   it('plan example: deleting A or B throws because they have children', () => {
     // Tree: A → [B → [C]]
-    const c = block('C')
-    const bBlock = new Block('B', emptyText, [c])
-    const a = new Block('A', emptyText, [bBlock])
-    const b = new Blocks([a])
+    const b = Blocks.from([dto('A', '', [dto('B', '', [dto('C')])])])
     expect(() => b.delete('A')).toThrow()
     expect(() => b.delete('B')).toThrow()
     // Correct sequence: delete C, then B, then A
