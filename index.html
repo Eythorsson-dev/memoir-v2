@@ -4,20 +4,160 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Block Editor Demo</title>
+    <script>
+      try {
+        const t = localStorage.getItem('block-editor-demo-theme') || 'system';
+        if (t !== 'system') document.documentElement.setAttribute('data-theme', t);
+      } catch {}
+    </script>
     <style>
-      body { font-family: sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
-      #editor-container { font-size: 1.2rem; margin-bottom: 1.5rem; }
-      #json-output, #selection-output { background: #f4f4f4; padding: 1rem; border-radius: 4px; white-space: break-spaces; overflow: auto; }
+      /* 1. Light defaults */
+      :root {
+        color-scheme: light;
+        --bg: #fff;
+        --fg: #111;
+        --panel-bg: #f4f4f4;
+        --border: #ccc;
+        --editor-bg: #f0f0f0;
+        --toolbar-fg: #555;
+        --toolbar-btn-hover-bg: #f0f0f0;
+        --toolbar-btn-active-bg: #dbeafe;
+        --toolbar-btn-active-color: #1d4ed8;
+        --toolbar-btn-active-border: #3b82f6;
+        --tooltip-bg: #111827;
+        --tooltip-color: #f9fafb;
+      }
+
+      /* 2. System dark (no user override) */
+      @media (prefers-color-scheme: dark) {
+        :root {
+          color-scheme: dark;
+          --bg: #1a1a1a;
+          --fg: #e8e8e8;
+          --panel-bg: #2a2a2a;
+          --border: #444;
+          --editor-bg: #252525;
+          --toolbar-fg: #aaa;
+          --toolbar-btn-hover-bg: #3a3a3a;
+          --toolbar-btn-active-bg: #1e3a5f;
+          --toolbar-btn-active-color: #93c5fd;
+          --toolbar-btn-active-border: #3b82f6;
+          --tooltip-bg: #f9fafb;
+          --tooltip-color: #111827;
+        }
+      }
+
+      /* 3. Explicit user override */
+      :root[data-theme="light"] {
+        color-scheme: light;
+        --bg: #fff;
+        --fg: #111;
+        --panel-bg: #f4f4f4;
+        --border: #ccc;
+        --editor-bg: #f0f0f0;
+        --toolbar-fg: #555;
+        --toolbar-btn-hover-bg: #f0f0f0;
+        --toolbar-btn-active-bg: #dbeafe;
+        --toolbar-btn-active-color: #1d4ed8;
+        --toolbar-btn-active-border: #3b82f6;
+        --tooltip-bg: #111827;
+        --tooltip-color: #f9fafb;
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #1a1a1a;
+        --fg: #e8e8e8;
+        --panel-bg: #2a2a2a;
+        --border: #444;
+        --editor-bg: #252525;
+        --toolbar-fg: #aaa;
+        --toolbar-btn-hover-bg: #3a3a3a;
+        --toolbar-btn-active-bg: #1e3a5f;
+        --toolbar-btn-active-color: #93c5fd;
+        --toolbar-btn-active-border: #3b82f6;
+        --tooltip-bg: #f9fafb;
+        --tooltip-color: #111827;
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        body, pre, .block-editor-editable {
+          transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease;
+        }
+      }
+
+      body {
+        font-family: sans-serif;
+        margin: 2rem;
+        padding: 0 1rem;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg);
+        color: var(--fg);
+      }
+
+      pre {
+        background: var(--panel-bg);
+        color: var(--fg);
+        border: 1px solid var(--border);
+        padding: 1rem;
+        border-radius: 4px;
+        white-space: break-spaces;
+        overflow: auto;
+      }
+
+      .block-editor-editable {
+        background: var(--editor-bg);
+        border-radius: 6px;
+        outline: none;
+        border: 1px solid var(--border);
+        padding: 8px;
+      }
+
+      .block-editor-editable:focus {
+        outline: none;
+      }
+
+      .layout {
+        display: flex;
+        gap: 1.5rem;
+        align-items: flex-start;
+      }
+
+      .editor-pane {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .inspector-pane {
+        width: 320px;
+        flex-shrink: 0;
+        position: sticky;
+        top: 1rem;
+      }
+
+      #theme-toggle {
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
-    <h1>Block Editor Demo</h1>
-    <h2>Editor</h2>
-    <div id="editor-container"></div>
-    <h2>State JSON</h2>
-    <pre id="json-output"></pre>
-    <h2>Selection</h2>
-    <pre id="selection-output">null</pre>
+    <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem;">
+      <h1 style="margin:0;">Block Editor Demo</h1>
+      <button id="theme-toggle" aria-label="Change color theme"></button>
+    </div>
+    <div class="layout">
+      <div class="editor-pane">
+        <h2>Editor</h2>
+        <div id="editor-container"></div>
+      </div>
+      <div class="inspector-pane">
+        <h2>Selection</h2>
+        <pre id="selection-output">null</pre>
+        <h2>State JSON</h2>
+        <pre id="json-output"></pre>
+      </div>
+    </div>
     <script type="module" src="/src/demo.ts"></script>
   </body>
 </html>
