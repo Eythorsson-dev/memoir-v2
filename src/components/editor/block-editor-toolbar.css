@@ -1,0 +1,62 @@
+.text-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+
+.text-editor-toolbar button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--toolbar-fg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.text-editor-toolbar button:hover {
+  background: var(--toolbar-btn-hover-bg);
+}
+
+.text-editor-toolbar button.is-active {
+  background: var(--toolbar-btn-active-bg);
+  border-color: var(--toolbar-btn-active-border);
+  color: var(--toolbar-btn-active-color);
+}
+
+.text-editor-toolbar button svg {
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+
+.text-editor-toolbar button .tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background: var(--tooltip-bg);
+  color: var(--tooltip-color);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.text-editor-toolbar button:hover .tooltip {
+  display: block;
+}
+
+.text-editor-toolbar button .tooltip kbd {
+  opacity: 0.65;
+  font-family: inherit;
+  margin-left: 4px;
+}

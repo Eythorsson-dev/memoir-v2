@@ -1,18 +1,36 @@
-import { defineConfig } from 'vite'
-import { resolve } from 'path'
-import { svelte } from '@sveltejs/vite-plugin-svelte'
+import { defineConfig } from 'vitest/config';
+import { playwright } from '@vitest/browser-playwright';
+import tailwindcss from '@tailwindcss/vite';
+import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
-  plugins: [svelte()],
-  build: {
-    lib: {
-      entry: resolve(__dirname, 'src/index.ts'),
-      name: 'BlockEditorAi2',
-      fileName: 'block-editor-ai2'
-    }
-  },
-  test: {
-    environment: 'jsdom',
-    globals: true
-  }
-})
+	plugins: [tailwindcss(), sveltekit()],
+	test: {
+		expect: { requireAssertions: true },
+		projects: [
+			{
+				extends: './vite.config.ts',
+				test: {
+					name: 'client',
+					browser: {
+						enabled: true,
+						provider: playwright(),
+						instances: [{ browser: 'chromium', headless: true }]
+					},
+					include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
+					exclude: ['src/lib/server/**']
+				}
+			},
+
+			{
+				extends: './vite.config.ts',
+				test: {
+					name: 'server',
+					environment: 'happy-dom',
+					include: ['src/**/*.{test,spec}.{js,ts}'],
+					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
+				}
+			}
+		]
+	}
+});

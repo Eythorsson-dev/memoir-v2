@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	%sveltekit.head%
+</head>
+
+<style>
+	/* 1. Light defaults */
+	:root {
+		color-scheme: light;
+		--bg: #fff;
+		--fg: #111;
+		--panel-bg: #f4f4f4;
+		--border: #ccc;
+		--editor-bg: #f0f0f0;
+		--toolbar-fg: #555;
+		--toolbar-btn-hover-bg: #f0f0f0;
+		--toolbar-btn-active-bg: #dbeafe;
+		--toolbar-btn-active-color: #1d4ed8;
+		--toolbar-btn-active-border: #3b82f6;
+		--tooltip-bg: #111827;
+		--tooltip-color: #f9fafb;
+	}
+
+	/* 2. System dark (no user override) */
+	@media (prefers-color-scheme: dark) {
+		:root {
+			color-scheme: dark;
+			--bg: #1a1a1a;
+			--fg: #e8e8e8;
+			--panel-bg: #2a2a2a;
+			--border: #444;
+			--editor-bg: #252525;
+			--toolbar-fg: #aaa;
+			--toolbar-btn-hover-bg: #3a3a3a;
+			--toolbar-btn-active-bg: #1e3a5f;
+			--toolbar-btn-active-color: #93c5fd;
+			--toolbar-btn-active-border: #3b82f6;
+			--tooltip-bg: #f9fafb;
+			--tooltip-color: #111827;
+		}
+	}
+
+	/* 3. Explicit user override */
+	:root[data-theme="light"] {
+		color-scheme: light;
+		--bg: #fff;
+		--fg: #111;
+		--panel-bg: #f4f4f4;
+		--border: #ccc;
+		--editor-bg: #f0f0f0;
+		--toolbar-fg: #555;
+		--toolbar-btn-hover-bg: #f0f0f0;
+		--toolbar-btn-active-bg: #dbeafe;
+		--toolbar-btn-active-color: #1d4ed8;
+		--toolbar-btn-active-border: #3b82f6;
+		--tooltip-bg: #111827;
+		--tooltip-color: #f9fafb;
+	}
+
+	:root[data-theme="dark"] {
+		color-scheme: dark;
+		--bg: #1a1a1a;
+		--fg: #e8e8e8;
+		--panel-bg: #2a2a2a;
+		--border: #444;
+		--editor-bg: #252525;
+		--toolbar-fg: #aaa;
+		--toolbar-btn-hover-bg: #3a3a3a;
+		--toolbar-btn-active-bg: #1e3a5f;
+		--toolbar-btn-active-color: #93c5fd;
+		--toolbar-btn-active-border: #3b82f6;
+		--tooltip-bg: #f9fafb;
+		--tooltip-color: #111827;
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+
+		body,
+		pre,
+		.block-editor-editable {
+			transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease;
+		}
+	}
+
+	body {
+		font-family: sans-serif;
+		display: flex;
+		flex-direction: column;
+		background: var(--bg);
+		color: var(--fg);
+	}
+
+	pre {
+		background: var(--panel-bg);
+		color: var(--fg);
+		border: 1px solid var(--border);
+		padding: 1rem;
+		border-radius: 4px;
+		white-space: break-spaces;
+		overflow: auto;
+	}
+
+	.block-editor-editable {
+		background: var(--editor-bg);
+		border-radius: 6px;
+		outline: none;
+		border: 1px solid var(--border);
+		padding: 8px;
+	}
+
+	.block-editor-editable:focus {
+		outline: none;
+	}
+</style>
+
+<body data-sveltekit-preload-data="hover">
+	<div style="display: contents">%sveltekit.body%</div>
+</body>
+
+</html>

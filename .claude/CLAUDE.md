@@ -37,6 +37,83 @@ Use small, atomic commits with [Conventional Commits](https://www.conventionalco
 
 **Errors must never fail silently.** All unexpected errors must throw. Never swallow exceptions or use empty catch blocks.
 
+## UI Guidelines
+
+**Always use Lucide icons** (`lucide` package, already a dependency) for any icons in the UI. Never use emoji, Unicode symbols, or CSS pseudo-element characters as icon substitutes.
+
+```typescript
+import { createElement, ChevronRight, X } from 'lucide'
+const icon = createElement(ChevronRight) // returns an SVGElement
+```
+
+## Demo Page
+
+The demo page (`index.html` / `src/demo/`) uses **Svelte 5**. The editor library itself (`src/editor/`, `src/blocks/`, `src/text/`) stays pure vanilla TypeScript — no Svelte dependency in the library code.
+
+### Svelte 5 conventions for the demo
+
+- Use runes: `$state` for reactive values, `$derived` for computed values, `$effect` only as a last resort.
+- Mount class-based editor components with `{@attach}` — the idiomatic Svelte 5 pattern for handing a DOM node to a vanilla JS library:
+  ```svelte
+  <script lang="ts">
+    import { BlockEditorWithToolbar } from '../editor/BlockEditorWithToolbar'
+    function mountEditor(node: HTMLElement) {
+      const editor = new BlockEditorWithToolbar(node, initialBlocks)
+      return () => editor.destroy()
+    }
+  </script>
+  <div {@attach mountEditor}></div>
+  ```
+- Use callback props (`let { onchange } = $props()`) instead of `createEventDispatcher`.
+- Use snippets (`{#snippet ...}`) instead of named slots.
+- Component files: `kebab-case.svelte`; imported as `PascalCase`.
+- Use `lang="ts"` (not `lang="typescript"`) on `<script>` tags.
+
+## Component Patterns
+
+All UI components in this library follow a **class-based pattern** — no Web Components, no framework.
+
+**Do not use Web Components (Custom Elements).** The library exposes a programmatic TypeScript API (`new TextEditor(container)`). Web Components add global registration overhead, Shadow DOM complexity, and attribute-only API limitations with no benefit for this use case. ProseMirror and CodeMirror use the same class-based approach.
+
+### Standard component shape
+
+```typescript
+class MyComponent {
+  private _root: HTMLElement
+  private _onFoo = () => { /* arrow fn stored as field for removeEventListener */ }
+
+  constructor(container: HTMLElement, opts: MyOptions) {
+    // Build DOM, attach listeners, call _render()
+    document.addEventListener('selectionchange', this._onFoo)
+  }
+
+  getValue(): State { ... }
+  setValue(state: State): void { this._state = state; this._render() }
+  onChange(cb: (state: State) => void): () => void { /* return unsubscribe fn */ }
+
+  destroy(): void {
+    this._root.remove()
+    document.removeEventListener('selectionchange', this._onFoo) // must remove global listeners
+  }
+
+  private _render(): void { /* idempotent DOM sync — never recreate; only patch */ }
+}
+```
+
+**Lifecycle rules:**
+- `constructor` — create DOM, register listeners, call `_render()`
+- `_render()` — private, idempotent, projects state → DOM; never recreate chrome, only patch (toggle classes/attributes)
+- `destroy()` — remove created DOM, **always detach global listeners** (`document`, `window`) stored as private arrow-function fields
+- Upward communication via subscription (`onChange(cb): () => void`) — fully type-safe, no `CustomEvent` dispatch
+
+**Re-rendering rules:**
+- State flows one way: event → derive new state → `_render()` → notify listeners
+- For toolbar/chrome: mutate only what changed (toggle CSS classes, set `aria-pressed`) — never `innerHTML` replace
+- For the rich-text area: full serializer re-render is correct (serializer owns the content)
+- For future block lists: use key-based reconciliation or `morphdom` rather than full replacement
+
+**CSS injection:** use a single shared `injectSharedStyles()` call with a module-level guard, not per-component injection.
+
 ## Architecture
 
 The project is a TypeScript library for a rich-text block editor. Three distinct layers:

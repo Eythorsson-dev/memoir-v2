@@ -1,0 +1,1 @@
+How can we extract actions from our notes. We want to be explicit on what we should do next
