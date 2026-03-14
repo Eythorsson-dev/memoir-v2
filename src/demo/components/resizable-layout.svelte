@@ -72,24 +72,26 @@
     {@render editor()}
   </div>
 
-  <div
-    class="resize-handle"
-    role="separator"
-    aria-orientation="vertical"
-    aria-label="Resize inspector"
-    aria-valuemin={minWidth}
-    aria-valuemax={maxWidth}
-    aria-valuenow={width}
-    tabindex="0"
-    bind:this={handleEl}
-    onpointerdown={onPointerDown}
-    onkeydown={onKeyDown}
-  >
-    <span class="grip-icon" bind:this={gripContainer}></span>
-  </div>
+  <div class="sidebar">
+    <div
+      class="resize-handle"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize inspector"
+      aria-valuemin={minWidth}
+      aria-valuemax={maxWidth}
+      aria-valuenow={width}
+      tabindex="0"
+      bind:this={handleEl}
+      onpointerdown={onPointerDown}
+      onkeydown={onKeyDown}
+    >
+      <span class="grip-icon" bind:this={gripContainer}></span>
+    </div>
 
-  <div class="inspector-pane" style="width: {width}px">
-    {@render inspector()}
+    <div class="inspector-pane" style="width: {width}px">
+      {@render inspector()}
+    </div>
   </div>
 </div>
 
@@ -103,12 +105,17 @@
     flex: 1;
     min-width: 0;
   }
-  .inspector-pane {
-    flex-shrink: 0;
-    max-height: calc(100vh - 4rem);
-    overflow-y: auto;
+  .sidebar {
+    display: flex;
+    align-items: stretch;
     position: sticky;
     top: 1rem;
+    max-height: calc(100vh - 4rem);
+    flex-shrink: 0;
+  }
+  .inspector-pane {
+    flex-shrink: 0;
+    overflow-y: auto;
   }
   .resize-handle {
     width: 4px;

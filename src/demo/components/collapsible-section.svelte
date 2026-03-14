@@ -45,9 +45,15 @@
     gap: 0.4rem;
     cursor: pointer;
     font-weight: 600;
-    padding: 0.4rem 0;
+    padding: 0.4rem 0.5rem;
+    margin: 0 -0.5rem;
     list-style: none;
     user-select: none;
+    border-radius: 4px;
+    transition: background 120ms;
+  }
+  .section-summary:hover {
+    background: var(--toolbar-btn-hover-bg);
   }
   .section-summary :global(.lucide) {
     width: 14px;
