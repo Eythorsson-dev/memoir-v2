@@ -1,11 +1,11 @@
 import { Serializer } from '../serializer'
-import { Blocks, BlockDto, BlockId } from './blocks'
+import { Blocks, Block, BlockId } from './blocks'
 import { Text, InlineDto } from '../text/text'
 import { textSerializer } from '../text/serializer'
 
 // ─── Render ───────────────────────────────────────────────────────────────────
 
-function renderBlock(block: BlockDto): Element {
+function renderBlock(block: Block): Element {
   const div = document.createElement('div')
   div.className = 'block'
   div.id = block.id
@@ -31,7 +31,7 @@ function render(blocks: Blocks): Node[] {
 
 // ─── Parse ────────────────────────────────────────────────────────────────────
 
-function parseBlock(el: Element): BlockDto {
+function parseBlock(el: Element): Block {
   const id: BlockId | null = el.getAttribute('id')
   if (!id) throw new Error('Block element missing id attribute')
 
@@ -61,7 +61,7 @@ function parseBlock(el: Element): BlockDto {
 
   const data = textSerializer.parse(Array.from(pElement.childNodes))
 
-  const children: BlockDto[] = []
+  const children: Block[] = []
   if (childrenElement) {
     for (const node of Array.from(childrenElement.childNodes)) {
       if (node.nodeType === Node.TEXT_NODE) {
@@ -78,11 +78,11 @@ function parseBlock(el: Element): BlockDto {
     }
   }
 
-  return { id, data: data.toJSON(), children }
+  return new Block(id, data.toJSON(), children)
 }
 
 function parse(nodes: Node[]): Blocks {
-  const dtos: BlockDto[] = []
+  const dtos: Block[] = []
   for (const node of nodes) {
     if (node.nodeType === Node.ELEMENT_NODE) {
       dtos.push(parseBlock(node as Element))

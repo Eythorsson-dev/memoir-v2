@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Blocks, BlockDto } from './blocks'
+import { Blocks, Block, BlockOffset, BlockRange } from './blocks'
 import { Text } from '../text/text'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -8,9 +8,9 @@ const emptyText = new Text('', [])
 const helloText = new Text('Hello', [])
 const worldText = new Text('World', [])
 
-/** Build a BlockDto (tree format) for use with Blocks.from */
-function dto(id: string, text = '', children: BlockDto[] = []): BlockDto {
-  return { id, data: { text, inline: [] }, children }
+/** Build a Block (tree format) for use with Blocks.from */
+function dto(id: string, text = '', children: Block[] = []): Block {
+  return new Block(id, { text, inline: [] }, children)
 }
 
 /** Build a block arg for use with mutation methods (addBefore, addAfter, etc.) */
@@ -20,7 +20,7 @@ function block(id: string, data: Text = emptyText): { id: string; data: Text } {
 
 /** Pre-order traversal of block IDs */
 function preorder(blocks: Blocks): string[] {
-  function walk(bs: ReadonlyArray<BlockDto>): string[] {
+  function walk(bs: ReadonlyArray<Block>): string[] {
     const result: string[] = []
     for (const b of bs) {
       result.push(b.id)
@@ -31,9 +31,9 @@ function preorder(blocks: Blocks): string[] {
   return walk(blocks.blocks)
 }
 
-/** Find a BlockDto anywhere in the tree */
-function find(blocks: Blocks, id: string): BlockDto {
-  function search(bs: ReadonlyArray<BlockDto>): BlockDto | undefined {
+/** Find a Block anywhere in the tree */
+function find(blocks: Blocks, id: string): Block {
+  function search(bs: ReadonlyArray<Block>): Block | undefined {
     for (const b of bs) {
       if (b.id === id) return b
       const found = search(b.children)
@@ -92,7 +92,7 @@ describe('Blocks.from', () => {
   })
 
   it('throws if block id is empty string', () => {
-    expect(() => Blocks.from([{ id: '', data: { text: '', inline: [] }, children: [] }])).toThrow()
+    expect(() => Blocks.from([new Block('', { text: '', inline: [] }, [])])).toThrow()
   })
 })
 
@@ -573,5 +573,388 @@ describe('delete', () => {
     const r2 = r1.delete('B')
     // Cannot delete A without another root block
     expect(() => r2.delete('A')).toThrow()
+  })
+})
+
+// ─── Block.getLength ──────────────────────────────────────────────────────────
+
+describe('Block.getLength', () => {
+  it('returns the text length of the block data', () => {
+    const b = new Block('a', { text: 'Hello', inline: [] }, [])
+    expect(b.getLength()).toBe(5)
+  })
+
+  it('returns 0 for empty text', () => {
+    const b = new Block('a', { text: '', inline: [] }, [])
+    expect(b.getLength()).toBe(0)
+  })
+})
+
+// ─── Blocks.createBlock ───────────────────────────────────────────────────────
+
+describe('Blocks.createBlock', () => {
+  it('creates a block with a UUID id', () => {
+    const b = Blocks.createBlock()
+    expect(b.id).toMatch(/^[0-9a-f-]{36}$/)
+  })
+
+  it('creates a block with empty data and children when no args given', () => {
+    const b = Blocks.createBlock()
+    expect(b.data.text).toBe('')
+    expect(b.data.inline).toHaveLength(0)
+    expect(b.children).toHaveLength(0)
+  })
+
+  it('uses the provided data', () => {
+    const b = Blocks.createBlock({ text: 'Hello', inline: [] })
+    expect(b.data.text).toBe('Hello')
+  })
+
+  it('generates unique IDs each time', () => {
+    const a = Blocks.createBlock()
+    const b = Blocks.createBlock()
+    expect(a.id).not.toBe(b.id)
+  })
+})
+
+// ─── getBlock ─────────────────────────────────────────────────────────────────
+
+describe('getBlock', () => {
+  it('returns a root block with its children', () => {
+    const b = Blocks.from([dto('a', 'Hello', [dto('b', 'World')])])
+    const result = b.getBlock('a')
+    expect(result.id).toBe('a')
+    expect(result.data.text).toBe('Hello')
+    expect(result.children).toHaveLength(1)
+    expect(result.children[0].id).toBe('b')
+  })
+
+  it('returns a nested block with its subtree', () => {
+    const b = Blocks.from([dto('parent', '', [dto('child', 'Hi', [dto('grandchild', 'Yo')])])])
+    const result = b.getBlock('child')
+    expect(result.id).toBe('child')
+    expect(result.children).toHaveLength(1)
+    expect(result.children[0].id).toBe('grandchild')
+  })
+
+  it("throws 'Block not found: <id>' if id does not exist", () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.getBlock('missing')).toThrow('Block not found: missing')
+  })
+})
+
+// ─── previousBlockId ─────────────────────────────────────────────────────────
+
+describe('previousBlockId', () => {
+  it('returns null for the first block', () => {
+    const b = Blocks.from([dto('a'), dto('b')])
+    expect(b.previousBlockId('a')).toBeNull()
+  })
+
+  it('returns the previous block in pre-order flat sequence', () => {
+    const b = Blocks.from([dto('a'), dto('b'), dto('c')])
+    expect(b.previousBlockId('b')).toBe('a')
+    expect(b.previousBlockId('c')).toBe('b')
+  })
+
+  it('returns the parent when a nested block is first child', () => {
+    // flat: [parent:0, child:1]
+    const b = Blocks.from([dto('parent', '', [dto('child')])])
+    expect(b.previousBlockId('child')).toBe('parent')
+  })
+
+  it('throws if id does not exist', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.previousBlockId('missing')).toThrow('Block not found: missing')
+  })
+})
+
+// ─── nextBlockId ─────────────────────────────────────────────────────────────
+
+describe('nextBlockId', () => {
+  it('returns null for the last block', () => {
+    const b = Blocks.from([dto('a'), dto('b')])
+    expect(b.nextBlockId('b')).toBeNull()
+  })
+
+  it('returns the next block in pre-order flat sequence', () => {
+    const b = Blocks.from([dto('a'), dto('b'), dto('c')])
+    expect(b.nextBlockId('a')).toBe('b')
+    expect(b.nextBlockId('b')).toBe('c')
+  })
+
+  it('returns the first child when the block has children', () => {
+    // flat: [parent:0, child:1]
+    const b = Blocks.from([dto('parent', '', [dto('child')])])
+    expect(b.nextBlockId('parent')).toBe('child')
+  })
+
+  it('throws if id does not exist', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.nextBlockId('missing')).toThrow('Block not found: missing')
+  })
+})
+
+// ─── nextSiblingOrNextAscendantSiblingId ──────────────────────────────────────
+
+describe('nextSiblingOrNextAscendantSiblingId', () => {
+  it('returns the next sibling when one exists', () => {
+    // flat: [a:0, b:0, c:0]
+    const b = Blocks.from([dto('a'), dto('b'), dto('c')])
+    expect(b.nextSiblingOrNextAscendantSiblingId('a')).toBe('b')
+  })
+
+  it("returns parent's next sibling when block is the last child", () => {
+    // flat: [a:0, b:1, c:0] — b is last child of a; c is a's next sibling
+    const b = Blocks.from([dto('a', '', [dto('b')]), dto('c')])
+    expect(b.nextSiblingOrNextAscendantSiblingId('b')).toBe('c')
+  })
+
+  it('skips over the entire subtree to find the next non-descendant', () => {
+    // flat: [a:0, b:1, c:2, d:0]
+    const b = Blocks.from([dto('a', '', [dto('b', '', [dto('c')])]), dto('d')])
+    expect(b.nextSiblingOrNextAscendantSiblingId('a')).toBe('d')
+    expect(b.nextSiblingOrNextAscendantSiblingId('b')).toBe('d')
+  })
+
+  it('returns null if the block and its subtree end the document', () => {
+    const b = Blocks.from([dto('a'), dto('b', '', [dto('c')])])
+    expect(b.nextSiblingOrNextAscendantSiblingId('b')).toBeNull()
+    expect(b.nextSiblingOrNextAscendantSiblingId('c')).toBeNull()
+  })
+
+  it('throws if id does not exist', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.nextSiblingOrNextAscendantSiblingId('missing')).toThrow('Block not found: missing')
+  })
+})
+
+// ─── hasChildren ──────────────────────────────────────────────────────────────
+
+describe('hasChildren', () => {
+  it('returns true when the block has children', () => {
+    const b = Blocks.from([dto('a', '', [dto('b')])])
+    expect(b.hasChildren('a')).toBe(true)
+  })
+
+  it('returns false when the block has no children', () => {
+    const b = Blocks.from([dto('a'), dto('b')])
+    expect(b.hasChildren('a')).toBe(false)
+    expect(b.hasChildren('b')).toBe(false)
+  })
+
+  it('returns false for the last block even if previous sibling has children', () => {
+    const b = Blocks.from([dto('a', '', [dto('b')]), dto('c')])
+    expect(b.hasChildren('c')).toBe(false)
+  })
+
+  it('throws if id does not exist', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.hasChildren('missing')).toThrow('Block not found: missing')
+  })
+})
+
+// ─── splitAt ─────────────────────────────────────────────────────────────────
+
+describe('splitAt', () => {
+  it('splits a block at a mid-text offset', () => {
+    const b = Blocks.from([dto('a', 'Hello World')])
+    const result = b.splitAt('a', 5, 'b')
+    expect(preorder(result)).toEqual(['a', 'b'])
+    expect(find(result, 'a').data.text).toBe('Hello')
+    expect(find(result, 'b').data.text).toBe(' World')
+  })
+
+  it('splits at offset 0 — left is empty, right has all text', () => {
+    const b = Blocks.from([dto('a', 'Hello')])
+    const result = b.splitAt('a', 0, 'b')
+    expect(find(result, 'a').data.text).toBe('')
+    expect(find(result, 'b').data.text).toBe('Hello')
+  })
+
+  it('splits at end — left has all text, right is empty', () => {
+    const b = Blocks.from([dto('a', 'Hello')])
+    const result = b.splitAt('a', 5, 'b')
+    expect(find(result, 'a').data.text).toBe('Hello')
+    expect(find(result, 'b').data.text).toBe('')
+  })
+
+  it('new block is inserted at same indent as original', () => {
+    // flat: [parent:0, child:1] — split child
+    const b = Blocks.from([dto('parent', '', [dto('child', 'Hi')])])
+    const result = b.splitAt('child', 1, 'new')
+    // new should be at same indent as child (both children of parent)
+    expect(find(result, 'parent').children.map(x => x.id)).toEqual(['child', 'new'])
+  })
+
+  it("new block inherits the original block's children", () => {
+    // flat: [a:0, b:1] — split 'a'; b comes after 'a' in flat, so b becomes child of new
+    const b = Blocks.from([dto('a', 'Hello', [dto('b')])])
+    const result = b.splitAt('a', 3, 'new')
+    expect(preorder(result)).toEqual(['a', 'new', 'b'])
+    // 'b' at indent 1 is now under 'new' (indent 0)
+    expect(find(result, 'new').children.map(x => x.id)).toEqual(['b'])
+  })
+
+  it('throws if id does not exist', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.splitAt('missing', 0, 'new')).toThrow('Block not found: missing')
+  })
+
+  it('throws if newId already exists', () => {
+    const b = Blocks.from([dto('a'), dto('b')])
+    expect(() => b.splitAt('a', 0, 'b')).toThrow()
+  })
+
+  it('throws if offset is out of bounds', () => {
+    const b = Blocks.from([dto('a', 'Hi')])
+    expect(() => b.splitAt('a', 10, 'new')).toThrow()
+  })
+})
+
+// ─── merge ────────────────────────────────────────────────────────────────────
+
+describe('merge', () => {
+  it('appends right text to left text', () => {
+    const b = Blocks.from([dto('a', 'Hello'), dto('b', ' World')])
+    const result = b.merge('a', 'b')
+    expect(find(result, 'a').data.text).toBe('Hello World')
+  })
+
+  it('removes the right block', () => {
+    const b = Blocks.from([dto('a', 'Hello'), dto('b', ' World')])
+    const result = b.merge('a', 'b')
+    expect(preorder(result)).toEqual(['a'])
+  })
+
+  it("keeps right block's children in place after merge, re-parenting via clamping", () => {
+    // flat: [a:0, b:0, c:1] — merge a and b; c was b's child
+    const b = Blocks.from([dto('a', 'Hello'), dto('b', ' World', [dto('c', 'Child')])])
+    const result = b.merge('a', 'b')
+    // flat after: [a:0, c:1] — c becomes child of a
+    expect(preorder(result)).toEqual(['a', 'c'])
+    expect(find(result, 'a').children.map(x => x.id)).toEqual(['c'])
+  })
+
+  it('applies clamping when right block children would be too deep', () => {
+    // flat: [parent:0, left:1, right:2, child:3]
+    const b = Blocks.from([
+      dto('parent', '', [
+        dto('left', 'L'),
+        dto('right', 'R', [dto('child', 'C')]),
+      ]),
+    ])
+    const result = b.merge('left', 'right')
+    // After removing right: [parent:0, left:1, child:3]
+    // Clamp: parent(0), left(1≤0+1=1 ✓), child(3>1+1=2 → 2)
+    expect(preorder(result)).toEqual(['parent', 'left', 'child'])
+    expect(find(result, 'left').children.map(x => x.id)).toEqual(['child'])
+  })
+
+  it('throws if left does not exist', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.merge('missing', 'a')).toThrow('Block not found: missing')
+  })
+
+  it('throws if right does not exist', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.merge('a', 'missing')).toThrow('Block not found: missing')
+  })
+
+  it('throws if right is not immediately after left in flat order', () => {
+    const b = Blocks.from([dto('a'), dto('b'), dto('c')])
+    expect(() => b.merge('a', 'c')).toThrow()
+  })
+
+  it('returns a new Blocks instance (immutable)', () => {
+    const b = Blocks.from([dto('a', 'Hello'), dto('b', ' World')])
+    const result = b.merge('a', 'b')
+    expect(result).not.toBe(b)
+  })
+})
+
+// ─── deleteRange ──────────────────────────────────────────────────────────────
+
+describe('deleteRange', () => {
+  it('same block: removes text between start and end offsets', () => {
+    const b = Blocks.from([dto('a', 'Hello World')])
+    const sel = new BlockRange(new BlockOffset('a', 5), new BlockOffset('a', 11))
+    const result = b.deleteRange(sel)
+    expect(find(result, 'a').data.text).toBe('Hello')
+  })
+
+  it('same block: removes text in the middle', () => {
+    const b = Blocks.from([dto('a', 'Hello World')])
+    const sel = new BlockRange(new BlockOffset('a', 5), new BlockOffset('a', 6))
+    const result = b.deleteRange(sel)
+    expect(find(result, 'a').data.text).toBe('HelloWorld')
+  })
+
+  it('multi-block: merges start and end blocks, removes everything between', () => {
+    const b = Blocks.from([dto('a', 'Hello'), dto('b', 'Middle'), dto('c', 'World')])
+    // delete from offset 2 in 'a' to offset 3 in 'c'
+    const sel = new BlockRange(new BlockOffset('a', 2), new BlockOffset('c', 3))
+    const result = b.deleteRange(sel)
+    expect(preorder(result)).toEqual(['a'])
+    expect(find(result, 'a').data.text).toBe('Held')  // 'He' + 'ld' (World[3..])
+  })
+
+  it('multi-block: removes end block and its descendants', () => {
+    // flat: [a:0, b:0, c:1]
+    const b = Blocks.from([dto('a', 'AAA'), dto('b', 'BBB', [dto('c', 'CCC')])])
+    const sel = new BlockRange(new BlockOffset('a', 1), new BlockOffset('b', 1))
+    const result = b.deleteRange(sel)
+    // remove b (and c as its descendant); a gets 'A' + 'BB'
+    expect(preorder(result)).toEqual(['a'])
+    expect(find(result, 'a').data.text).toBe('ABB')
+  })
+
+  it('multi-block: keeps blocks after end block', () => {
+    const b = Blocks.from([dto('a', 'AAA'), dto('b', 'BBB'), dto('c', 'CCC')])
+    const sel = new BlockRange(new BlockOffset('a', 1), new BlockOffset('b', 1))
+    const result = b.deleteRange(sel)
+    expect(preorder(result)).toEqual(['a', 'c'])
+    expect(find(result, 'a').data.text).toBe('ABB')
+  })
+
+  it('BlockRange throws if start equals end (same block and offset)', () => {
+    expect(() => new BlockRange(new BlockOffset('a', 2), new BlockOffset('a', 2))).toThrow()
+  })
+
+  it('throws if start block does not exist', () => {
+    const b = Blocks.from([dto('a')])
+    const sel = new BlockRange(new BlockOffset('missing', 0), new BlockOffset('a', 0))
+    expect(() => b.deleteRange(sel)).toThrow('Block not found: missing')
+  })
+
+  it('throws if end block does not exist', () => {
+    const b = Blocks.from([dto('a')])
+    const sel = new BlockRange(new BlockOffset('a', 0), new BlockOffset('missing', 0))
+    expect(() => b.deleteRange(sel)).toThrow('Block not found: missing')
+  })
+
+  it('returns a new Blocks instance (immutable)', () => {
+    const b = Blocks.from([dto('a', 'Hello'), dto('b', 'World')])
+    const sel = new BlockRange(new BlockOffset('a', 2), new BlockOffset('b', 2))
+    const result = b.deleteRange(sel)
+    expect(result).not.toBe(b)
+  })
+})
+
+// ─── BlockOffset / BlockRange validation ─────────────────────────────────────
+
+describe('BlockOffset', () => {
+  it('throws if blockId is empty', () => {
+    expect(() => new BlockOffset('', 0)).toThrow('blockId must be non-empty')
+  })
+
+  it('throws if offset is negative', () => {
+    expect(() => new BlockOffset('a', -1)).toThrow('offset must be >= 0')
+  })
+
+  it('constructs successfully with valid args', () => {
+    const bo = new BlockOffset('a', 3)
+    expect(bo.blockId).toBe('a')
+    expect(bo.offset).toBe(3)
   })
 })

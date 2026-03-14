@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { blocksSerializer } from './serializer'
-import { Blocks, BlockDto } from './blocks'
+import { Blocks, Block } from './blocks'
 import { Text } from '../text/text'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -11,8 +11,8 @@ function nodesToHtml(nodes: Node[]): string {
   return div.innerHTML
 }
 
-function dto(id: string, text = '', children: BlockDto[] = []): BlockDto {
-  return { id, data: { text, inline: [] }, children }
+function dto(id: string, text = '', children: Block[] = []): Block {
+  return new Block(id, { text, inline: [] }, children)
 }
 
 // ─── render ───────────────────────────────────────────────────────────────────
@@ -50,14 +50,10 @@ describe('blocksSerializer.render', () => {
 
   it('renders the plan example correctly', () => {
     const blocks = Blocks.from([
-      {
-        id: 'block-1',
-        data: { text: 'Hello World', inline: [] },
-        children: [
-          { id: 'block-2', data: { text: 'This is a test', inline: [] }, children: [] },
-        ],
-      },
-      { id: 'block-3', data: { text: 'This is another', inline: [] }, children: [] },
+      new Block('block-1', { text: 'Hello World', inline: [] }, [
+        new Block('block-2', { text: 'This is a test', inline: [] }, []),
+      ]),
+      new Block('block-3', { text: 'This is another', inline: [] }, []),
     ])
     const html = nodesToHtml(blocksSerializer.render(blocks))
     expect(html).toBe(
@@ -69,7 +65,7 @@ describe('blocksSerializer.render', () => {
 
   it('renders inline formatting inside <p>', () => {
     const blocks = Blocks.from([
-      { id: 'b1', data: { text: 'Hello', inline: [{ type: 'Bold', start: 0, end: 5 }] }, children: [] },
+      new Block('b1', { text: 'Hello', inline: [{ type: 'Bold', start: 0, end: 5 }] }, []),
     ])
     const html = nodesToHtml(blocksSerializer.render(blocks))
     expect(html).toBe('<div class="block" id="b1"><p><strong>Hello</strong></p></div>')
@@ -216,22 +212,17 @@ describe('roundtrip: parse(render(blocks)) === blocks', () => {
   })
 
   it('plan example roundtrip', () => {
-    const dtos: BlockDto[] = [
-      {
-        id: 'block-1',
-        data: { text: 'Hello World', inline: [] },
-        children: [
-          { id: 'block-2', data: { text: 'This is a test', inline: [] }, children: [] },
-        ],
-      },
-      { id: 'block-3', data: { text: 'This is another', inline: [] }, children: [] },
-    ]
-    roundtrip(Blocks.from(dtos))
+    roundtrip(Blocks.from([
+      new Block('block-1', { text: 'Hello World', inline: [] }, [
+        new Block('block-2', { text: 'This is a test', inline: [] }, []),
+      ]),
+      new Block('block-3', { text: 'This is another', inline: [] }, []),
+    ]))
   })
 
   it('block with inline formatting roundtrip', () => {
     roundtrip(Blocks.from([
-      { id: 'b1', data: { text: 'Hello World', inline: [{ type: 'Bold', start: 0, end: 5 }] }, children: [] },
+      new Block('b1', { text: 'Hello World', inline: [{ type: 'Bold', start: 0, end: 5 }] }, []),
     ]))
   })
 
