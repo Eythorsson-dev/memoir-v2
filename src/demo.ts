@@ -1,17 +1,27 @@
-import { Text } from './text/text'
-import { TextEditor } from './editor/TextEditor'
+import { Blocks, Block } from './blocks/blocks'
+import { BlockEditorWithToolbar } from './editor/BlockEditorWithToolbar'
+import type { BlockSelection } from './editor/BlockEditor'
 
-const initial = new Text('Hello world, this is a demo!', [
-  { type: 'Bold',      start: 0,  end: 5  },
-  { type: 'Italic',   start: 13, end: 17 },
-  { type: 'Underline', start: 23, end: 27 },
+const initial = Blocks.from([
+  new Block('b1', { text: 'Hello world!', inline: [{ type: 'Bold', start: 0, end: 5 }] }, [
+    new Block('b2', { text: 'This is a nested block', inline: [{ type: 'Italic', start: 10, end: 16 }] }, []),
+  ]),
+  new Block('b3', { text: 'Another root block', inline: [] }, [
+    new Block('b4', { text: 'Nested deeper', inline: [{ type: 'Underline', start: 0, end: 6 }] }, []),
+  ]),
 ])
 
-const editor = new TextEditor(document.getElementById('editor-container')!, initial)
+const editor = new BlockEditorWithToolbar(document.getElementById('editor-container')!, initial)
 
 const jsonOutput = document.getElementById('json-output')!
-jsonOutput.textContent = JSON.stringify(initial.toJSON(), null, 2)
+const selectionOutput = document.getElementById('selection-output')!
 
-editor.onChange((text) => {
-  jsonOutput.textContent = JSON.stringify(text.toJSON(), null, 2)
+jsonOutput.textContent = JSON.stringify(initial.blocks, null, 2)
+
+editor.onChange((blocks) => {
+  jsonOutput.textContent = JSON.stringify(blocks.blocks, null, 2)
+})
+
+editor.onSelectionChange((sel: BlockSelection | null) => {
+  selectionOutput.textContent = sel === null ? 'null' : JSON.stringify(sel, null, 2)
 })
