@@ -31,7 +31,7 @@ pnpm vitest run
 
 Use small, atomic commits with [Conventional Commits](https://www.conventionalcommits.org/) messages (`feat:`, `fix:`, `test:`, `refactor:`, `chore:`).
 
-**Commit after each completed and verified step** — do not batch multiple steps into one commit.
+**Commit after each completed and verified step** — do not batch multiple steps into one commit. Always create the commit automatically without asking for confirmation.
 
 **Never commit plan documents** (`plans/` directory). These are local planning notes only.
 
