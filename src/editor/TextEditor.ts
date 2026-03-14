@@ -1,5 +1,6 @@
 import { Text, InlineTypes } from '../text/text'
 import { textSerializer } from '../text/serializer'
+import { createElement, Bold, Italic, Underline } from 'lucide'
 
 // ─── CSS injection ────────────────────────────────────────────────────────────
 
@@ -22,9 +23,8 @@ function injectStyles(): void {
       border: 1px solid #ccc;
       border-radius: 4px;
       background: #fff;
+      color: #111;
       cursor: pointer;
-      font-size: 14px;
-      font-weight: bold;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -36,6 +36,22 @@ function injectStyles(): void {
       background: #dbeafe;
       border-color: #3b82f6;
       color: #1d4ed8;
+    }
+    .text-editor-toolbar button svg { width: 16px; height: 16px; pointer-events: none; }
+    @media (prefers-color-scheme: dark) {
+      .text-editor-toolbar button {
+        background: #2a2a2a;
+        border-color: #555;
+        color: #e0e0e0;
+      }
+      .text-editor-toolbar button:hover {
+        background: #3a3a3a;
+      }
+      .text-editor-toolbar button.is-active {
+        background: #1e3a5f;
+        border-color: #3b82f6;
+        color: #93c5fd;
+      }
     }
     .text-editor-editable {
       border: 1px solid #ccc;
@@ -126,15 +142,16 @@ export class TextEditor {
     this._toolbar = document.createElement('div')
     this._toolbar.className = 'text-editor-toolbar'
 
-    const buttonDefs: { type: InlineTypes; label: string }[] = [
-      { type: 'Bold', label: 'B' },
-      { type: 'Italic', label: 'I' },
-      { type: 'Underline', label: 'U' },
+    const buttonDefs: { type: InlineTypes; icon: Parameters<typeof createElement>[0] }[] = [
+      { type: 'Bold', icon: Bold },
+      { type: 'Italic', icon: Italic },
+      { type: 'Underline', icon: Underline },
     ]
 
-    for (const { type, label } of buttonDefs) {
+    for (const { type, icon } of buttonDefs) {
       const btn = document.createElement('button')
-      btn.textContent = label
+      btn.appendChild(createElement(icon))
+      btn.ariaLabel = type
       btn.dataset.inlineType = type
       // Use mousedown + preventDefault to keep focus in editable
       btn.addEventListener('mousedown', (e) => {
