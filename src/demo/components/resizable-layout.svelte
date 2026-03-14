@@ -1,0 +1,142 @@
+<script lang="ts">
+  import { createElement, GripVertical } from 'lucide'
+  import { onMount } from 'svelte'
+
+  let {
+    storageKey   = 'inspector-width',
+    minWidth     = 200,
+    maxWidth     = 600,
+    defaultWidth = 320,
+    editor,
+    inspector,
+  }: {
+    storageKey?:   string
+    minWidth?:     number
+    maxWidth?:     number
+    defaultWidth?: number
+    editor:        import('svelte').Snippet
+    inspector:     import('svelte').Snippet
+  } = $props()
+
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+
+  const stored    = localStorage.getItem(storageKey)
+  let width       = $state(stored ? parseInt(stored) : defaultWidth)
+
+  let handleEl: HTMLElement
+  let gripContainer: HTMLSpanElement
+
+  onMount(() => {
+    gripContainer.appendChild(createElement(GripVertical))
+  })
+
+  function onPointerDown(e: PointerEvent) {
+    handleEl.setPointerCapture(e.pointerId)
+    e.preventDefault()
+    const startX     = e.clientX
+    const startWidth = width
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor     = 'col-resize'
+    handleEl.classList.add('dragging')
+
+    function onMove(e: PointerEvent) {
+      width = clamp(startWidth + (startX - e.clientX), minWidth, maxWidth)
+    }
+    function onUp() {
+      handleEl.removeEventListener('pointermove', onMove)
+      handleEl.releasePointerCapture(e.pointerId)
+      document.body.style.userSelect = ''
+      document.body.style.cursor     = ''
+      handleEl.classList.remove('dragging')
+      localStorage.setItem(storageKey, String(width))
+    }
+    handleEl.addEventListener('pointermove', onMove)
+    handleEl.addEventListener('pointerup', onUp, { once: true })
+  }
+
+  function onKeyDown(e: KeyboardEvent) {
+    const STEP = 16
+    const delta: Record<string, number> = {
+      ArrowLeft: STEP, ArrowRight: -STEP,
+      Home: -(width - minWidth), End: maxWidth - width,
+    }
+    if (!(e.key in delta)) return
+    e.preventDefault()
+    width = clamp(width + delta[e.key]!, minWidth, maxWidth)
+    localStorage.setItem(storageKey, String(width))
+  }
+</script>
+
+<div class="layout">
+  <div class="editor-pane">
+    {@render editor()}
+  </div>
+
+  <div
+    class="resize-handle"
+    role="separator"
+    aria-orientation="vertical"
+    aria-label="Resize inspector"
+    aria-valuemin={minWidth}
+    aria-valuemax={maxWidth}
+    aria-valuenow={width}
+    tabindex="0"
+    bind:this={handleEl}
+    onpointerdown={onPointerDown}
+    onkeydown={onKeyDown}
+  >
+    <span class="grip-icon" bind:this={gripContainer}></span>
+  </div>
+
+  <div class="inspector-pane" style="width: {width}px">
+    {@render inspector()}
+  </div>
+</div>
+
+<style>
+  .layout {
+    display: flex;
+    gap: 0;
+    align-items: flex-start;
+  }
+  .editor-pane {
+    flex: 1;
+    min-width: 0;
+  }
+  .inspector-pane {
+    flex-shrink: 0;
+    max-height: calc(100vh - 4rem);
+    overflow-y: auto;
+    position: sticky;
+    top: 1rem;
+  }
+  .resize-handle {
+    width: 4px;
+    cursor: col-resize;
+    flex-shrink: 0;
+    background: transparent;
+    border-left: 2px solid var(--border);
+    transition: border-color 150ms;
+    touch-action: none;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .resize-handle::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0; left: -4px; right: -4px;
+  }
+  .resize-handle:hover,
+  .resize-handle:focus-visible,
+  .resize-handle:global(.dragging) {
+    border-color: var(--toolbar-btn-active-border);
+    outline: none;
+  }
+  .grip-icon :global(.lucide) {
+    width: 12px;
+    height: 12px;
+    stroke: var(--border);
+  }
+</style>

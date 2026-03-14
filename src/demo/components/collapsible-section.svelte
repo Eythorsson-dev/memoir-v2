@@ -1,0 +1,66 @@
+<script lang="ts">
+  import { createElement, ChevronRight } from 'lucide'
+  import { onMount } from 'svelte'
+
+  let {
+    title,
+    storageKey = '',
+    defaultOpen = true,
+    children,
+  }: {
+    title:       string
+    storageKey?: string
+    defaultOpen?: boolean
+    children:    import('svelte').Snippet
+  } = $props()
+
+  const stored = storageKey ? localStorage.getItem(storageKey) : null
+  let open = $state(stored !== null ? stored === 'true' : defaultOpen)
+
+  function onToggle(e: Event) {
+    open = (e.currentTarget as HTMLDetailsElement).open
+    if (storageKey) localStorage.setItem(storageKey, String(open))
+  }
+
+  let iconContainer: HTMLSpanElement
+  onMount(() => {
+    iconContainer.appendChild(createElement(ChevronRight))
+  })
+</script>
+
+<details {open} ontoggle={onToggle}>
+  <summary class="section-summary">
+    <span class="section-icon" bind:this={iconContainer}></span>
+    {title}
+  </summary>
+  <div class="section-body">
+    {@render children()}
+  </div>
+</details>
+
+<style>
+  .section-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+    font-weight: 600;
+    padding: 0.4rem 0;
+    list-style: none;
+    user-select: none;
+  }
+  .section-summary :global(.lucide) {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    transition: transform 150ms;
+    stroke: currentColor;
+  }
+  details[open] > summary :global(.lucide) {
+    transform: rotate(90deg);
+  }
+  .section-body {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+</style>

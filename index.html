@@ -118,46 +118,10 @@
         outline: none;
       }
 
-      .layout {
-        display: flex;
-        gap: 1.5rem;
-        align-items: flex-start;
-      }
-
-      .editor-pane {
-        flex: 1;
-        min-width: 0;
-      }
-
-      .inspector-pane {
-        width: 320px;
-        flex-shrink: 0;
-        position: sticky;
-        top: 1rem;
-      }
-
-      #theme-toggle {
-        cursor: pointer;
-      }
     </style>
   </head>
   <body>
-    <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem;">
-      <h1 style="margin:0;">Block Editor Demo</h1>
-      <button id="theme-toggle" aria-label="Change color theme"></button>
-    </div>
-    <div class="layout">
-      <div class="editor-pane">
-        <h2>Editor</h2>
-        <div id="editor-container"></div>
-      </div>
-      <div class="inspector-pane">
-        <h2>Selection</h2>
-        <pre id="selection-output">null</pre>
-        <h2>State JSON</h2>
-        <pre id="json-output"></pre>
-      </div>
-    </div>
-    <script type="module" src="/src/demo.ts"></script>
+    <div id="app"></div>
+    <script type="module" src="/src/demo/main.ts"></script>
   </body>
 </html>
