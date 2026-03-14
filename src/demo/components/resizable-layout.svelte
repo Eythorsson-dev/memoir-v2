@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createElement, GripVertical } from 'lucide'
   import { onMount } from 'svelte'
 
   let {
@@ -24,11 +23,6 @@
   let width       = $state(stored ? parseInt(stored) : defaultWidth)
 
   let handleEl: HTMLElement
-  let gripContainer: HTMLSpanElement
-
-  onMount(() => {
-    gripContainer.appendChild(createElement(GripVertical))
-  })
 
   function onPointerDown(e: PointerEvent) {
     handleEl.setPointerCapture(e.pointerId)
@@ -85,9 +79,7 @@
       bind:this={handleEl}
       onpointerdown={onPointerDown}
       onkeydown={onKeyDown}
-    >
-      <span class="grip-icon" bind:this={gripContainer}></span>
-    </div>
+    ></div>
 
     <div class="inspector-pane" style="width: {width}px">
       {@render inspector()}
@@ -98,8 +90,8 @@
 <style>
   .layout {
     display: flex;
-    gap: 0;
-    align-items: flex-start;
+    align-items: stretch;
+    min-height: 100dvh;
   }
   .editor-pane {
     flex: 1;
@@ -109,8 +101,8 @@
     display: flex;
     align-items: stretch;
     position: sticky;
-    top: 1rem;
-    max-height: calc(100vh - 4rem);
+    top: 0;
+    height: 100dvh;
     flex-shrink: 0;
   }
   .inspector-pane {
@@ -118,7 +110,9 @@
     overflow-y: auto;
   }
   .resize-handle {
-    width: 4px;
+    width: 12px;
+    padding: 0 4px;
+    box-sizing: border-box;
     cursor: col-resize;
     flex-shrink: 0;
     background: transparent;
@@ -126,9 +120,6 @@
     transition: border-color 150ms;
     touch-action: none;
     position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
   .resize-handle::after {
     content: '';
@@ -140,10 +131,5 @@
   .resize-handle:global(.dragging) {
     border-color: var(--toolbar-btn-active-border);
     outline: none;
-  }
-  .grip-icon :global(.lucide) {
-    width: 12px;
-    height: 12px;
-    stroke: var(--border);
   }
 </style>
