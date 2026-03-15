@@ -53,6 +53,40 @@ Use small, atomic commits with [Conventional Commits](https://www.conventionalco
 
 **Use the `frontend-design` skill** when building or significantly redesigning UI components, pages, or layouts in the demo application. Invoke it via the Skill tool before writing Svelte/CSS code for any non-trivial UI work.
 
+## Feature Worktrees
+
+**Every new feature must be developed in a dedicated git worktree** — never directly on `master`. When starting a feature, create a worktree on a new branch:
+
+```bash
+git worktree add .claude/worktrees/<branch-name> -b <branch-name>
+```
+
+Work entirely within that worktree, then remove it after the PR is merged:
+
+```bash
+git worktree remove .claude/worktrees/<branch-name>
+git branch -d <branch-name>
+```
+
+## Pull Request Workflow
+
+**Use the `/create-pr` skill** to automate the full PR creation flow. It will:
+
+1. Ensure all commits on the feature branch are GPG-signed — re-signs any unsigned commits with:
+   ```bash
+   git rebase --exec "git commit --amend --no-edit -S" origin/master
+   ```
+2. Fetch and rebase the branch on the latest `origin/master` (with signing).
+3. Force-push with `--force-with-lease`.
+4. Create the PR on GitHub using `gh pr create`.
+5. Open the PR URL in the browser with `open <pr-url>`.
+
+**GPG signing is required.** Branch protection on `master` enforces verified signatures. The signing key is already configured (`commit.gpgsign = true`, key `CD42639745A71184`). To re-sign all commits on a branch manually:
+
+```bash
+git rebase --exec "git commit --amend --no-edit -S" origin/master
+```
+
 ## Area-Specific Rules
 
 @rules/demo.md
