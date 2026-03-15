@@ -397,8 +397,9 @@ export class BlockEditor {
     return walk(state.blocks)
   }
 
-  private _emitBlockMovedForChanges(oldState: Blocks): void {
+  private _emitBlockMovedForChanges(oldState: Blocks, excludeId?: BlockId): void {
     for (const id of this._flatIds()) {
+      if (id === excludeId) continue
       const prevChanged   = this._prevSiblingOf(id) !== this._prevSiblingOf(id, oldState)
       const parentChanged = this._parentOf(id)      !== this._parentOf(id, oldState)
       if (prevChanged || parentChanged) {
@@ -623,16 +624,13 @@ export class BlockEditor {
     const block = this._state.getBlock(blockId)
     const atEnd = offset === block.getLength()
 
-    // Capture old next tree sibling before mutation
-    const oldNextTreeSibling = this._nextTreeSiblingOf(blockId)
-    const oldNextTreeSiblingPrevSibling = oldNextTreeSibling ? this._prevSiblingOf(oldNextTreeSibling) : null
-
     if (atEnd) {
       this._flushDataUpdated(blockId)
     } else {
       this._cancelDataUpdated(blockId)
     }
 
+    const oldState = this._state
     const newId = crypto.randomUUID()
     this._state = this._state.splitAt(blockId, offset, newId)
     this._render(new BlockOffset(newId, 0))
@@ -642,19 +640,13 @@ export class BlockEditor {
     }
 
     this._emit('blockCreated', {
-      id: newId,
+      id:              newId,
+      data:            this._state.getBlock(newId).data,
       previousBlockId: this._prevSiblingOf(newId),
       parentBlockId:   this._parentOf(newId),
     })
 
-    // Check if old next tree sibling was displaced
-    if (oldNextTreeSibling && this._prevSiblingOf(oldNextTreeSibling) !== oldNextTreeSiblingPrevSibling) {
-      this._emit('blockMoved', {
-        id:              oldNextTreeSibling,
-        previousBlockId: this._prevSiblingOf(oldNextTreeSibling),
-        parentBlockId:   this._parentOf(oldNextTreeSibling),
-      })
-    }
+    this._emitBlockMovedForChanges(oldState, newId)
   }
 
   private _handleBackspace(sel: BlockSelection): void {

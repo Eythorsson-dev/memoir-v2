@@ -379,9 +379,9 @@ describe('blockCreated events', () => {
   it('Enter at end of block — only blockCreated', () => {
     const container = makeContainer()
     const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
-    const created: string[] = []
+    const created: Array<{ id: string; data: { text: string; inline: readonly unknown[] } }> = []
     const dataUpdated: string[] = []
-    editor.addEventListener('blockCreated', (e) => created.push(e.id))
+    editor.addEventListener('blockCreated', (e) => created.push(e))
     editor.addEventListener('blockDataUpdated', (e) => dataUpdated.push(e.id))
 
     getEditable(container).focus()
@@ -389,6 +389,7 @@ describe('blockCreated events', () => {
     keydown(container, 'Enter')
 
     expect(created).toHaveLength(1)
+    expect(created[0].data).toEqual({ text: '', inline: [] })  // new block is empty
     expect(dataUpdated).toHaveLength(0)  // no immediate data update for 'a'
     cleanup(editor, container)
   })
@@ -397,7 +398,8 @@ describe('blockCreated events', () => {
     const container = makeContainer()
     const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
     const events: string[] = []
-    editor.addEventListener('blockCreated', (e) => events.push(`created:${e.id}`))
+    const createdData: Array<{ text: string; inline: readonly unknown[] }> = []
+    editor.addEventListener('blockCreated', (e) => { events.push(`created:${e.id}`); createdData.push(e.data) })
     editor.addEventListener('blockDataUpdated', (e) => events.push(`data:${e.id}`))
 
     getEditable(container).focus()
@@ -406,6 +408,7 @@ describe('blockCreated events', () => {
 
     expect(events[0]).toBe('data:a')
     expect(events[1]).toMatch(/^created:/)
+    expect(createdData[0].text).toBe('llo')  // tail of 'Hello' after split at offset 2
     cleanup(editor, container)
   })
 
@@ -590,6 +593,32 @@ describe('blockMoved events', () => {
     const bMoved = moved.find(m => m.id === 'b')
     expect(bMoved).toBeDefined()
     expect(bMoved?.parentBlockId).toBeNull()
+    cleanup(editor, container)
+  })
+
+  it('Enter mid-block displaces children of split block → blockMoved for each child', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(
+      container,
+      Blocks.from([dto('a', 'Hello', [dto('b', 'B'), dto('c', 'C')]), dto('d', 'World')]),
+    )
+    const moved: Array<{ id: string; parentBlockId: string | null; previousBlockId: string | null }> = []
+    editor.addEventListener('blockMoved', (e) => moved.push(e))
+
+    getEditable(container).focus()
+    setCursor(container, 'a', 2)
+    keydown(container, 'Enter')
+
+    // B and C should now be children of the new block (parent changed from 'a')
+    const bMoved = moved.find(m => m.id === 'b')
+    const cMoved = moved.find(m => m.id === 'c')
+    expect(bMoved).toBeDefined()
+    expect(bMoved?.parentBlockId).not.toBe('a')
+    expect(cMoved).toBeDefined()
+    expect(cMoved?.parentBlockId).not.toBe('a')
+    // D should also have moved (its previousBlockId changed from 'a')
+    const dMoved = moved.find(m => m.id === 'd')
+    expect(dMoved).toBeDefined()
     cleanup(editor, container)
   })
 
