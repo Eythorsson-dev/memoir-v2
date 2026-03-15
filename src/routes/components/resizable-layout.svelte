@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
 
   let {
     storageKey = "inspector-width",
@@ -20,7 +20,7 @@
   const clamp = (v: number, lo: number, hi: number) =>
     Math.max(lo, Math.min(hi, v));
 
-  let width = $state(defaultWidth);
+  let width = $state(untrack(() => defaultWidth));
 
   onMount(() => {
     const stored = localStorage.getItem(storageKey);
@@ -74,6 +74,8 @@
   </div>
 
   <div class="sidebar">
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
       class="resize-handle ml-1 pr-1"
       role="separator"

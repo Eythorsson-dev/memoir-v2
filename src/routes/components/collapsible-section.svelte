@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ChevronRight } from "@lucide/svelte";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
 
   let {
     title,
@@ -14,7 +14,7 @@
     children: import("svelte").Snippet;
   } = $props();
 
-  let open = $state(defaultOpen);
+  let open = $state(untrack(() => defaultOpen));
 
   function onToggle(e: Event) {
     open = (e.currentTarget as HTMLDetailsElement).open;
