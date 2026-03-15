@@ -1,13 +1,16 @@
 <script lang="ts">
   interface Props {
-    value: number | Date
+    value?: number | Date
   }
 
   let { value } = $props()
 
   let now = $state(Date.now())
 
-  let timestamp = $derived(typeof value === 'number' ? value : value.getTime())
+  let timestamp = $derived.by(() => {
+    if (value == null) return 0
+    return typeof value === 'number' ? value : value.getTime()
+  })
 
   let intervalMs = $derived.by(() => {
     const diffS = Math.floor((now - timestamp) / 1000)

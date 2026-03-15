@@ -3,6 +3,7 @@
   import RelativeTimestamp from './relative-timestamp.svelte'
   import { popup } from './popup-attachment'
   import type { BlockEditorEventMap } from '$lib/block-editor'
+  import { Trash2Icon } from '@lucide/svelte'
 
   export type LogEntry<T extends keyof BlockEditorEventMap = keyof BlockEditorEventMap> = {
     timestamp: number
@@ -29,12 +30,24 @@
   }
 </script>
 
+<div class="flex justify-end px-1 pb-1">
+  <button
+    onclick={() => (entries = [])}
+    disabled={entries.length === 0}
+    class="flex items-center gap-1 text-[11px] opacity-50 hover:opacity-100 disabled:opacity-20 disabled:pointer-events-none transition-opacity cursor-default"
+    title="Clear event log"
+  >
+    <Trash2Icon size={11} />
+    Clear
+  </button>
+</div>
+
 {#if entries.length === 0}
   <p class="text-xs opacity-40 font-mono py-1 px-1">No events yet…</p>
 {:else}
   <div class="overflow-y-auto" style="max-height: 33vh">
     <div class="flex flex-col gap-px font-mono text-[11px] leading-snug">
-      {#each entries as entry (entry.timestamp + '_' + entry.name)}
+      {#each entries as entry}
         {#snippet popupBody()}
           <CodePreview language="json" code={JSON.stringify(entry.payload, null, 2)} />
         {/snippet}

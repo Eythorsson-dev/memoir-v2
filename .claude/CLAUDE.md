@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 pnpm dev          # start SvelteKit dev server
 pnpm build        # build the app
-pnpm typecheck    # run tsc --noEmit
+pnpm check        # run svelte-check
 ```
 
 Run all tests once (CI style):
@@ -37,7 +37,7 @@ pnpm vitest
 1. Write a failing test first and confirm it fails.
 2. Implement the fix/feature.
 3. Run `pnpm vitest run` and confirm all tests pass.
-4. Run `pnpm typecheck` to catch any type errors.
+4. Run `pnpm check` to catch any type errors.
 
 Use small, atomic commits with [Conventional Commits](https://www.conventionalcommits.org/) messages (`feat:`, `fix:`, `test:`, `refactor:`, `chore:`).
 
