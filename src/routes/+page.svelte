@@ -5,6 +5,8 @@
     import ResizableLayout from "../components/resizable-layout.svelte";
     import CodePreview from "../components/code-preview.svelte";
     import ThemeToggle from "../components/theme-toggle.svelte";
+    import EventLogPanel from "../components/event-log-panel.svelte";
+    import type { LogEntry } from "../components/event-log-panel.svelte";
 
     const STORAGE_KEY = "block-editor-demo-state";
 
@@ -33,17 +35,30 @@
 
     let selection = $state<BlockSelection | null>(null);
     let blocks = $state(initialBlocks.blocks);
+    let log = $state<LogEntry[]>([]);
 
     function mountEditor(node: HTMLElement) {
         const editor = new BlockEditorWithToolbar(node, initialBlocks);
 
-        editor.onChange((b) => {
-            blocks = b.blocks;
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(b.blocks));
-        });
-        editor.onSelectionChange((sel) => {
+        editor.addEventListener("selectionChange", (sel) => {
             selection = sel;
         });
+
+        const stateEvents = [
+            "blockCreated",
+            "blockDataUpdated",
+            "blockRemoved",
+            "blockMoved",
+        ] as const;
+
+        for (const name of stateEvents) {
+            editor.addEventListener(name, (payload) => {
+                blocks = editor.getValue().blocks;
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(blocks));
+                const time = new Date().toTimeString().slice(0, 8);
+                log = [{ time, name, payload: JSON.stringify(payload) }, ...log].slice(0, 50);
+            });
+        }
 
         return () => editor.destroy();
     }
@@ -64,6 +79,11 @@
             <span class="text-[11px] font-semibold uppercase tracking-widest opacity-50">Inspector</span>
         </div>
         <div class="px-3 pb-3 flex flex-col gap-3 flex-1 min-h-0 overflow-auto">
+            <EventLogPanel
+                title="Event Log"
+                storageKey="inspector-event-log"
+                bind:entries={log}
+            />
             <CodePreview
                 title="Selection"
                 storageKey="inspector-selection"
