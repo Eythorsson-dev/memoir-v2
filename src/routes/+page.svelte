@@ -1,7 +1,6 @@
 <script lang="ts">
-    import { Blocks, Block } from "$lib/block-editor";
-    import { BlockEditorWithToolbar } from "$lib/block-editor";
-    import type { BlockSelection } from "$lib/block-editor";
+    import { Blocks, Block, BlockEditorWithToolbar, BLOCK_EDITOR_EVENT_NAMES } from "$lib/block-editor";
+    import type { BlockSelection, BlockEditorEventMap } from "$lib/block-editor";
     import ResizableLayout from "../components/resizable-layout.svelte";
     import CollapsibleSection from "../components/collapsible-section.svelte";
     import CodePreview from "../components/code-preview.svelte";
@@ -37,7 +36,7 @@
 
     let selection = $state<BlockSelection | null>(null);
     let blocks = $state(initialBlocks.blocks);
-    const log = localState<LogEntry[]>('event-log', []);
+    const log = localState<LogEntry<keyof BlockEditorEventMap>[]>('event-log', []);
 
     const selectionOpen = localState('inspector-selection', true)
     const stateOpen     = localState('inspector-state',     true)
@@ -50,19 +49,15 @@
             selection = sel;
         });
 
-        const stateEvents = [
-            "blockCreated",
-            "blockDataUpdated",
-            "blockRemoved",
-            "blockMoved",
-        ] as const;
+        const stateEvents = BLOCK_EDITOR_EVENT_NAMES.filter(
+            (n): n is Exclude<typeof n, 'selectionChange'> => n !== 'selectionChange'
+        );
 
         for (const name of stateEvents) {
             editor.addEventListener(name, (payload) => {
                 blocks = editor.getValue().blocks;
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(blocks));
-                const time = new Date().toTimeString().slice(0, 8);
-                log.value = [{ time, name, payload: JSON.stringify(payload) }, ...log.value].slice(0, 50);
+                log.value = [{ timestamp: Date.now(), name, payload }, ...log.value].slice(0, 50);
             });
         }
 

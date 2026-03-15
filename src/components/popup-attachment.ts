@@ -1,12 +1,9 @@
 import { mount, unmount } from 'svelte'
-import type { Snippet, Component } from 'svelte'
+import type { Snippet } from 'svelte'
 import type { Attachment } from 'svelte/attachments'
 import PopupContainer from './popup-container.svelte'
 
-export type PopupBody =
-  | string
-  | Snippet
-  | { component: Component<any>; props?: Record<string, unknown> }
+export type PopupBody = string | Snippet
 
 export interface PopupOptions {
   title:     string
@@ -14,8 +11,6 @@ export interface PopupOptions {
   body:      PopupBody
 }
 
-export const POPUP_W = 320
-const OFFSET = 0   // gap between cursor and popup edge
 const MARGIN = 8   // minimum distance from viewport edge
 
 const CLOSE_DELAY        = 100   // ms grace before hiding
@@ -37,8 +32,8 @@ export function computePosition(
   const left    = Math.max(MARGIN, Math.min(rawLeft, vw - popupW - MARGIN))
 
   // y-axis: prefer below row bottom, flip above row top if overflow
-  const prefTop = anchorBottom + OFFSET
-  const flipTop = anchorTop - popupH - OFFSET
+  const prefTop = anchorBottom
+  const flipTop = anchorTop - popupH
   const rawTop  = prefTop + popupH > vh - MARGIN ? flipTop : prefTop
   const top     = Math.max(MARGIN, Math.min(rawTop, vh - popupH - MARGIN))
 

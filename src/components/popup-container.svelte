@@ -1,11 +1,8 @@
 <script lang="ts">
-  import type { Snippet, Component } from 'svelte'
+  import type { Snippet } from 'svelte'
   import { computePosition } from './popup-attachment.ts'
 
-  type Body =
-    | string
-    | Snippet
-    | { component: Component<any>; props?: Record<string, unknown> }
+  type Body = string | Snippet
 
   let { title, subtitle, body, x, anchorTop, anchorBottom }: {
     title:        string
@@ -20,7 +17,7 @@
   let popupH = $state(0)
   let measured = $state(false)
 
-  let timeout: number;
+  let timeout: ReturnType<typeof setTimeout>;
   function observe(el: HTMLElement) {
     const ro = new ResizeObserver(() => {
       popupW = el.offsetWidth
@@ -50,10 +47,8 @@
   <div class="p-3">
     {#if typeof body === 'string'}
       <p class="font-mono text-xs text-(--fg)">{body}</p>
-    {:else if typeof body === 'function'}
-      {@render body()}
     {:else}
-      <body.component {...(body.props ?? {})} />
+      {@render body()}
     {/if}
   </div>
 </div>

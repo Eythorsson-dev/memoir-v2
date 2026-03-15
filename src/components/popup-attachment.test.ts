@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { computePosition, POPUP_W } from './popup-attachment'
+import { computePosition } from './popup-attachment'
 
 vi.mock('svelte', () => ({
   mount:   vi.fn(() => ({})),
@@ -7,35 +7,35 @@ vi.mock('svelte', () => ({
 }))
 vi.mock('./popup-container.svelte', () => ({ default: {} }))
 
-const VW = 1024, VH = 768, PH = 300
-const OFFSET = 12, MARGIN = 8
+const VIEWPORT_W = 1024, VIEWPORT_H = 768, POPUP_HEIGHT = 300
+const POPUP_WIDTH = 320, MARGIN = 8
 
 describe('computePosition', () => {
   it('places popup centered below row in unconstrained space', () => {
     // x=400, row: top=390, bottom=410
-    const { left, top } = computePosition(400, 390, 410, POPUP_W, PH, VW, VH)
-    expect(left).toBe(400 - POPUP_W / 2)   // centered on cursor
-    expect(top).toBe(410 + OFFSET)          // below row bottom
+    const { left, top } = computePosition(400, 390, 410, POPUP_WIDTH, POPUP_HEIGHT, VIEWPORT_W, VIEWPORT_H)
+    expect(left).toBe(400 - POPUP_WIDTH / 2)   // centered on cursor
+    expect(top).toBe(410)                        // below row bottom
   })
 
   it('clamps to right margin when cursor near right edge', () => {
-    const { left } = computePosition(VW - 10, 390, 410, POPUP_W, PH, VW, VH)
-    expect(left).toBe(VW - POPUP_W - MARGIN)
+    const { left } = computePosition(VIEWPORT_W - 10, 390, 410, POPUP_WIDTH, POPUP_HEIGHT, VIEWPORT_W, VIEWPORT_H)
+    expect(left).toBe(VIEWPORT_W - POPUP_WIDTH - MARGIN)
   })
 
   it('clamps to left margin when cursor near left edge', () => {
-    const { left } = computePosition(4, 390, 410, POPUP_W, PH, VW, VH)
+    const { left } = computePosition(4, 390, 410, POPUP_WIDTH, POPUP_HEIGHT, VIEWPORT_W, VIEWPORT_H)
     expect(left).toBeGreaterThanOrEqual(MARGIN)
   })
 
   it('flips above row when near bottom edge', () => {
     // anchorTop=VH-30=738, anchorBottom=VH-10=758
-    const { top } = computePosition(400, VH - 30, VH - 10, POPUP_W, PH, VW, VH)
-    expect(top).toBe(VH - 30 - PH - OFFSET)  // flipped above row top
+    const { top } = computePosition(400, VIEWPORT_H - 30, VIEWPORT_H - 10, POPUP_WIDTH, POPUP_HEIGHT, VIEWPORT_W, VIEWPORT_H)
+    expect(top).toBe(VIEWPORT_H - 30 - POPUP_HEIGHT)  // flipped above row top
   })
 
   it('clamps to top margin when both vertical sides overflow', () => {
-    const { top } = computePosition(400, 4, 24, POPUP_W, 800, VW, VH)
+    const { top } = computePosition(400, 4, 24, POPUP_WIDTH, 800, VIEWPORT_W, VIEWPORT_H)
     expect(top).toBeGreaterThanOrEqual(MARGIN)
   })
 })
