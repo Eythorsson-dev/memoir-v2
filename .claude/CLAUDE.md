@@ -47,6 +47,10 @@ Use small, atomic commits with [Conventional Commits](https://www.conventionalco
 
 **Errors must never fail silently.** All unexpected errors must throw. Never swallow exceptions or use empty catch blocks.
 
+**Ask before assuming.** When a task is ambiguous — unclear requirements, multiple valid approaches, or missing context — use the `AskUserQuestion` tool to clarify before implementing. Never guess or pick an arbitrary direction silently.
+
+**Prefer build-time errors over runtime errors.** Use TypeScript's type system to make invalid states unrepresentable. Favour exhaustive `switch` statements (with a `never` default), discriminated unions, and strict types so that mistakes are caught by `tsc` or tests — not at runtime in production.
+
 ## Area-Specific Rules
 
 @rules/demo.md

@@ -26,7 +26,7 @@ Use **`@lucide/svelte`** for all icons in the demo. Never use emoji, Unicode sym
 ## CSS
 
 - Global styles and CSS custom properties go in `src/routes/layout.css`.
-- Use Tailwind utility classes in component templates — do not add `<style>` blocks or separate `.css` files for Svelte components.
+- Use Tailwind utility classes in component templates. Add a `<style>` block only when the styling cannot be expressed with Tailwind (e.g. targeting third-party library class names). Do not create separate `.css` files for Svelte components.
 
 ## Importing the Editor Library
 
