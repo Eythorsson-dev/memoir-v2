@@ -15,8 +15,8 @@ export interface PopupOptions {
 }
 
 export const POPUP_W = 320
-const OFFSET = 12   // gap between cursor and popup edge
-const MARGIN =  8   // minimum distance from viewport edge
+const OFFSET = 0   // gap between cursor and popup edge
+const MARGIN = 8   // minimum distance from viewport edge
 
 const CLOSE_DELAY        = 100   // ms grace before hiding
 const INITIAL_OPEN_DELAY = 300   // ms dwell before first popup opens
@@ -89,12 +89,16 @@ export function popup(options: PopupOptions, group?: string): Attachment {
       cancelHide()
       cancelOpen()
       const e = evt as MouseEvent
-      const rect = element.getBoundingClientRect()
       const isWarm = group != null && groups.has(group) && groups.get(group) !== hide
       const delay = isWarm ? SWITCH_OPEN_DELAY : (group != null ? INITIAL_OPEN_DELAY : 0)
       if (delay > 0) {
-        openTimeout = setTimeout(() => { openTimeout = null; show(e.clientX, rect.top, rect.bottom) }, delay)
+        openTimeout = setTimeout(() => {
+          openTimeout = null
+          const rect = element.getBoundingClientRect()
+          show(e.clientX, rect.top, rect.bottom)
+        }, delay)
       } else {
+        const rect = element.getBoundingClientRect()
         show(e.clientX, rect.top, rect.bottom)
       }
     }
