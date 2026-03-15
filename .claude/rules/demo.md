@@ -66,6 +66,20 @@ A Svelte MCP server is available with comprehensive Svelte 5 and SvelteKit docum
 - **`svelte-autofixer`** — analyzes Svelte code and returns issues and suggestions. Call this before finalizing any Svelte code; keep calling until no issues remain.
 - **`playground-link`** — generates a Svelte Playground link. Only call after user confirmation, and never when code has already been written to project files.
 
+## Syntax Highlighting
+
+`prismjs` must only be imported inside `src/components/code-preview.svelte`.
+`CodePreview` renders a bare highlighted `<pre>` — no collapsible wrapper.
+Never import `prismjs` directly in other components.
+
+## Component Responsibilities
+
+- `CollapsibleSection` — renders a `<details>` toggle; has no knowledge of persistence.
+  If open/closed state must survive a page reload, the **parent** manages it
+  (e.g. `$state` + `$effect` writing to `localStorage`), then binds with `bind:open`.
+- `CodePreview` — renders syntax-highlighted code; has no collapsible wrapper.
+  Wrap in `<CollapsibleSection>` at the call site when a collapsible UI is needed.
+
 ## Svelte 5 Conventions
 
 - Use runes: `$state` for reactive values, `$derived` for computed values, `$effect` only as a last resort.
