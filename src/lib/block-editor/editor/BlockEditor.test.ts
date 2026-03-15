@@ -636,6 +636,47 @@ describe('blockMoved events', () => {
     expect(moved).toContain('c')
     cleanup(editor, container)
   })
+
+  it('Backspace merge — emits blockMoved for children of removed block', () => {
+    // flat: [a:0, b:0, c:1, d:1] — b has children c and d
+    const container = makeContainer()
+    const editor = new BlockEditor(
+      container,
+      Blocks.from([dto('a', 'AA'), dto('b', 'BB', [dto('c', 'CC'), dto('d', 'DD')])]),
+    )
+    const moved: Array<{ id: string; parentBlockId: string | null; previousBlockId: string | null }> = []
+    editor.addEventListener('blockMoved', (e) => moved.push(e))
+
+    getEditable(container).focus()
+    setCursor(container, 'b', 0)
+    keydown(container, 'Backspace')
+
+    // c and d were children of b; after merge b is gone, they re-parent under a or become root
+    const cMoved = moved.find(m => m.id === 'c')
+    const dMoved = moved.find(m => m.id === 'd')
+    expect(cMoved).toBeDefined()
+    expect(dMoved).toBeDefined()
+    cleanup(editor, container)
+  })
+
+  it('Delete merge — emits blockMoved for children of removed block', () => {
+    // flat: [a:0, b:0, c:1] — b has child c; Delete at end of a merges a+b
+    const container = makeContainer()
+    const editor = new BlockEditor(
+      container,
+      Blocks.from([dto('a', 'AA'), dto('b', 'BB', [dto('c', 'CC')])]),
+    )
+    const moved: Array<{ id: string; parentBlockId: string | null }> = []
+    editor.addEventListener('blockMoved', (e) => moved.push(e))
+
+    getEditable(container).focus()
+    setCursor(container, 'a', 2)
+    keydown(container, 'Delete')
+
+    const cMoved = moved.find(m => m.id === 'c')
+    expect(cMoved).toBeDefined()
+    cleanup(editor, container)
+  })
 })
 
 // ─── selectionChange events ───────────────────────────────────────────────────

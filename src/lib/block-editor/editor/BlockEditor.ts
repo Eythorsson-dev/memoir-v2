@@ -564,12 +564,14 @@ export class BlockEditor {
     const prevId = this._state.previousBlockId(blockId)
     if (prevId === null) return  // first block — no-op
     const cursorOffset = this._state.getBlock(prevId).getLength()
+    const oldState = this._state
     this._cancelDataUpdated(blockId)
     this._cancelDataUpdated(prevId)
     this._state = this._state.merge(prevId, blockId)
     this._render(new BlockOffset(prevId, cursorOffset))
     this._emit('blockDataUpdated', { id: prevId, data: this._state.getBlock(prevId).data })
     this._emit('blockRemoved', { id: blockId })
+    this._emitMoved(Blocks.diff(oldState, this._state))
   }
 
   private _handleDelete(sel: BlockSelection): void {
@@ -583,12 +585,14 @@ export class BlockEditor {
     const nextId = this._state.nextBlockId(blockId)
     if (nextId === null) return  // last block — no-op
     const cursorOffset = this._state.getBlock(blockId).getLength()
+    const oldState = this._state
     this._cancelDataUpdated(nextId)
     this._cancelDataUpdated(blockId)
     this._state = this._state.merge(blockId, nextId)
     this._render(new BlockOffset(blockId, cursorOffset))
     this._emit('blockDataUpdated', { id: blockId, data: this._state.getBlock(blockId).data })
     this._emit('blockRemoved', { id: nextId })
+    this._emitMoved(Blocks.diff(oldState, this._state))
   }
 
   private _deleteRange(sel: BlockRange): BlockOffset {
