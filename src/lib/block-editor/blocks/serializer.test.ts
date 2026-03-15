@@ -69,6 +69,12 @@ describe('blocksSerializer.render', () => {
     const html = nodesToHtml(blocksSerializer.render(blocks))
     expect(html).toBe('<div class="block" id="b1"><p><strong>Hello</strong></p></div>')
   })
+
+  it('renders an empty block with a <br> placeholder inside <p>', () => {
+    const blocks = Blocks.from([dto('b1', '')])
+    const html = nodesToHtml(blocksSerializer.render(blocks))
+    expect(html).toBe('<div class="block" id="b1"><p><br></p></div>')
+  })
 })
 
 // ─── parse ────────────────────────────────────────────────────────────────────

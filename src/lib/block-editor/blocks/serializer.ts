@@ -12,7 +12,11 @@ function renderBlock(block: Block): Element {
 
   const p = document.createElement('p')
   const text = new Text(block.data.text, [...block.data.inline] as InlineDto[])
-  textSerializer.render(text).forEach((node) => p.appendChild(node))
+  if (text.text.length === 0) {
+    p.appendChild(document.createElement('br'))
+  } else {
+    textSerializer.render(text).forEach((node) => p.appendChild(node))
+  }
   div.appendChild(p)
 
   if (block.children.length > 0) {
