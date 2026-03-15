@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { BlockEditor } from './BlockEditor'
 import { BlockEditorWithToolbar } from './BlockEditorWithToolbar'
 import { Blocks, Block } from '../blocks/blocks'
 import { type InlineTypes } from '../text/text'
+import type { BlockDataUpdatedEvent } from './events'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -12,7 +13,8 @@ function makeContainer(): HTMLElement {
   return div
 }
 
-function cleanup(container: HTMLElement): void {
+function cleanup(editor: BlockEditor | BlockEditorWithToolbar, container: HTMLElement): void {
+  editor.destroy()
   container.remove()
 }
 
@@ -147,7 +149,7 @@ describe('construction', () => {
     const blocks = editor.getValue()
     expect(blocks.blocks).toHaveLength(1)
     expect(blocks.blocks[0].data.text).toBe('')
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('uses provided initial state', () => {
@@ -155,51 +157,164 @@ describe('construction', () => {
     const initial = Blocks.from([dto('b1', 'Hello'), dto('b2', 'World')])
     const editor = new BlockEditor(container, initial)
     expect(preorder(editor.getValue())).toEqual(['b1', 'b2'])
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('renders blocks to DOM', () => {
     const container = makeContainer()
-    new BlockEditor(container, Blocks.from([dto('b1', 'Hello')]))
+    const editor = new BlockEditor(container, Blocks.from([dto('b1', 'Hello')]))
     expect(container.querySelector('[id="b1"]')).not.toBeNull()
     expect(container.querySelector('[id="b1"] p')!.textContent).toBe('Hello')
-    cleanup(container)
+    cleanup(editor, container)
   })
 })
 
-// ─── getValue / setValue / onChange ───────────────────────────────────────────
+// ─── getValue / setValue ───────────────────────────────────────────────────────
 
-describe('getValue / setValue / onChange', () => {
+describe('getValue / setValue', () => {
   it('setValue → getValue round-trip', () => {
     const container = makeContainer()
     const editor = new BlockEditor(container)
     const newState = Blocks.from([dto('x', 'foo'), dto('y', 'bar')])
     editor.setValue(newState)
     expect(JSON.stringify(editor.getValue().blocks)).toBe(JSON.stringify(newState.blocks))
-    cleanup(container)
+    cleanup(editor, container)
   })
 
-  it('onChange fires after setValue', () => {
+  it('setValue emits no events', () => {
     const container = makeContainer()
     const editor = new BlockEditor(container)
-    const calls: Blocks[] = []
-    editor.onChange(b => calls.push(b))
-    const newState = Blocks.from([dto('x', 'foo')])
-    editor.setValue(newState)
-    expect(calls).toHaveLength(1)
-    expect(calls[0].blocks[0].id).toBe('x')
-    cleanup(container)
-  })
-
-  it('onChange unsubscribe stops callbacks', () => {
-    const container = makeContainer()
-    const editor = new BlockEditor(container)
-    const calls: number[] = []
-    const unsub = editor.onChange(() => calls.push(1))
-    unsub()
+    const events: string[] = []
+    editor.addEventListener('blockDataUpdated', () => events.push('blockDataUpdated'))
+    editor.addEventListener('blockCreated', () => events.push('blockCreated'))
+    editor.addEventListener('blockRemoved', () => events.push('blockRemoved'))
+    editor.addEventListener('blockMoved', () => events.push('blockMoved'))
     editor.setValue(Blocks.from([dto('x', 'foo')]))
-    expect(calls).toHaveLength(0)
-    cleanup(container)
+    expect(events).toHaveLength(0)
+    cleanup(editor, container)
+  })
+
+  it('setValue cancels pending blockDataUpdated', () => {
+    vi.useFakeTimers()
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
+    const events: string[] = []
+    editor.addEventListener('blockDataUpdated', () => events.push('blockDataUpdated'))
+
+    // Trigger a pending data update via simulated input
+    getEditable(container).focus()
+    const editable = getEditable(container)
+    const blockEl = editable.querySelector('[id="a"]')!
+    const p = blockEl.querySelector('p')!
+    p.textContent = 'Hello!'
+    setCursor(container, 'a', 6)
+    editable.dispatchEvent(new Event('input', { bubbles: true }))
+
+    // Set value before debounce fires — should cancel
+    editor.setValue(Blocks.from([dto('x', 'foo')]))
+    vi.advanceTimersByTime(2000)
+    expect(events).toHaveLength(0)
+
+    cleanup(editor, container)
+    vi.useRealTimers()
+  })
+})
+
+// ─── blockDataUpdated debouncing ──────────────────────────────────────────────
+
+describe('blockDataUpdated debouncing', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  /** Simulate a single character being typed by mutating the DOM then firing input */
+  function simulateInput(container: HTMLElement, blockId: string, newText: string): void {
+    const editable = getEditable(container)
+    const blockEl = editable.querySelector(`[id="${blockId}"]`)!
+    const p = blockEl.querySelector('p')!
+    p.textContent = newText
+    // Re-set cursor after DOM mutation so _handleInput can read a valid selection
+    setCursor(container, blockId, newText.length)
+    editable.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+
+  it('does not fire immediately after input', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
+    const events: BlockDataUpdatedEvent[] = []
+    editor.addEventListener('blockDataUpdated', (e) => events.push(e))
+
+    getEditable(container).focus()
+    simulateInput(container, 'a', 'Hello!')
+
+    expect(events).toHaveLength(0)
+    cleanup(editor, container)
+  })
+
+  it('fires after debounce delay', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]), { dataUpdateDebounceMs: 1000 })
+    const events: BlockDataUpdatedEvent[] = []
+    editor.addEventListener('blockDataUpdated', (e) => events.push(e))
+
+    getEditable(container).focus()
+    simulateInput(container, 'a', 'Hello!')
+
+    vi.advanceTimersByTime(1000)
+    expect(events).toHaveLength(1)
+    expect(events[0].id).toBe('a')
+    cleanup(editor, container)
+  })
+
+  it('fires after maxWait during continuous typing', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]), {
+      dataUpdateDebounceMs: 1000,
+      dataUpdateMaxWaitMs: 3000,
+    })
+    const events: BlockDataUpdatedEvent[] = []
+    editor.addEventListener('blockDataUpdated', (e) => events.push(e))
+
+    getEditable(container).focus()
+
+    // Simulate continuous typing: each keypress is 800ms apart; after 3200ms, maxWait fires
+    for (let i = 0; i < 4; i++) {
+      simulateInput(container, 'a', `Hello${i}`)
+      vi.advanceTimersByTime(800)
+    }
+
+    // maxWait of 3000 should have triggered by now
+    expect(events.length).toBeGreaterThanOrEqual(1)
+    cleanup(editor, container)
+  })
+
+  it('blur flushes pending synchronously', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
+    const events: BlockDataUpdatedEvent[] = []
+    editor.addEventListener('blockDataUpdated', (e) => events.push(e))
+
+    getEditable(container).focus()
+    simulateInput(container, 'a', 'Hello!')
+
+    expect(events).toHaveLength(0)
+    getEditable(container).dispatchEvent(new Event('blur', { bubbles: true }))
+    expect(events).toHaveLength(1)
+    cleanup(editor, container)
+  })
+
+  it('unsubscribe stops delivery', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]), { dataUpdateDebounceMs: 100 })
+    const events: BlockDataUpdatedEvent[] = []
+    const unsub = editor.addEventListener('blockDataUpdated', (e) => events.push(e))
+    unsub()
+
+    getEditable(container).focus()
+    simulateInput(container, 'a', 'Hello!')
+
+    vi.advanceTimersByTime(200)
+    expect(events).toHaveLength(0)
+    cleanup(editor, container)
   })
 })
 
@@ -217,7 +332,7 @@ describe('Enter', () => {
     expect(blocks.blocks).toHaveLength(2)
     expect(blocks.blocks[0].data.text).toBe('He')
     expect(blocks.blocks[1].data.text).toBe('llo')
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('collapsed at offset 0 → empty left block, full right block', () => {
@@ -230,7 +345,7 @@ describe('Enter', () => {
     expect(blocks.blocks).toHaveLength(2)
     expect(blocks.blocks[0].data.text).toBe('')
     expect(blocks.blocks[1].data.text).toBe('Hello')
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('single-block BlockRange → same block count; selected text deleted; no new block', () => {
@@ -242,7 +357,7 @@ describe('Enter', () => {
     const blocks = editor.getValue()
     expect(blocks.blocks).toHaveLength(1)
     expect(blocks.blocks[0].data.text).toBe('Heorld')
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('multi-block BlockRange → fewer blocks; content between deleted; no extra block', () => {
@@ -254,7 +369,73 @@ describe('Enter', () => {
     const blocks = editor.getValue()
     expect(preorder(blocks)).toEqual(['a'])
     expect(blocks.blocks[0].data.text).toBe('AC')
-    cleanup(container)
+    cleanup(editor, container)
+  })
+})
+
+// ─── blockCreated events ───────────────────────────────────────────────────────
+
+describe('blockCreated events', () => {
+  it('Enter at end of block — only blockCreated', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
+    const created: string[] = []
+    const dataUpdated: string[] = []
+    editor.addEventListener('blockCreated', (e) => created.push(e.id))
+    editor.addEventListener('blockDataUpdated', (e) => dataUpdated.push(e.id))
+
+    getEditable(container).focus()
+    setCursor(container, 'a', 5)
+    keydown(container, 'Enter')
+
+    expect(created).toHaveLength(1)
+    expect(dataUpdated).toHaveLength(0)  // no immediate data update for 'a'
+    cleanup(editor, container)
+  })
+
+  it('Enter mid-block — immediate blockDataUpdated then blockCreated', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
+    const events: string[] = []
+    editor.addEventListener('blockCreated', (e) => events.push(`created:${e.id}`))
+    editor.addEventListener('blockDataUpdated', (e) => events.push(`data:${e.id}`))
+
+    getEditable(container).focus()
+    setCursor(container, 'a', 2)
+    keydown(container, 'Enter')
+
+    expect(events[0]).toBe('data:a')
+    expect(events[1]).toMatch(/^created:/)
+    cleanup(editor, container)
+  })
+
+  it('Enter on first block — previousBlockId is null', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
+    const created: Array<{ previousBlockId: string | null }> = []
+    editor.addEventListener('blockCreated', (e) => created.push(e))
+
+    getEditable(container).focus()
+    setCursor(container, 'a', 5)
+    keydown(container, 'Enter')
+
+    expect(created[0].previousBlockId).toBe('a')
+    cleanup(editor, container)
+  })
+
+  it('blockCreated previousBlockId/parentBlockId correct for nested blocks', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'AA', [dto('b', 'BB')])]))
+    const created: Array<{ id: string; previousBlockId: string | null; parentBlockId: string | null }> = []
+    editor.addEventListener('blockCreated', (e) => created.push(e))
+
+    getEditable(container).focus()
+    setCursor(container, 'b', 2)  // at end of nested block 'b'
+    keydown(container, 'Enter')
+
+    expect(created[0].previousBlockId).toBe('b')
+    expect(created[0].parentBlockId).toBe('a')
+    cleanup(editor, container)
   })
 })
 
@@ -270,7 +451,7 @@ describe('Backspace', () => {
     const blocks = editor.getValue()
     expect(preorder(blocks)).toEqual(['a'])
     expect(blocks.blocks[0].data.text).toBe('Hello World')
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('collapsed at offset 0, first block → no change', () => {
@@ -281,7 +462,7 @@ describe('Backspace', () => {
     keydown(container, 'Backspace')
     const blocks = editor.getValue()
     expect(preorder(blocks)).toEqual(['a', 'b'])
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it("collapsed at offset 0, block with children → merged; children become sibling of merged block", () => {
@@ -295,7 +476,7 @@ describe('Backspace', () => {
     // b is merged into a; c (b's child) gets re-parented via clamping
     expect(preorder(blocks)).toEqual(['a', 'c'])
     expect(blocks.blocks[0].data.text).toBe('AABB')
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('BlockRange → selected content deleted and merged', () => {
@@ -307,7 +488,177 @@ describe('Backspace', () => {
     const blocks = editor.getValue()
     expect(preorder(blocks)).toEqual(['a'])
     expect(blocks.blocks[0].data.text).toBe('AB')
-    cleanup(container)
+    cleanup(editor, container)
+  })
+})
+
+// ─── blockRemoved events ──────────────────────────────────────────────────────
+
+describe('blockRemoved events', () => {
+  it('Backspace merge — immediate blockDataUpdated for left block then blockRemoved', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello'), dto('b', ' World')]))
+    const events: string[] = []
+    editor.addEventListener('blockDataUpdated', (e) => events.push(`data:${e.id}`))
+    editor.addEventListener('blockRemoved', (e) => events.push(`removed:${e.id}`))
+
+    getEditable(container).focus()
+    setCursor(container, 'b', 0)
+    keydown(container, 'Backspace')
+
+    expect(events).toEqual(['data:a', 'removed:b'])
+    cleanup(editor, container)
+  })
+
+  it('Delete merge — immediate blockDataUpdated then blockRemoved', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello'), dto('b', ' World')]))
+    const events: string[] = []
+    editor.addEventListener('blockDataUpdated', (e) => events.push(`data:${e.id}`))
+    editor.addEventListener('blockRemoved', (e) => events.push(`removed:${e.id}`))
+
+    getEditable(container).focus()
+    setCursor(container, 'a', 5)
+    keydown(container, 'Delete')
+
+    expect(events).toEqual(['data:a', 'removed:b'])
+    cleanup(editor, container)
+  })
+
+  it('Multi-block range delete — blockRemoved for each removed block', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'AAA'), dto('b', 'BBB'), dto('c', 'CCC')]))
+    const removed: string[] = []
+    editor.addEventListener('blockRemoved', (e) => removed.push(e.id))
+
+    getEditable(container).focus()
+    setRange(container, 'a', 1, 'c', 2)
+    keydown(container, 'Backspace')
+
+    expect(removed).toContain('b')
+    expect(removed).toContain('c')
+    cleanup(editor, container)
+  })
+})
+
+// ─── blockMoved events ────────────────────────────────────────────────────────
+
+describe('blockMoved events', () => {
+  it('Enter mid-block displaces next sibling → blockMoved with new previousBlockId', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello'), dto('b', 'World')]))
+    const moved: Array<{ id: string; previousBlockId: string | null }> = []
+    editor.addEventListener('blockMoved', (e) => moved.push(e))
+
+    getEditable(container).focus()
+    setCursor(container, 'a', 2)
+    keydown(container, 'Enter')
+
+    // 'b' should have been displaced — its previousBlockId should no longer be 'a'
+    const bMoved = moved.find(m => m.id === 'b')
+    expect(bMoved).toBeDefined()
+    expect(bMoved?.previousBlockId).not.toBe('a')
+    cleanup(editor, container)
+  })
+
+  it('Tab indent → blockMoved for indented block with correct parentBlockId', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'AA'), dto('b', 'BB')]))
+    const moved: Array<{ id: string; parentBlockId: string | null }> = []
+    editor.addEventListener('blockMoved', (e) => moved.push(e))
+
+    getEditable(container).focus()
+    setCursor(container, 'b', 0)
+    keydown(container, 'Tab')
+
+    const bMoved = moved.find(m => m.id === 'b')
+    expect(bMoved).toBeDefined()
+    expect(bMoved?.parentBlockId).toBe('a')
+    cleanup(editor, container)
+  })
+
+  it('Shift+Tab outdent → blockMoved for unindented block', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'AA', [dto('b', 'BB')])]))
+    const moved: Array<{ id: string; parentBlockId: string | null }> = []
+    editor.addEventListener('blockMoved', (e) => moved.push(e))
+
+    getEditable(container).focus()
+    setCursor(container, 'b', 0)
+    keydown(container, 'Tab', { shiftKey: true })
+
+    const bMoved = moved.find(m => m.id === 'b')
+    expect(bMoved).toBeDefined()
+    expect(bMoved?.parentBlockId).toBeNull()
+    cleanup(editor, container)
+  })
+
+  it('Multi-block indent → one blockMoved per affected block in order', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'AA'), dto('b', 'BB'), dto('c', 'CC')]))
+    const moved: string[] = []
+    editor.addEventListener('blockMoved', (e) => moved.push(e.id))
+
+    getEditable(container).focus()
+    setRange(container, 'b', 0, 'c', 0)
+    keydown(container, 'Tab')
+
+    expect(moved).toContain('b')
+    expect(moved).toContain('c')
+    cleanup(editor, container)
+  })
+})
+
+// ─── selectionChange events ───────────────────────────────────────────────────
+
+describe('selectionChange events', () => {
+  it('blur emits selectionChange(null)', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
+    const selections: Array<unknown> = []
+    editor.addEventListener('selectionChange', (s) => selections.push(s))
+
+    getEditable(container).focus()
+    getEditable(container).dispatchEvent(new Event('blur', { bubbles: true }))
+
+    expect(selections[selections.length - 1]).toBeNull()
+    cleanup(editor, container)
+  })
+})
+
+// ─── destroy() cleanup ────────────────────────────────────────────────────────
+
+describe('destroy() cleanup', () => {
+  it('no selectionchange listener on document after destroy()', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
+    const selections: unknown[] = []
+    editor.addEventListener('selectionChange', (s) => selections.push(s))
+
+    editor.destroy()
+    container.remove()
+
+    // After destroy, dispatching selectionchange should not call our listener
+    const countBefore = selections.length
+    document.dispatchEvent(new Event('selectionchange'))
+    expect(selections.length).toBe(countBefore)
+  })
+})
+
+// ─── setValue() events ────────────────────────────────────────────────────────
+
+describe('setValue() events', () => {
+  it('emits no events', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container)
+    const events: string[] = []
+    editor.addEventListener('blockDataUpdated', () => events.push('data'))
+    editor.addEventListener('blockCreated', () => events.push('created'))
+    editor.addEventListener('blockRemoved', () => events.push('removed'))
+    editor.addEventListener('blockMoved', () => events.push('moved'))
+    editor.setValue(Blocks.from([dto('x', 'foo')]))
+    expect(events).toHaveLength(0)
+    cleanup(editor, container)
   })
 })
 
@@ -323,7 +674,7 @@ describe('Delete', () => {
     const blocks = editor.getValue()
     expect(preorder(blocks)).toEqual(['a'])
     expect(blocks.blocks[0].data.text).toBe('Hello World')
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('collapsed at end, next block is descendant → merged; subtree clamped', () => {
@@ -339,7 +690,7 @@ describe('Delete', () => {
     // 'b' (next in flat order) merged into 'a'; 'c' re-parented via clamping
     expect(preorder(blocks)).toEqual(['a', 'c'])
     expect(find(blocks, 'a').data.text).toBe('AABB')
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('collapsed at end, last block → no change', () => {
@@ -350,7 +701,7 @@ describe('Delete', () => {
     keydown(container, 'Delete')
     const blocks = editor.getValue()
     expect(preorder(blocks)).toEqual(['a', 'b'])
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('BlockRange → deleted and merged', () => {
@@ -362,7 +713,7 @@ describe('Delete', () => {
     const blocks = editor.getValue()
     expect(preorder(blocks)).toEqual(['a'])
     expect(blocks.blocks[0].data.text).toBe('AB')
-    cleanup(container)
+    cleanup(editor, container)
   })
 })
 
@@ -378,7 +729,7 @@ describe('Tab / Shift+Tab', () => {
     const blocks = editor.getValue()
     // b should now be indented under a
     expect(find(blocks, 'a').children.map(x => x.id)).toContain('b')
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('Shift+Tab → unindent applied', () => {
@@ -391,7 +742,7 @@ describe('Tab / Shift+Tab', () => {
     // b should now be at same level as a
     expect(blocks.blocks.map(x => x.id)).toContain('b')
     expect(find(blocks, 'a').children).toHaveLength(0)
-    cleanup(container)
+    cleanup(editor, container)
   })
 })
 
@@ -406,7 +757,7 @@ describe('Ctrl+B / Ctrl+I / Ctrl+U', () => {
     keydown(container, 'b', { ctrlKey: true })
     const block = find(editor.getValue(), 'a')
     expect(block.data.inline).toContainEqual({ type: 'Bold', start: 1, end: 4 })
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('Bold applied again → removed', () => {
@@ -418,7 +769,7 @@ describe('Ctrl+B / Ctrl+I / Ctrl+U', () => {
     keydown(container, 'b', { ctrlKey: true })
     const block = find(editor.getValue(), 'a')
     expect(block.data.inline).toHaveLength(0)
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('Italic applied on selection', () => {
@@ -429,7 +780,7 @@ describe('Ctrl+B / Ctrl+I / Ctrl+U', () => {
     keydown(container, 'i', { ctrlKey: true })
     const block = find(editor.getValue(), 'a')
     expect(block.data.inline).toContainEqual({ type: 'Italic', start: 0, end: 5 })
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('Underline applied on selection', () => {
@@ -440,7 +791,7 @@ describe('Ctrl+B / Ctrl+I / Ctrl+U', () => {
     keydown(container, 'u', { ctrlKey: true })
     const block = find(editor.getValue(), 'a')
     expect(block.data.inline).toContainEqual({ type: 'Underline', start: 0, end: 3 })
-    cleanup(container)
+    cleanup(editor, container)
   })
 })
 
@@ -455,7 +806,7 @@ describe('printable char with BlockRange', () => {
     keydown(container, 'X')
     const blocks = editor.getValue()
     expect(blocks.blocks[0].data.text).toBe('HXo')
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('multi-block range: merged block contains the typed character', () => {
@@ -467,7 +818,7 @@ describe('printable char with BlockRange', () => {
     const blocks = editor.getValue()
     expect(preorder(blocks)).toEqual(['a'])
     expect(blocks.blocks[0].data.text).toBe('AXB')
-    cleanup(container)
+    cleanup(editor, container)
   })
 })
 
@@ -479,7 +830,6 @@ describe('IME', () => {
     const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
     const editable = getEditable(container)
     editable.focus()
-    const initialState = editor.getValue()
 
     editable.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
     // Simulate DOM mutation that would normally happen during IME
@@ -490,7 +840,7 @@ describe('IME', () => {
 
     // State should not have changed during composition
     expect(editor.getValue().blocks[0].data.text).toBe('Hello')
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('compositionend → state updated', () => {
@@ -512,7 +862,7 @@ describe('IME', () => {
 
     // State should now reflect the IME input
     expect(editor.getValue().blocks[0].data.text).toBe('Hello世界')
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('multi-block selection + compositionstart → range deleted before composition', () => {
@@ -527,7 +877,7 @@ describe('IME', () => {
     const blocks = editor.getValue()
     expect(preorder(blocks)).toEqual(['a'])
     expect(blocks.blocks[0].data.text).toBe('AB')
-    cleanup(container)
+    cleanup(editor, container)
   })
 })
 
@@ -543,7 +893,7 @@ describe('isInlineActive', () => {
     getEditable(container).focus()
     setRange(container, 'a', 0, 'a', 5)
     expect(editor.isInlineActive('Bold')).toBe(true)
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('returns false when format is not active', () => {
@@ -552,7 +902,7 @@ describe('isInlineActive', () => {
     getEditable(container).focus()
     setRange(container, 'a', 0, 'a', 5)
     expect(editor.isInlineActive('Bold')).toBe(false)
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('returns false for collapsed selection', () => {
@@ -561,7 +911,7 @@ describe('isInlineActive', () => {
     getEditable(container).focus()
     setCursor(container, 'a', 2)
     expect(editor.isInlineActive('Bold')).toBe(false)
-    cleanup(container)
+    cleanup(editor, container)
   })
 })
 
@@ -572,19 +922,26 @@ describe('BlockEditorWithToolbar', () => {
     const container = makeContainer()
     const editor = new BlockEditorWithToolbar(container)
     expect(editor.getValue().blocks).toHaveLength(1)
-    cleanup(container)
+    cleanup(editor, container)
   })
 
-  it('getValue / setValue / onChange work', () => {
+  it('getValue / setValue / addEventListener work', () => {
     const container = makeContainer()
     const editor = new BlockEditorWithToolbar(container)
-    const calls: Blocks[] = []
-    editor.onChange(b => calls.push(b))
+    const created: string[] = []
+    editor.addEventListener('blockCreated', (e) => created.push(e.id))
+
     const newState = Blocks.from([dto('x', 'foo')])
     editor.setValue(newState)
     expect(editor.getValue().blocks[0].id).toBe('x')
-    expect(calls).toHaveLength(1)
-    cleanup(container)
+
+    // Fire Enter to create a block and confirm addEventListener works through toolbar
+    getEditable(container).focus()
+    setCursor(container, 'x', 3)
+    keydown(container, 'Enter')
+    expect(created).toHaveLength(1)
+
+    cleanup(editor, container)
   })
 
   it('Bold button click → getValue block has Bold inline', () => {
@@ -597,7 +954,7 @@ describe('BlockEditorWithToolbar', () => {
     boldBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
     const block = editor.getValue().blocks[0]
     expect(block.data.inline).toContainEqual({ type: 'Bold', start: 0, end: 5 })
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('Bold button click twice → removed', () => {
@@ -611,7 +968,7 @@ describe('BlockEditorWithToolbar', () => {
     boldBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
     const block = editor.getValue().blocks[0]
     expect(block.data.inline).toHaveLength(0)
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('Indent button click → getValue reflects indent', () => {
@@ -624,7 +981,7 @@ describe('BlockEditorWithToolbar', () => {
     indentBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
     const blocks = editor.getValue()
     expect(find(blocks, 'a').children.map(x => x.id)).toContain('b')
-    cleanup(container)
+    cleanup(editor, container)
   })
 
   it('Outdent button click → getValue reflects unindent', () => {
@@ -638,7 +995,7 @@ describe('BlockEditorWithToolbar', () => {
     const blocks = editor.getValue()
     expect(blocks.blocks.map(x => x.id)).toContain('b')
     expect(find(blocks, 'a').children).toHaveLength(0)
-    cleanup(container)
+    cleanup(editor, container)
   })
 })
 
@@ -647,13 +1004,13 @@ describe('BlockEditorWithToolbar', () => {
 describe('Record<InlineTypes, HTMLButtonElement> exhaustiveness', () => {
   it('toolbar has buttons for all InlineTypes', () => {
     const container = makeContainer()
-    new BlockEditorWithToolbar(container)
+    const editor = new BlockEditorWithToolbar(container)
     // If any InlineType is missing a button, TypeScript would error at compile time.
     // At runtime, verify all known types have a button
     const types: InlineTypes[] = ['Bold', 'Italic', 'Underline']
     for (const type of types) {
       expect(container.querySelector(`[data-inline-type="${type}"]`)).not.toBeNull()
     }
-    cleanup(container)
+    cleanup(editor, container)
   })
 })
