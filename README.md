@@ -1,42 +1,79 @@
-# sv
+# Block Editor
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+A lightweight, framework-agnostic rich-text block editor written in pure TypeScript. No React, no Vue, no Svelte — just a class-based library you can drop into any project.
 
-## Creating a project
+A SvelteKit demo application is included for development and exploration.
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Features
 
-```sh
-# create a new project
-npx sv create my-app
+- **Block model** — content is represented as an ordered list of blocks, each containing a rich-text value
+- **Inline formatting** — Bold, Italic, and Underline, with correct overlap/merge semantics
+- **Toolbar** — formatting buttons with active-state feedback and keyboard-accessible tooltips
+- **Immutable text model** — `Text` is an immutable value object; all mutations return a new instance
+- **Bidirectional serialization** — lossless conversion between the `Text` model and DOM nodes
+- **IME support** — composition events handled separately to avoid premature parses
+- **Framework-agnostic** — no runtime dependency on any UI framework; integrates via a plain `HTMLElement`
+- **TypeScript-first** — exhaustive discriminated unions; invalid states are unrepresentable at compile time
+
+## Usage
+
+Mount the editor by passing a container element to `BlockEditorWithToolbar`:
+
+```typescript
+import { BlockEditorWithToolbar, Blocks, Block } from './src/lib/block-editor'
+
+const container = document.getElementById('editor')!
+const initial = new Blocks([new Block()])
+
+const editor = new BlockEditorWithToolbar(container, initial)
+
+editor.onChange((blocks) => {
+  console.log(blocks.toDto())
+})
+
+// Later, when done:
+editor.destroy()
 ```
 
-To recreate this project with the same configuration:
+### Svelte 5 / SvelteKit
 
-```sh
-# recreate this project
-pnpm dlx sv@0.12.7 create --template minimal --types ts --add tailwindcss="plugins:none" vitest="usages:unit,component" --install pnpm memoir
+Use the `{@attach}` directive to integrate with the component lifecycle:
+
+```svelte
+<script lang="ts">
+  import { BlockEditorWithToolbar, Blocks, Block } from '$lib/block-editor'
+
+  const initial = new Blocks([new Block()])
+
+  function mountEditor(node: HTMLElement) {
+    const editor = new BlockEditorWithToolbar(node, initial)
+    editor.onChange((blocks) => console.log(blocks.toDto()))
+    return () => editor.destroy()
+  }
+</script>
+
+<div {@attach mountEditor}></div>
 ```
 
-## Developing
+## Public API
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+| Export | Description |
+|---|---|
+| `BlockEditorWithToolbar` | Full editor with formatting toolbar |
+| `BlockEditor` | Editor without toolbar |
+| `Blocks` | Ordered collection of `Block` instances |
+| `Block` | A single block containing a `Text` value |
+| `BlockOffset` | A position within a block |
+| `BlockRange` | A selection range spanning one or more blocks |
+| `BlockSelection` | Type representing the current editor selection |
 
-```sh
-npm run dev
+## Development
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+```bash
+pnpm install
+pnpm dev          # start SvelteKit demo
+pnpm vitest run   # run all tests
+pnpm typecheck    # type-check with tsc
 ```
 
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+Tests live alongside source files (`*.test.ts`). TDD is required — write a failing test before implementing any change.

@@ -51,6 +51,8 @@ Use small, atomic commits with [Conventional Commits](https://www.conventionalco
 
 **Prefer build-time errors over runtime errors.** Use TypeScript's type system to make invalid states unrepresentable. Favour exhaustive `switch` statements (with a `never` default), discriminated unions, and strict types so that mistakes are caught by `tsc` or tests — not at runtime in production.
 
+**Use the `frontend-design` skill** when building or significantly redesigning UI components, pages, or layouts in the demo application. Invoke it via the Skill tool before writing Svelte/CSS code for any non-trivial UI work.
+
 ## Area-Specific Rules
 
 @rules/demo.md
