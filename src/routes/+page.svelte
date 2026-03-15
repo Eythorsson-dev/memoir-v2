@@ -1,7 +1,7 @@
 <script lang="ts">
-    import { Blocks, Block } from "../components/blocks/blocks";
-    import { BlockEditorWithToolbar } from "../components/editor/BlockEditorWithToolbar";
-    import type { BlockSelection } from "../components/editor/BlockEditor";
+    import { Blocks, Block } from "$lib/block-editor";
+    import { BlockEditorWithToolbar } from "$lib/block-editor";
+    import type { BlockSelection } from "$lib/block-editor";
     import ResizableLayout from "./components/resizable-layout.svelte";
     import JsonPanel from "./components/json-panel.svelte";
 
@@ -50,7 +50,7 @@
 
 <ResizableLayout>
     {#snippet editor()}
-        <div  class="max-w-2xl mx-auto" {@attach mountEditor}></div>
+        <div class="max-w-2xl mx-auto" {@attach mountEditor}></div>
     {/snippet}
 
     {#snippet inspector()}
