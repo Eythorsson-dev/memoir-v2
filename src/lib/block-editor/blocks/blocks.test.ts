@@ -941,6 +941,164 @@ describe('deleteRange', () => {
   })
 })
 
+// ─── parent ───────────────────────────────────────────────────────────────────
+
+describe('parent', () => {
+  it('returns null for a root-level block', () => {
+    const b = Blocks.from([dto('a'), dto('b')])
+    expect(b.parent('a')).toBeNull()
+    expect(b.parent('b')).toBeNull()
+  })
+
+  it('returns the parent id for a direct child', () => {
+    const b = Blocks.from([dto('a', '', [dto('b')])])
+    expect(b.parent('b')).toBe('a')
+  })
+
+  it('returns the correct parent for deeply nested blocks', () => {
+    // flat: [a:0, b:1, c:2]
+    const b = Blocks.from([dto('a', '', [dto('b', '', [dto('c')])])])
+    expect(b.parent('c')).toBe('b')
+    expect(b.parent('b')).toBe('a')
+  })
+
+  it('returns correct parent for second child (skipping subtree of first child)', () => {
+    // flat: [a:0, b:1, c:2, d:1]
+    const b = Blocks.from([dto('a', '', [dto('b', '', [dto('c')]), dto('d')])])
+    expect(b.parent('d')).toBe('a')
+  })
+
+  it('throws for unknown id', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.parent('missing')).toThrow('Block not found: missing')
+  })
+})
+
+// ─── prevSibling ──────────────────────────────────────────────────────────────
+
+describe('prevSibling', () => {
+  it('returns null for first root block', () => {
+    const b = Blocks.from([dto('a'), dto('b')])
+    expect(b.prevSibling('a')).toBeNull()
+  })
+
+  it('returns prev sibling for root-level blocks', () => {
+    const b = Blocks.from([dto('a'), dto('b'), dto('c')])
+    expect(b.prevSibling('b')).toBe('a')
+    expect(b.prevSibling('c')).toBe('b')
+  })
+
+  it('returns null when block is first child of its parent', () => {
+    const b = Blocks.from([dto('a', '', [dto('b'), dto('c')])])
+    expect(b.prevSibling('b')).toBeNull()
+  })
+
+  it('returns prev sibling among children', () => {
+    const b = Blocks.from([dto('a', '', [dto('b'), dto('c')])])
+    expect(b.prevSibling('c')).toBe('b')
+  })
+
+  it('skips over subtrees of potential prev sibling', () => {
+    // flat: [a:0, b:1, c:2, d:1]  → d.prevSibling = b
+    const b = Blocks.from([dto('a', '', [dto('b', '', [dto('c')]), dto('d')])])
+    expect(b.prevSibling('d')).toBe('b')
+  })
+
+  it('throws for unknown id', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.prevSibling('missing')).toThrow('Block not found: missing')
+  })
+})
+
+// ─── nextSibling ──────────────────────────────────────────────────────────────
+
+describe('nextSibling', () => {
+  it('returns null for last root block', () => {
+    const b = Blocks.from([dto('a'), dto('b')])
+    expect(b.nextSibling('b')).toBeNull()
+  })
+
+  it('returns next sibling for root-level blocks', () => {
+    const b = Blocks.from([dto('a'), dto('b'), dto('c')])
+    expect(b.nextSibling('a')).toBe('b')
+    expect(b.nextSibling('b')).toBe('c')
+  })
+
+  it('returns null when block is last child of its parent', () => {
+    const b = Blocks.from([dto('a', '', [dto('b'), dto('c')])])
+    expect(b.nextSibling('c')).toBeNull()
+  })
+
+  it('returns next sibling among children', () => {
+    const b = Blocks.from([dto('a', '', [dto('b'), dto('c')])])
+    expect(b.nextSibling('b')).toBe('c')
+  })
+
+  it('skips over own subtree when finding next sibling', () => {
+    // flat: [a:0, b:1, c:2, d:1]  → b.nextSibling = d
+    const b = Blocks.from([dto('a', '', [dto('b', '', [dto('c')]), dto('d')])])
+    expect(b.nextSibling('b')).toBe('d')
+  })
+
+  it('throws for unknown id', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.nextSibling('missing')).toThrow('Block not found: missing')
+  })
+})
+
+// ─── Blocks.diff ─────────────────────────────────────────────────────────────
+
+describe('Blocks.diff', () => {
+  it('returns empty array for identical states', () => {
+    const b = Blocks.from([dto('a'), dto('b', '', [dto('c')])])
+    expect(Blocks.diff(b, b)).toEqual([])
+  })
+
+  it('returns empty array when no positions changed', () => {
+    const b1 = Blocks.from([dto('a', 'hello'), dto('b', 'world')])
+    const b2 = b1.update('a', new Text('changed', []))
+    expect(Blocks.diff(b1, b2)).toEqual([])
+  })
+
+  it('detects removed blocks', () => {
+    const b1 = Blocks.from([dto('a'), dto('b'), dto('c')])
+    const b2 = b1.delete('b')
+    const changes = Blocks.diff(b1, b2)
+    expect(changes).toContainEqual({ type: 'removed', id: 'b' })
+    // 'a' is unchanged
+    expect(changes).not.toContainEqual(expect.objectContaining({ id: 'a' }))
+    // 'c' prevSibling changed from 'b' → 'a', so it gets a moved entry
+    expect(changes).toContainEqual(expect.objectContaining({ type: 'moved', id: 'c' }))
+  })
+
+  it('detects moved blocks when parent changes (indent)', () => {
+    const b1 = Blocks.from([dto('a'), dto('b')])
+    const b2 = b1.indent('b', 'b')  // b becomes child of a
+    const changes = Blocks.diff(b1, b2)
+    const bMoved = changes.find(c => c.type === 'moved' && c.id === 'b')
+    expect(bMoved).toBeDefined()
+    expect(bMoved).toMatchObject({ type: 'moved', id: 'b', parentBlockId: 'a', previousBlockId: null })
+  })
+
+  it('detects moved blocks when prevSibling changes', () => {
+    // After splitting 'a' at offset 0, a new block appears before 'b',
+    // changing b's prevSibling from 'a' to the new block.
+    const b1 = Blocks.from([dto('a'), dto('b')])
+    const b2 = b1.splitAt('a', 0, 'x')  // flat: [a, x, b]
+    const changes = Blocks.diff(b1, b2)
+    const bMoved = changes.find(c => c.type === 'moved' && c.id === 'b')
+    expect(bMoved).toBeDefined()
+    expect(bMoved).toMatchObject({ type: 'moved', id: 'b', previousBlockId: 'x', parentBlockId: null })
+  })
+
+  it('ignores newly added blocks (only reports blocks present in old state)', () => {
+    const b1 = Blocks.from([dto('a')])
+    const b2 = b1.splitAt('a', 0, 'new')
+    const changes = Blocks.diff(b1, b2)
+    expect(changes.find(c => c.id === 'new')).toBeUndefined()
+  })
+})
+
 // ─── BlockOffset / BlockRange validation ─────────────────────────────────────
 
 describe('BlockOffset', () => {

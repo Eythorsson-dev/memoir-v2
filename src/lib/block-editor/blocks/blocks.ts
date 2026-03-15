@@ -41,6 +41,10 @@ export class BlockRange {
   }
 }
 
+export type BlocksChange =
+  | { type: 'moved';   id: BlockId; previousBlockId: BlockId | null; parentBlockId: BlockId | null }
+  | { type: 'removed'; id: BlockId }
+
 // ─── Internal types ────────────────────────────────────────────────────────────
 
 /**
@@ -234,6 +238,73 @@ export class Blocks {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`Block not found: ${id}`)
     return idx + 1 < this.#blocks.length && this.#blocks[idx + 1].indent > this.#blocks[idx].indent
+  }
+
+  /** Returns the parent block's ID, or null if the block is at the root level. */
+  parent(id: BlockId): BlockId | null {
+    const idx = this.#blocks.findIndex(b => b.id === id)
+    if (idx === -1) throw new Error(`Block not found: ${id}`)
+    const targetIndent = this.#blocks[idx].indent
+    if (targetIndent === 0) return null
+    for (let i = idx - 1; i >= 0; i--) {
+      if (this.#blocks[i].indent === targetIndent - 1) return this.#blocks[i].id
+    }
+    return null
+  }
+
+  /** Returns the previous sibling's ID, or null if this is the first child. */
+  prevSibling(id: BlockId): BlockId | null {
+    const idx = this.#blocks.findIndex(b => b.id === id)
+    if (idx === -1) throw new Error(`Block not found: ${id}`)
+    const targetIndent = this.#blocks[idx].indent
+    for (let i = idx - 1; i >= 0; i--) {
+      if (this.#blocks[i].indent < targetIndent) return null
+      if (this.#blocks[i].indent === targetIndent) return this.#blocks[i].id
+    }
+    return null
+  }
+
+  /** Returns the next sibling's ID, or null if this is the last child. */
+  nextSibling(id: BlockId): BlockId | null {
+    const idx = this.#blocks.findIndex(b => b.id === id)
+    if (idx === -1) throw new Error(`Block not found: ${id}`)
+    const targetIndent = this.#blocks[idx].indent
+    for (let i = idx + 1; i < this.#blocks.length; i++) {
+      if (this.#blocks[i].indent < targetIndent) return null
+      if (this.#blocks[i].indent === targetIndent) return this.#blocks[i].id
+    }
+    return null
+  }
+
+  /**
+   * Computes the structural differences between two Blocks states.
+   * Returns `removed` entries for blocks present in `oldBlocks` but not in `newBlocks`,
+   * and `moved` entries for blocks whose parent or prevSibling changed.
+   * Newly added blocks (not present in `oldBlocks`) are ignored.
+   */
+  static diff(oldBlocks: Blocks, newBlocks: Blocks): BlocksChange[] {
+    const changes: BlocksChange[] = []
+    const newIds = new Set(newBlocks.#blocks.map(b => b.id))
+    const oldIds = new Set(oldBlocks.#blocks.map(b => b.id))
+
+    for (const b of oldBlocks.#blocks) {
+      if (!newIds.has(b.id)) {
+        changes.push({ type: 'removed', id: b.id })
+      }
+    }
+
+    for (const b of newBlocks.#blocks) {
+      if (!oldIds.has(b.id)) continue
+      const oldParent = oldBlocks.parent(b.id)
+      const newParent = newBlocks.parent(b.id)
+      const oldPrev = oldBlocks.prevSibling(b.id)
+      const newPrev = newBlocks.prevSibling(b.id)
+      if (oldParent !== newParent || oldPrev !== newPrev) {
+        changes.push({ type: 'moved', id: b.id, previousBlockId: newPrev, parentBlockId: newParent })
+      }
+    }
+
+    return changes
   }
 
   // ─── Existing mutation methods ────────────────────────────────────────────────

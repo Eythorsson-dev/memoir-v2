@@ -116,3 +116,34 @@ Bidirectional conversion between `Text` and arrays of DOM nodes.
 ### 4. Public API — `src/lib/block-editor/index.ts`
 
 All classes and types intended for consumers must be exported from `index.ts`. When adding a new public class or type, add it here.
+
+## Blocks API
+
+### Tree navigation
+`Blocks` exposes three instance methods for positional queries:
+- `parent(id)` — parent block ID, or `null` for root blocks
+- `prevSibling(id)` — previous sibling ID, or `null` if first child
+- `nextSibling(id)` — next sibling ID, or `null` if last child
+
+All three throw if the `id` is not found.
+
+### Structural diffing
+`Blocks.diff(oldBlocks, newBlocks): BlocksChange[]` returns the structural differences between two states:
+- `{ type: 'removed', id }` — block present in old, absent in new
+- `{ type: 'moved', id, previousBlockId, parentBlockId }` — block whose parent or prevSibling changed
+
+Newly added blocks (not in old state) are ignored. Use this to compute `blockRemoved` and `blockMoved` events.
+
+### Domain-logic boundary rule
+**Tree-traversal and change-detection belong in `Blocks`, not in `BlockEditor` or any component.** If you need to know a block's parent, siblings, or what changed between two states, use the `Blocks` methods above — never re-implement traversal in the editor.
+
+## Event Infrastructure
+
+`BlockEventEmitter` (`editor/BlockEventEmitter.ts`) is the single owner of:
+- Typed `addEventListener` / unsubscribe
+- Immediate `emit`
+- Debounced `scheduleDataUpdated` (with `flushDataUpdated`, `cancelDataUpdated`, `flushAll`, `cancelAll`)
+
+`BlockEditor` holds a single `private _emitter: BlockEventEmitter` — it never manages listener maps or timers directly.
+
+`BLOCK_EDITOR_EVENT_NAMES` (exported from `events.ts` and `index.ts`) is a compile-time-exhaustive tuple of all event names. Use it in tests and any code that must handle every event type.

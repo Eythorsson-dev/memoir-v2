@@ -1,6 +1,7 @@
 import { type InlineTypes, type InlineDtoMap } from '../text/text'
 import { Blocks } from '../blocks/blocks'
 import { BlockEditor } from './BlockEditor'
+import type { BlockEditorEventMap, BlockEditorOptions } from './events'
 import { createElement, Bold, Italic, Underline, IndentIncrease, IndentDecrease } from 'lucide'
 import './block-editor-toolbar.css'
 
@@ -26,8 +27,9 @@ export class BlockEditorWithToolbar {
   private _inlineButtons: Record<InlineTypes, HTMLButtonElement>
   private _indentBtn: HTMLButtonElement
   private _outdentBtn: HTMLButtonElement
+  private _unsubscribeSelection: () => void
 
-  constructor(container: HTMLElement, initial?: Blocks) {
+  constructor(container: HTMLElement, initial?: Blocks, opts: BlockEditorOptions = {}) {
     // Build toolbar
     this._toolbar = document.createElement('div')
     this._toolbar.className = 'text-editor-toolbar'
@@ -77,13 +79,12 @@ export class BlockEditorWithToolbar {
 
     container.appendChild(this._toolbar)
 
-    this._editor = new BlockEditor(container, initial)
+    this._editor = new BlockEditor(container, initial, opts)
 
     // Update toolbar active state on selection change
-    this._editor.onSelectionChange(() => {
+    this._unsubscribeSelection = this._editor.addEventListener('selectionChange', () => {
       for (const type of Object.keys(this._inlineButtons) as InlineTypes[]) {
-        const active = this._editor.isInlineActive(type)
-        this._inlineButtons[type].classList.toggle('is-active', active)
+        this._inlineButtons[type].classList.toggle('is-active', this._editor.isInlineActive(type))
       }
     })
   }
@@ -96,15 +97,15 @@ export class BlockEditorWithToolbar {
     this._editor.setValue(blocks)
   }
 
-  onChange(cb: (b: Blocks) => void): () => void {
-    return this._editor.onChange(cb)
-  }
-
-  onSelectionChange(cb: (sel: import('./BlockEditor').BlockSelection | null) => void): () => void {
-    return this._editor.onSelectionChange(cb)
+  addEventListener<K extends keyof BlockEditorEventMap>(
+    event: K,
+    handler: (payload: BlockEditorEventMap[K]) => void,
+  ): () => void {
+    return this._editor.addEventListener(event, handler)
   }
 
   destroy(): void {
+    this._unsubscribeSelection()
     this._toolbar.remove()
     this._editor.destroy()
   }

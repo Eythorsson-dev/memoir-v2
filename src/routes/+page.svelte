@@ -1,10 +1,13 @@
 <script lang="ts">
-    import { Blocks, Block } from "$lib/block-editor";
-    import { BlockEditorWithToolbar } from "$lib/block-editor";
-    import type { BlockSelection } from "$lib/block-editor";
+    import { Blocks, Block, BlockEditorWithToolbar, BLOCK_EDITOR_EVENT_NAMES } from "$lib/block-editor";
+    import type { BlockSelection, BlockEditorEventMap } from "$lib/block-editor";
     import ResizableLayout from "../components/resizable-layout.svelte";
+    import CollapsibleSection from "../components/collapsible-section.svelte";
     import CodePreview from "../components/code-preview.svelte";
     import ThemeToggle from "../components/theme-toggle.svelte";
+    import EventLogPanel from "../components/event-log-panel.svelte";
+    import type { LogEntry } from "../components/event-log-panel.svelte";
+    import { localState } from "../components/local-state.svelte";
 
     const STORAGE_KEY = "block-editor-demo-state";
 
@@ -33,17 +36,30 @@
 
     let selection = $state<BlockSelection | null>(null);
     let blocks = $state(initialBlocks.blocks);
+    const log = localState<LogEntry<keyof BlockEditorEventMap>[]>('event-log', []);
+
+    const selectionOpen = localState('inspector-selection', true)
+    const stateOpen     = localState('inspector-state',     true)
+    const eventLogOpen  = localState('inspector-event-log', true)
 
     function mountEditor(node: HTMLElement) {
         const editor = new BlockEditorWithToolbar(node, initialBlocks);
 
-        editor.onChange((b) => {
-            blocks = b.blocks;
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(b.blocks));
-        });
-        editor.onSelectionChange((sel) => {
+        editor.addEventListener("selectionChange", (sel) => {
             selection = sel;
         });
+
+        const stateEvents = BLOCK_EDITOR_EVENT_NAMES.filter(
+            (n): n is Exclude<typeof n, 'selectionChange'> => n !== 'selectionChange'
+        );
+
+        for (const name of stateEvents) {
+            editor.addEventListener(name, (payload) => {
+                blocks = editor.getValue().blocks;
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(blocks));
+                log.value = [{ timestamp: Date.now(), name, payload }, ...log.value].slice(0, 50);
+            });
+        }
 
         return () => editor.destroy();
     }
@@ -64,18 +80,17 @@
             <span class="text-[11px] font-semibold uppercase tracking-widest opacity-50">Inspector</span>
         </div>
         <div class="px-3 pb-3 flex flex-col gap-3 flex-1 min-h-0 overflow-auto">
-            <CodePreview
-                title="Selection"
-                storageKey="inspector-selection"
-                language="json"
-                code={JSON.stringify(selection, null, 2)}
-            />
-            <CodePreview
-                title="State JSON"
-                storageKey="inspector-state"
-                language="json"
-                code={JSON.stringify(blocks, null, 2)}
-            />
+            <CollapsibleSection title="Event Log" bind:open={eventLogOpen.value}>
+                <EventLogPanel bind:entries={log.value} />
+            </CollapsibleSection>
+
+            <CollapsibleSection title="Selection" bind:open={selectionOpen.value}>
+                <CodePreview language="json" code={JSON.stringify(selection, null, 2)} />
+            </CollapsibleSection>
+
+            <CollapsibleSection title="State JSON" bind:open={stateOpen.value}>
+                <CodePreview language="json" code={JSON.stringify(blocks, null, 2)} />
+            </CollapsibleSection>
         </div>
     {/snippet}
 </ResizableLayout>
