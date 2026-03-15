@@ -3,7 +3,7 @@ import { textSerializer } from '../text/serializer'
 import { Blocks, type BlockId, BlockOffset, BlockRange } from '../blocks/blocks'
 import { blocksSerializer } from '../blocks/serializer'
 import type { BlockEditorEventMap, BlockEditorOptions, BlockSelection } from './events'
-import { type DebouncedFn, makeDebounced } from './debounce'
+import { BlockEventEmitter } from './BlockEventEmitter'
 import './block-editor.css'
 
 export { BlockOffset, BlockRange } from '../blocks/blocks'
@@ -92,9 +92,7 @@ function insertChar(text: Text, offset: number, char: string): Text {
 export class BlockEditor {
   private _state: Blocks
   private _editable: HTMLDivElement
-  private _opts: BlockEditorOptions
-  private _eventListeners: Map<keyof BlockEditorEventMap, Set<(payload: unknown) => void>> = new Map()
-  private _pendingDataUpdates: Map<BlockId, DebouncedFn> = new Map()
+  private _emitter: BlockEventEmitter
   /**
    * IME composition guard.
    * Set true on compositionstart, false on compositionend.
@@ -104,18 +102,31 @@ export class BlockEditor {
 
   private _onSelectionChange = (): void => {
     if (document.activeElement === this._editable) {
-      this._emit('selectionChange', this._getSelection())
+      this._emitter.emit('selectionChange', this._getSelection())
     }
   }
 
   private _onBlur = (): void => {
-    this._flushAllDataUpdates()
-    this._emit('selectionChange', null)
+    this._emitter.flushAll()
+    this._emitter.emit('selectionChange', null)
   }
 
   constructor(container: HTMLElement, initial?: Blocks, opts: BlockEditorOptions = {}) {
     this._state = initial ?? Blocks.from([Blocks.createBlock()])
-    this._opts = opts
+    this._emitter = new BlockEventEmitter(
+      (id) => {
+        try {
+          const block = this._state.getBlock(id)
+          return { id, data: block.data }
+        } catch {
+          return null  // block was removed; skip
+        }
+      },
+      {
+        debounceMs: opts.dataUpdateDebounceMs ?? 1000,
+        maxWaitMs:  opts.dataUpdateMaxWaitMs  ?? 10000,
+      },
+    )
 
     this._editable = document.createElement('div')
     this._editable.className = 'block-editor-editable'
@@ -151,7 +162,7 @@ export class BlockEditor {
   }
 
   setValue(blocks: Blocks): void {
-    this._cancelAllDataUpdates()
+    this._emitter.cancelAll()
     this._state = blocks
     this._render()
     // no events
@@ -162,11 +173,7 @@ export class BlockEditor {
     event: K,
     handler: (payload: BlockEditorEventMap[K]) => void,
   ): () => void {
-    if (!this._eventListeners.has(event)) {
-      this._eventListeners.set(event, new Set())
-    }
-    this._eventListeners.get(event)!.add(handler as (payload: unknown) => void)
-    return () => this._eventListeners.get(event)?.delete(handler as (payload: unknown) => void)
+    return this._emitter.addEventListener(event, handler)
   }
 
   /** Indent current block range; re-render preserving full BlockSelection. */
@@ -222,7 +229,7 @@ export class BlockEditor {
 
     this._state = this._state.update(blockId, newText)
     this._render(sel)
-    this._scheduleDataUpdated(blockId)
+    this._emitter.scheduleDataUpdated(blockId)
   }
 
   /** Returns true if the inline is fully active on the current selection. */
@@ -245,65 +252,10 @@ export class BlockEditor {
   }
 
   destroy(): void {
-    this._flushAllDataUpdates()
-    this._cancelAllDataUpdates()
+    this._emitter.flushAll()
+    this._emitter.cancelAll()
     document.removeEventListener('selectionchange', this._onSelectionChange)
     this._editable.remove()
-  }
-
-  // ─── Event emission ─────────────────────────────────────────────────────────
-
-  private _emit<K extends keyof BlockEditorEventMap>(event: K, payload: BlockEditorEventMap[K]): void {
-    const listeners = this._eventListeners.get(event)
-    if (!listeners) return
-    for (const cb of listeners) cb(payload as unknown)
-  }
-
-  private _scheduleDataUpdated(id: BlockId): void {
-    if (!this._pendingDataUpdates.has(id)) {
-      this._pendingDataUpdates.set(id, makeDebounced(
-        () => this._emitDataUpdated(id),
-        this._opts.dataUpdateDebounceMs ?? 1000,
-        this._opts.dataUpdateMaxWaitMs ?? 10000,
-      ))
-    }
-    this._pendingDataUpdates.get(id)!()
-  }
-
-  private _emitDataUpdated(id: BlockId): void {
-    this._pendingDataUpdates.delete(id)
-    try {
-      const block = this._state.getBlock(id)
-      this._emit('blockDataUpdated', { id, data: block.data })
-    } catch {
-      // block was removed; skip
-    }
-  }
-
-  private _flushDataUpdated(id: BlockId): void {
-    const fn = this._pendingDataUpdates.get(id)
-    if (fn) fn.flush()
-  }
-
-  private _cancelDataUpdated(id: BlockId): void {
-    const fn = this._pendingDataUpdates.get(id)
-    if (fn) {
-      fn.cancel()
-      this._pendingDataUpdates.delete(id)
-    }
-  }
-
-  private _flushAllDataUpdates(): void {
-    for (const id of [...this._pendingDataUpdates.keys()]) {
-      this._flushDataUpdated(id)
-    }
-  }
-
-  private _cancelAllDataUpdates(): void {
-    for (const fn of this._pendingDataUpdates.values()) {
-      fn.cancel()
-    }
-    this._pendingDataUpdates.clear()
   }
 
   // ─── Private helpers ────────────────────────────────────────────────────────
@@ -311,7 +263,7 @@ export class BlockEditor {
   private _emitMoved(changes: ReturnType<typeof Blocks.diff>, excludeId?: BlockId): void {
     for (const change of changes) {
       if (change.type === 'moved' && change.id !== excludeId) {
-        this._emit('blockMoved', { id: change.id, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
+        this._emitter.emit('blockMoved', { id: change.id, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
       }
     }
   }
@@ -492,7 +444,7 @@ export class BlockEditor {
       this._state = this._state.update(cursor.blockId, newText)
       const newCursor = new BlockOffset(cursor.blockId, cursor.offset + 1)
       this._render(newCursor)
-      this._scheduleDataUpdated(cursor.blockId)
+      this._emitter.scheduleDataUpdated(cursor.blockId)
       return
     }
   }
@@ -514,7 +466,7 @@ export class BlockEditor {
     const newText = textSerializer.parse(Array.from(pEl.childNodes))
     this._state = this._state.update(blockId, newText)
     this._render(sel)
-    this._scheduleDataUpdated(blockId)
+    this._emitter.scheduleDataUpdated(blockId)
   }
 
   private _handleEnter(sel: BlockSelection): void {
@@ -529,9 +481,9 @@ export class BlockEditor {
     const atEnd = offset === block.getLength()
 
     if (atEnd) {
-      this._flushDataUpdated(blockId)
+      this._emitter.flushDataUpdated(blockId)
     } else {
-      this._cancelDataUpdated(blockId)
+      this._emitter.cancelDataUpdated(blockId)
     }
 
     const oldState = this._state
@@ -540,10 +492,10 @@ export class BlockEditor {
     this._render(new BlockOffset(newId, 0))
 
     if (!atEnd) {
-      this._emit('blockDataUpdated', { id: blockId, data: this._state.getBlock(blockId).data })
+      this._emitter.emit('blockDataUpdated', { id: blockId, data: this._state.getBlock(blockId).data })
     }
 
-    this._emit('blockCreated', {
+    this._emitter.emit('blockCreated', {
       id:              newId,
       data:            this._state.getBlock(newId).data,
       previousBlockId: this._state.prevSibling(newId),
@@ -565,12 +517,12 @@ export class BlockEditor {
     if (prevId === null) return  // first block — no-op
     const cursorOffset = this._state.getBlock(prevId).getLength()
     const oldState = this._state
-    this._cancelDataUpdated(blockId)
-    this._cancelDataUpdated(prevId)
+    this._emitter.cancelDataUpdated(blockId)
+    this._emitter.cancelDataUpdated(prevId)
     this._state = this._state.merge(prevId, blockId)
     this._render(new BlockOffset(prevId, cursorOffset))
-    this._emit('blockDataUpdated', { id: prevId, data: this._state.getBlock(prevId).data })
-    this._emit('blockRemoved', { id: blockId })
+    this._emitter.emit('blockDataUpdated', { id: prevId, data: this._state.getBlock(prevId).data })
+    this._emitter.emit('blockRemoved', { id: blockId })
     this._emitMoved(Blocks.diff(oldState, this._state))
   }
 
@@ -586,12 +538,12 @@ export class BlockEditor {
     if (nextId === null) return  // last block — no-op
     const cursorOffset = this._state.getBlock(blockId).getLength()
     const oldState = this._state
-    this._cancelDataUpdated(nextId)
-    this._cancelDataUpdated(blockId)
+    this._emitter.cancelDataUpdated(nextId)
+    this._emitter.cancelDataUpdated(blockId)
     this._state = this._state.merge(blockId, nextId)
     this._render(new BlockOffset(blockId, cursorOffset))
-    this._emit('blockDataUpdated', { id: blockId, data: this._state.getBlock(blockId).data })
-    this._emit('blockRemoved', { id: nextId })
+    this._emitter.emit('blockDataUpdated', { id: blockId, data: this._state.getBlock(blockId).data })
+    this._emitter.emit('blockRemoved', { id: nextId })
     this._emitMoved(Blocks.diff(oldState, this._state))
   }
 
@@ -601,18 +553,18 @@ export class BlockEditor {
       const text = new Text(block.data.text, [...block.data.inline] as InlineDto[])
       const length = sel.end.offset - sel.start.offset
       const newText = text.remove(sel.start.offset, length)
-      this._cancelDataUpdated(sel.start.blockId)
+      this._emitter.cancelDataUpdated(sel.start.blockId)
       this._state = this._state.update(sel.start.blockId, newText)
-      this._emit('blockDataUpdated', { id: sel.start.blockId, data: this._state.getBlock(sel.start.blockId).data })
+      this._emitter.emit('blockDataUpdated', { id: sel.start.blockId, data: this._state.getBlock(sel.start.blockId).data })
       return new BlockOffset(sel.start.blockId, sel.start.offset)
     }
     // Multi-block
     const oldState = this._state
-    this._cancelAllDataUpdates()
+    this._emitter.cancelAll()
     this._state = this._state.deleteRange(sel)
-    this._emit('blockDataUpdated', { id: sel.start.blockId, data: this._state.getBlock(sel.start.blockId).data })
+    this._emitter.emit('blockDataUpdated', { id: sel.start.blockId, data: this._state.getBlock(sel.start.blockId).data })
     for (const change of Blocks.diff(oldState, this._state)) {
-      if (change.type === 'removed') this._emit('blockRemoved', { id: change.id })
+      if (change.type === 'removed') this._emitter.emit('blockRemoved', { id: change.id })
     }
     return new BlockOffset(sel.start.blockId, sel.start.offset)
   }
