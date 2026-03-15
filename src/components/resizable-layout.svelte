@@ -36,7 +36,6 @@
     const startWidth = width;
     document.body.style.userSelect = "none";
     document.body.style.cursor = "col-resize";
-    handleEl.classList.add("dragging");
 
     function onMove(e: PointerEvent) {
       width = clamp(startWidth + (startX - e.clientX), minWidth, maxWidth);
@@ -46,7 +45,6 @@
       handleEl.releasePointerCapture(e.pointerId);
       document.body.style.userSelect = "";
       document.body.style.cursor = "";
-      handleEl.classList.remove("dragging");
       localStorage.setItem(storageKey, String(width));
     }
     handleEl.addEventListener("pointermove", onMove);
@@ -68,16 +66,16 @@
   }
 </script>
 
-<div class="layout">
-  <div class="editor-pane">
+<div class="flex items-stretch min-h-dvh">
+  <div class="flex-1 min-w-0">
     {@render editor()}
   </div>
 
-  <div class="sidebar">
+  <div class="flex items-stretch sticky top-0 h-dvh shrink-0">
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
-      class="resize-handle ml-1 pr-1"
+      class="ml-1 pr-1 box-border cursor-col-resize shrink-0 bg-transparent border-l-2 border-(--border) transition-colors duration-150 touch-none relative hover:border-(--toolbar-btn-active-border) focus-visible:border-(--toolbar-btn-active-border) focus-visible:outline-none active:border-(--toolbar-btn-active-border)"
       role="separator"
       aria-orientation="vertical"
       aria-label="Resize inspector"
@@ -90,49 +88,8 @@
       onkeydown={onKeyDown}
     ></div>
 
-    <div class="inspector-pane" style="width: {width}px">
+    <div class="shrink-0 overflow-y-auto" style="width: {width}px">
       {@render inspector()}
     </div>
   </div>
 </div>
-
-<style>
-  .layout {
-    display: flex;
-    align-items: stretch;
-    min-height: 100dvh;
-  }
-  .editor-pane {
-    flex: 1;
-    min-width: 0;
-  }
-  .sidebar {
-    display: flex;
-    align-items: stretch;
-    position: sticky;
-    top: 0;
-    height: 100dvh;
-    flex-shrink: 0;
-  }
-  .inspector-pane {
-    flex-shrink: 0;
-    overflow-y: auto;
-  }
-  .resize-handle {
-    /* width: 2px; */
-    box-sizing: border-box;
-    cursor: col-resize;
-    flex-shrink: 0;
-    background: transparent;
-    border-left: 2px solid var(--border);
-    transition: border-color 150ms;
-    touch-action: none;
-    position: relative;
-  }
-  .resize-handle:hover,
-  .resize-handle:focus-visible,
-  .resize-handle:global(.dragging) {
-    border-color: var(--toolbar-btn-active-border);
-    outline: none;
-  }
-</style>

@@ -15,18 +15,5 @@
 </script>
 
 <CollapsibleSection {title} {storageKey}>
-  <pre>{text}</pre>
+  <pre class="m-0 bg-(--panel-bg) text-(--fg) border border-(--border) p-4 rounded whitespace-break-spaces overflow-auto">{text}</pre>
 </CollapsibleSection>
-
-<style>
-  pre {
-    margin: 0;
-    background: var(--panel-bg);
-    color: var(--fg);
-    border: 1px solid var(--border);
-    padding: 1rem;
-    border-radius: 4px;
-    white-space: break-spaces;
-    overflow: auto;
-  }
-</style>

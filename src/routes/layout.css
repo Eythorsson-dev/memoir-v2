@@ -9,6 +9,8 @@
   --tooltip-bg: #1f2937;
   --tooltip-color: #f9fafb;
   --border: #e5e7eb;
+  --panel-bg: #f9fafb;
+  --fg: #111827;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -21,5 +23,7 @@
     --tooltip-bg: #f9fafb;
     --tooltip-color: #111827;
     --border: #374151;
+    --panel-bg: #1f2937;
+    --fg: #f9fafb;
   }
 }

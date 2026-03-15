@@ -30,46 +30,13 @@
 </script>
 
 <details {open} ontoggle={onToggle}>
-  <summary class="section-summary">
-    <span class="section-icon">
-      <ChevronRight></ChevronRight>
+  <summary class="flex items-center gap-[0.4rem] cursor-pointer font-semibold py-[0.4rem] px-2 -mx-2 list-none select-none rounded transition-colors duration-[120ms] hover:bg-(--toolbar-btn-hover-bg)">
+    <span class={['[&>svg]:size-3.5 [&>svg]:stroke-current shrink-0 transition-transform duration-150', open && 'rotate-90'].filter(Boolean).join(' ')}>
+      <ChevronRight />
     </span>
     {title}
   </summary>
-  <div class="section-body">
+  <div class="max-h-[300px] overflow-y-auto">
     {@render children()}
   </div>
 </details>
-
-<style>
-  .section-summary {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    cursor: pointer;
-    font-weight: 600;
-    padding: 0.4rem 0.5rem;
-    margin: 0 -0.5rem;
-    list-style: none;
-    user-select: none;
-    border-radius: 4px;
-    transition: background 120ms;
-  }
-  .section-summary:hover {
-    background: var(--toolbar-btn-hover-bg);
-  }
-  .section-summary :global(.lucide) {
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
-    transition: transform 150ms;
-    stroke: currentColor;
-  }
-  details[open] > summary :global(.lucide) {
-    transform: rotate(90deg);
-  }
-  .section-body {
-    max-height: 300px;
-    overflow-y: auto;
-  }
-</style>
