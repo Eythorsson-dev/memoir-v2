@@ -563,9 +563,11 @@ export class BlockEditor {
     this._emitter.cancelAll()
     this._state = this._state.deleteRange(sel)
     this._emitter.emit('blockDataUpdated', { id: sel.start.blockId, data: this._state.getBlock(sel.start.blockId).data })
-    for (const change of Blocks.diff(oldState, this._state)) {
+    const changes = Blocks.diff(oldState, this._state)
+    for (const change of changes) {
       if (change.type === 'removed') this._emitter.emit('blockRemoved', { id: change.id })
     }
+    this._emitMoved(changes)
     return new BlockOffset(sel.start.blockId, sel.start.offset)
   }
 }

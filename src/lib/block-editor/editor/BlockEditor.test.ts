@@ -677,6 +677,26 @@ describe('blockMoved events', () => {
     expect(cMoved).toBeDefined()
     cleanup(editor, container)
   })
+
+  it('range-delete — emits blockMoved for children of removed blocks that remain', () => {
+    // flat: [a:0, b:0, c:1, d:1]  (b has children c and d)
+    // Range selection from (a, 2) to (c, 0) then Backspace
+    // deleteRange removes b and c, keeps d; d's parent changes b → a
+    const container = makeContainer()
+    const editor = new BlockEditor(
+      container,
+      Blocks.from([dto('a', 'AA'), dto('b', 'BB', [dto('c', 'CC'), dto('d', 'DD')])]),
+    )
+    const moved: Array<{ id: string }> = []
+    editor.addEventListener('blockMoved', (e) => moved.push(e))
+
+    getEditable(container).focus()
+    setRange(container, 'a', 2, 'c', 0)
+    keydown(container, 'Backspace')
+
+    expect(moved.find((m) => m.id === 'd')).toBeDefined()
+    cleanup(editor, container)
+  })
 })
 
 // ─── selectionChange events ───────────────────────────────────────────────────
