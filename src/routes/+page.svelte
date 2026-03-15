@@ -3,7 +3,7 @@
     import { BlockEditorWithToolbar } from "$lib/block-editor";
     import type { BlockSelection } from "$lib/block-editor";
     import ResizableLayout from "../components/resizable-layout.svelte";
-    import JsonPanel from "../components/json-panel.svelte";
+    import CodePreview from "../components/code-preview.svelte";
     import ThemeToggle from "../components/theme-toggle.svelte";
 
     const STORAGE_KEY = "block-editor-demo-state";
@@ -64,15 +64,17 @@
             <span class="text-[11px] font-semibold uppercase tracking-widest opacity-50">Inspector</span>
         </div>
         <div class="px-3 pb-3 flex flex-col gap-3 flex-1 min-h-0 overflow-auto">
-            <JsonPanel
+            <CodePreview
                 title="Selection"
                 storageKey="inspector-selection"
-                value={selection}
+                language="json"
+                code={JSON.stringify(selection, null, 2)}
             />
-            <JsonPanel
+            <CodePreview
                 title="State JSON"
                 storageKey="inspector-state"
-                value={blocks}
+                language="json"
+                code={JSON.stringify(blocks, null, 2)}
             />
         </div>
     {/snippet}
