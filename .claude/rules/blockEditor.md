@@ -14,7 +14,7 @@ The library is **pure vanilla TypeScript** — no Svelte, no framework, no `$lib
 
 ## Icons
 
-Use the **`lucide`** vanilla JS package. Never use `@lucide/svelte` or any framework-specific Lucide package in the library.
+Use the **`lucide`** vanilla JS package. Never use a framework-specific Lucide package in the library.
 
 ```typescript
 import { createElement, ChevronRight, X } from 'lucide'

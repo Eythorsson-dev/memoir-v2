@@ -13,7 +13,7 @@ The demo **must not** contain business logic. It imports from the editor library
 
 ## Icons
 
-Use **`@lucide/svelte`** for all icons in the demo. Never use the vanilla `lucide` package, emoji, Unicode symbols, or CSS pseudo-element characters as icon substitutes.
+Use **`@lucide/svelte`** for all icons in the demo. Never use emoji, Unicode symbols, or CSS pseudo-element characters as icon substitutes.
 
 ```svelte
 <script lang="ts">
@@ -26,8 +26,7 @@ Use **`@lucide/svelte`** for all icons in the demo. Never use the vanilla `lucid
 ## CSS
 
 - Global styles and CSS custom properties go in `src/routes/layout.css`.
-- Component-scoped styles go in a `<style>` block inside the `.svelte` file.
-- Do not create separate `.css` files for Svelte components.
+- Use Tailwind utility classes in component templates — do not add `<style>` blocks or separate `.css` files for Svelte components.
 
 ## Importing the Editor Library
 
