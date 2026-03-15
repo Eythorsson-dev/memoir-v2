@@ -3,6 +3,7 @@ import { BlockEditor } from './BlockEditor'
 import { BlockEditorWithToolbar } from './BlockEditorWithToolbar'
 import { Blocks, Block } from '../blocks/blocks'
 import { type InlineTypes } from '../text/text'
+import { BLOCK_EDITOR_EVENT_NAMES } from './events'
 import type { BlockDataUpdatedEvent } from './events'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -185,10 +186,9 @@ describe('getValue / setValue', () => {
     const container = makeContainer()
     const editor = new BlockEditor(container)
     const events: string[] = []
-    editor.addEventListener('blockDataUpdated', () => events.push('blockDataUpdated'))
-    editor.addEventListener('blockCreated', () => events.push('blockCreated'))
-    editor.addEventListener('blockRemoved', () => events.push('blockRemoved'))
-    editor.addEventListener('blockMoved', () => events.push('blockMoved'))
+    for (const name of BLOCK_EDITOR_EVENT_NAMES) {
+      editor.addEventListener(name, () => events.push(name))
+    }
     editor.setValue(Blocks.from([dto('x', 'foo')]))
     expect(events).toHaveLength(0)
     cleanup(editor, container)
