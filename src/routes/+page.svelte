@@ -2,8 +2,8 @@
     import { Blocks, Block } from "$lib/block-editor";
     import { BlockEditorWithToolbar } from "$lib/block-editor";
     import type { BlockSelection } from "$lib/block-editor";
-    import ResizableLayout from "./components/resizable-layout.svelte";
-    import JsonPanel from "./components/json-panel.svelte";
+    import ResizableLayout from "../components/resizable-layout.svelte";
+    import JsonPanel from "../components/json-panel.svelte";
 
     const STORAGE_KEY = "block-editor-demo-state";
 
