@@ -1,6 +1,6 @@
 import { Text, type InlineTypes, type InlineDto } from '../text/text'
 import { textSerializer } from '../text/serializer'
-import { Blocks, type BlockId, BlockOffset, BlockRange, type Block } from '../blocks/blocks'
+import { Blocks, type BlockId, BlockOffset, BlockRange } from '../blocks/blocks'
 import { blocksSerializer } from '../blocks/serializer'
 import type { BlockEditorEventMap, BlockEditorOptions, BlockSelection } from './events'
 import { type DebouncedFn, makeDebounced } from './debounce'
@@ -178,7 +178,7 @@ export class BlockEditor {
     const oldState = this._state
     this._state = this._state.indent(fromId, toId)
     this._render(sel)
-    this._emitBlockMovedForChanges(oldState)
+    this._emitMoved(Blocks.diff(oldState, this._state))
   }
 
   /** Unindent current block range; re-render preserving full BlockSelection. */
@@ -190,7 +190,7 @@ export class BlockEditor {
     const oldState = this._state
     this._state = this._state.unindent(fromId, toId)
     this._render(sel)
-    this._emitBlockMovedForChanges(oldState)
+    this._emitMoved(Blocks.diff(oldState, this._state))
   }
 
   /** Toggle inline format on selection within focused block. */
@@ -306,65 +306,12 @@ export class BlockEditor {
     this._pendingDataUpdates.clear()
   }
 
-  // ─── Tree helpers ───────────────────────────────────────────────────────────
+  // ─── Private helpers ────────────────────────────────────────────────────────
 
-  private _treeInfo(
-    id: BlockId,
-    state: Blocks,
-  ): { parentId: BlockId | null; prevSiblingId: BlockId | null; nextSiblingId: BlockId | null } {
-    function walk(
-      blocks: ReadonlyArray<Block>,
-      parentId: BlockId | null,
-    ): { parentId: BlockId | null; prevSiblingId: BlockId | null; nextSiblingId: BlockId | null } | null {
-      for (let i = 0; i < blocks.length; i++) {
-        const b = blocks[i]
-        if (b.id === id) {
-          return {
-            parentId,
-            prevSiblingId: i > 0 ? blocks[i - 1].id : null,
-            nextSiblingId: i < blocks.length - 1 ? blocks[i + 1].id : null,
-          }
-        }
-        const found = walk(b.children, b.id)
-        if (found) return found
-      }
-      return null
-    }
-    const result = walk(state.blocks, null)
-    if (!result) throw new Error(`Block not found: ${id}`)
-    return result
-  }
-
-  private _prevSiblingOf(id: BlockId, state = this._state): BlockId | null {
-    return this._treeInfo(id, state).prevSiblingId
-  }
-
-  private _parentOf(id: BlockId, state = this._state): BlockId | null {
-    return this._treeInfo(id, state).parentId
-  }
-
-  private _nextTreeSiblingOf(id: BlockId, state = this._state): BlockId | null {
-    return this._treeInfo(id, state).nextSiblingId
-  }
-
-  private _flatIds(state = this._state): BlockId[] {
-    function walk(blocks: ReadonlyArray<Block>): BlockId[] {
-      return blocks.flatMap(b => [b.id, ...walk(b.children)])
-    }
-    return walk(state.blocks)
-  }
-
-  private _emitBlockMovedForChanges(oldState: Blocks, excludeId?: BlockId): void {
-    for (const id of this._flatIds()) {
-      if (id === excludeId) continue
-      const prevChanged   = this._prevSiblingOf(id) !== this._prevSiblingOf(id, oldState)
-      const parentChanged = this._parentOf(id)      !== this._parentOf(id, oldState)
-      if (prevChanged || parentChanged) {
-        this._emit('blockMoved', {
-          id,
-          previousBlockId: this._prevSiblingOf(id),
-          parentBlockId:   this._parentOf(id),
-        })
+  private _emitMoved(changes: ReturnType<typeof Blocks.diff>, excludeId?: BlockId): void {
+    for (const change of changes) {
+      if (change.type === 'moved' && change.id !== excludeId) {
+        this._emit('blockMoved', { id: change.id, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
       }
     }
   }
@@ -599,11 +546,11 @@ export class BlockEditor {
     this._emit('blockCreated', {
       id:              newId,
       data:            this._state.getBlock(newId).data,
-      previousBlockId: this._prevSiblingOf(newId),
-      parentBlockId:   this._parentOf(newId),
+      previousBlockId: this._state.prevSibling(newId),
+      parentBlockId:   this._state.parent(newId),
     })
 
-    this._emitBlockMovedForChanges(oldState, newId)
+    this._emitMoved(Blocks.diff(oldState, this._state), newId)
   }
 
   private _handleBackspace(sel: BlockSelection): void {
@@ -656,13 +603,12 @@ export class BlockEditor {
       return new BlockOffset(sel.start.blockId, sel.start.offset)
     }
     // Multi-block
-    const oldIds = new Set(this._flatIds())
+    const oldState = this._state
     this._cancelAllDataUpdates()
     this._state = this._state.deleteRange(sel)
-    const newIds = new Set(this._flatIds())
     this._emit('blockDataUpdated', { id: sel.start.blockId, data: this._state.getBlock(sel.start.blockId).data })
-    for (const id of oldIds) {
-      if (!newIds.has(id)) this._emit('blockRemoved', { id })
+    for (const change of Blocks.diff(oldState, this._state)) {
+      if (change.type === 'removed') this._emit('blockRemoved', { id: change.id })
     }
     return new BlockOffset(sel.start.blockId, sel.start.offset)
   }
