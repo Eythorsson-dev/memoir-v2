@@ -3,6 +3,7 @@ import { textSerializer } from '../text/serializer'
 import { Blocks, type BlockId, BlockOffset, BlockRange, type Block } from '../blocks/blocks'
 import { blocksSerializer } from '../blocks/serializer'
 import type { BlockEditorEventMap, BlockEditorOptions, BlockSelection } from './events'
+import { type DebouncedFn, makeDebounced } from './debounce'
 import './block-editor.css'
 
 export { BlockOffset, BlockRange } from '../blocks/blocks'
@@ -84,50 +85,6 @@ function getBlockElementContent(blockEl: Element): Element {
 function insertChar(text: Text, offset: number, char: string): Text {
   const [left, right] = text.split(offset)
   return Text.merge(Text.merge(left, new Text(char, [])), right)
-}
-
-// ─── Debounce with flush/cancel ───────────────────────────────────────────────
-
-interface DebouncedFn {
-  (): void
-  cancel(): void
-  flush(): void
-}
-
-function makeDebounced(fn: () => void, delay: number, maxWait: number): DebouncedFn {
-  let timer: ReturnType<typeof setTimeout> | null = null
-  let maxTimer: ReturnType<typeof setTimeout> | null = null
-  let pending = false
-
-  function invoke(): void {
-    if (timer !== null) { clearTimeout(timer); timer = null }
-    if (maxTimer !== null) { clearTimeout(maxTimer); maxTimer = null }
-    pending = false
-    fn()
-  }
-
-  const debounced = Object.assign(
-    function debouncedFn(): void {
-      pending = true
-      if (timer !== null) clearTimeout(timer)
-      timer = setTimeout(invoke, delay)
-      if (maxTimer === null) {
-        maxTimer = setTimeout(invoke, maxWait)
-      }
-    },
-    {
-      cancel(): void {
-        if (timer !== null) { clearTimeout(timer); timer = null }
-        if (maxTimer !== null) { clearTimeout(maxTimer); maxTimer = null }
-        pending = false
-      },
-      flush(): void {
-        if (pending) invoke()
-      },
-    },
-  )
-
-  return debounced
 }
 
 // ─── BlockEditor ─────────────────────────────────────────────────────────────
