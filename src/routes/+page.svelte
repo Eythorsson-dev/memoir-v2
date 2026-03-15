@@ -4,6 +4,7 @@
     import type { BlockSelection } from "$lib/block-editor";
     import ResizableLayout from "../components/resizable-layout.svelte";
     import JsonPanel from "../components/json-panel.svelte";
+    import ThemeToggle from "../components/theme-toggle.svelte";
 
     const STORAGE_KEY = "block-editor-demo-state";
 
@@ -50,19 +51,29 @@
 
 <ResizableLayout>
     {#snippet editor()}
-        <div class="max-w-2xl mx-auto" {@attach mountEditor}></div>
+        <div class="relative min-h-dvh">
+            <div class="absolute top-4 right-4 z-10">
+                <ThemeToggle />
+            </div>
+            <div class="max-w-2xl mx-auto px-6 pt-12 pb-8" {@attach mountEditor}></div>
+        </div>
     {/snippet}
 
     {#snippet inspector()}
-        <JsonPanel
-            title="Selection"
-            storageKey="inspector-selection"
-            value={selection}
-        />
-        <JsonPanel
-            title="State JSON"
-            storageKey="inspector-state"
-            value={blocks}
-        />
+        <div class="px-3 py-2 border-b border-(--border)">
+            <span class="text-[11px] font-semibold uppercase tracking-widest opacity-50">Inspector</span>
+        </div>
+        <div class="px-3 pb-3 flex flex-col gap-3 flex-1 min-h-0 overflow-auto">
+            <JsonPanel
+                title="Selection"
+                storageKey="inspector-selection"
+                value={selection}
+            />
+            <JsonPanel
+                title="State JSON"
+                storageKey="inspector-state"
+                value={blocks}
+            />
+        </div>
     {/snippet}
 </ResizableLayout>

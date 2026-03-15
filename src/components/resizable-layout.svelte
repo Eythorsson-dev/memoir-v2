@@ -75,7 +75,7 @@
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
-      class="ml-1 pr-1 box-border cursor-col-resize shrink-0 bg-transparent border-l-2 border-(--border) transition-colors duration-150 touch-none relative hover:border-(--toolbar-btn-active-border) focus-visible:border-(--toolbar-btn-active-border) focus-visible:outline-none active:border-(--toolbar-btn-active-border)"
+      class="box-border cursor-col-resize shrink-0 bg-transparent border-l-2 border-(--border) transition-colors duration-150 touch-none relative hover:border-(--toolbar-btn-active-border) focus-visible:border-(--toolbar-btn-active-border) focus-visible:outline-none active:border-(--toolbar-btn-active-border)"
       role="separator"
       aria-orientation="vertical"
       aria-label="Resize inspector"
@@ -87,8 +87,7 @@
       onpointerdown={onPointerDown}
       onkeydown={onKeyDown}
     ></div>
-
-    <div class="shrink-0 overflow-y-auto" style="width: {width}px">
+    <div class="shrink-0 flex flex-col overflow-hidden bg-(--panel-bg)" style="width: {width}px">
       {@render inspector()}
     </div>
   </div>
