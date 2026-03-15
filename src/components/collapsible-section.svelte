@@ -1,32 +1,19 @@
 <script lang="ts">
   import { ChevronRight } from "@lucide/svelte";
-  import { onMount, untrack } from "svelte";
 
   let {
     title,
-    storageKey = "",
-    defaultOpen = true,
+    open = $bindable(true),
     children,
   }: {
-    title: string;
-    storageKey?: string;
-    defaultOpen?: boolean;
-    children: import("svelte").Snippet;
-  } = $props();
-
-  let open = $state(untrack(() => defaultOpen));
+    title:    string
+    open?:    boolean
+    children: import("svelte").Snippet
+  } = $props()
 
   function onToggle(e: Event) {
     open = (e.currentTarget as HTMLDetailsElement).open;
-    if (storageKey) localStorage.setItem(storageKey, String(open));
   }
-
-  onMount(() => {
-    if (storageKey) {
-      const stored = localStorage.getItem(storageKey);
-      if (stored !== null) open = stored === "true";
-    }
-  });
 </script>
 
 <details {open} ontoggle={onToggle}>

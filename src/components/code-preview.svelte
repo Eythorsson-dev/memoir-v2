@@ -2,22 +2,11 @@
   import { untrack } from 'svelte'
   import Prism from 'prismjs'
   import 'prismjs/components/prism-json'
-  import CollapsibleSection from './collapsible-section.svelte'
 
   const SUPPORTED_LANGUAGES = ['json'] as const
   type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number]
 
-  let {
-    title,
-    storageKey,
-    language,
-    code,
-  }: {
-    title:       string
-    storageKey?: string
-    language:    SupportedLanguage
-    code:        string
-  } = $props()
+  let { code, language }: { code: string; language: SupportedLanguage } = $props()
 
   untrack(() => {
     if (!Prism.languages[language]) {
@@ -33,12 +22,10 @@
   })
 </script>
 
-<CollapsibleSection {title} {storageKey}>
-  <pre
-    bind:this={preEl}
-    class="m-0 bg-(--panel-bg) text-(--fg) text-sm border border-(--border) p-4 rounded whitespace-break-spaces overflow-auto"
-  ></pre>
-</CollapsibleSection>
+<pre
+  bind:this={preEl}
+  class="m-0 bg-(--panel-bg) text-(--fg) text-sm border border-(--border) p-4 rounded whitespace-break-spaces overflow-auto"
+></pre>
 
 <style>
   :global(:root) {
