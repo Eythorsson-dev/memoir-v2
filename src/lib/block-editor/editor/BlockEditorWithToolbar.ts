@@ -18,21 +18,21 @@ function addTooltip(btn: HTMLButtonElement, label: string, shortcut?: string): v
 }
 
 export class BlockEditorWithToolbar {
-  private _editor: BlockEditor
-  private _toolbar: HTMLDivElement
+  #editor: BlockEditor
+  #toolbar: HTMLDivElement
   /**
    * Record<InlineTypes, ...> ensures TypeScript errors if any inline type
    * is missing a button. Exhaustiveness is verified at compile time.
    */
-  private _inlineButtons: Record<InlineTypes, HTMLButtonElement>
-  private _indentBtn: HTMLButtonElement
-  private _outdentBtn: HTMLButtonElement
-  private _unsubscribeSelection: () => void
+  #inlineButtons: Record<InlineTypes, HTMLButtonElement>
+  #indentBtn: HTMLButtonElement
+  #outdentBtn: HTMLButtonElement
+  #unsubscribeSelection: () => void
 
   constructor(container: HTMLElement, initial?: Blocks, opts: BlockEditorOptions = {}) {
     // Build toolbar
-    this._toolbar = document.createElement('div')
-    this._toolbar.className = 'text-editor-toolbar'
+    this.#toolbar = document.createElement('div')
+    this.#toolbar.className = 'text-editor-toolbar'
 
     const inlineDefs: { type: InlineTypes; icon: Parameters<typeof createElement>[0]; shortcut: string }[] = [
       { type: 'Bold', icon: Bold, shortcut: '⌘B' },
@@ -40,7 +40,7 @@ export class BlockEditorWithToolbar {
       { type: 'Underline', icon: Underline, shortcut: '⌘U' },
     ] satisfies { type: keyof InlineDtoMap; icon: Parameters<typeof createElement>[0]; shortcut: string }[]
 
-    this._inlineButtons = {} as Record<InlineTypes, HTMLButtonElement>
+    this.#inlineButtons = {} as Record<InlineTypes, HTMLButtonElement>
     for (const { type, icon, shortcut } of inlineDefs) {
       const btn = document.createElement('button')
       btn.appendChild(createElement(icon))
@@ -49,64 +49,64 @@ export class BlockEditorWithToolbar {
       addTooltip(btn, type, shortcut)
       btn.addEventListener('mousedown', (e) => {
         e.preventDefault()
-        this._editor.toggleInline(type)
+        this.#editor.toggleInline(type)
       })
-      this._toolbar.appendChild(btn)
-      this._inlineButtons[type] = btn
+      this.#toolbar.appendChild(btn)
+      this.#inlineButtons[type] = btn
     }
 
-    this._indentBtn = document.createElement('button')
-    this._indentBtn.appendChild(createElement(IndentIncrease))
-    this._indentBtn.ariaLabel = 'Indent'
-    this._indentBtn.title = 'Indent'
-    addTooltip(this._indentBtn, 'Indent', 'Tab')
-    this._indentBtn.addEventListener('mousedown', (e) => {
+    this.#indentBtn = document.createElement('button')
+    this.#indentBtn.appendChild(createElement(IndentIncrease))
+    this.#indentBtn.ariaLabel = 'Indent'
+    this.#indentBtn.title = 'Indent'
+    addTooltip(this.#indentBtn, 'Indent', 'Tab')
+    this.#indentBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()
-      this._editor.indent()
+      this.#editor.indent()
     })
-    this._toolbar.appendChild(this._indentBtn)
+    this.#toolbar.appendChild(this.#indentBtn)
 
-    this._outdentBtn = document.createElement('button')
-    this._outdentBtn.appendChild(createElement(IndentDecrease))
-    this._outdentBtn.ariaLabel = 'Outdent'
-    this._outdentBtn.title = 'Outdent'
-    addTooltip(this._outdentBtn, 'Outdent', '⇧Tab')
-    this._outdentBtn.addEventListener('mousedown', (e) => {
+    this.#outdentBtn = document.createElement('button')
+    this.#outdentBtn.appendChild(createElement(IndentDecrease))
+    this.#outdentBtn.ariaLabel = 'Outdent'
+    this.#outdentBtn.title = 'Outdent'
+    addTooltip(this.#outdentBtn, 'Outdent', '⇧Tab')
+    this.#outdentBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()
-      this._editor.outdent()
+      this.#editor.outdent()
     })
-    this._toolbar.appendChild(this._outdentBtn)
+    this.#toolbar.appendChild(this.#outdentBtn)
 
-    container.appendChild(this._toolbar)
+    container.appendChild(this.#toolbar)
 
-    this._editor = new BlockEditor(container, initial, opts)
+    this.#editor = new BlockEditor(container, initial, opts)
 
     // Update toolbar active state on selection change
-    this._unsubscribeSelection = this._editor.addEventListener('selectionChange', () => {
-      for (const type of Object.keys(this._inlineButtons) as InlineTypes[]) {
-        this._inlineButtons[type].classList.toggle('is-active', this._editor.isInlineActive(type))
+    this.#unsubscribeSelection = this.#editor.addEventListener('selectionChange', () => {
+      for (const type of Object.keys(this.#inlineButtons) as InlineTypes[]) {
+        this.#inlineButtons[type].classList.toggle('is-active', this.#editor.isInlineActive(type))
       }
     })
   }
 
   getValue(): Blocks {
-    return this._editor.getValue()
+    return this.#editor.getValue()
   }
 
   setValue(blocks: Blocks): void {
-    this._editor.setValue(blocks)
+    this.#editor.setValue(blocks)
   }
 
   addEventListener<K extends keyof BlockEditorEventMap>(
     event: K,
     handler: (payload: BlockEditorEventMap[K]) => void,
   ): () => void {
-    return this._editor.addEventListener(event, handler)
+    return this.#editor.addEventListener(event, handler)
   }
 
   destroy(): void {
-    this._unsubscribeSelection()
-    this._toolbar.remove()
-    this._editor.destroy()
+    this.#unsubscribeSelection()
+    this.#toolbar.remove()
+    this.#editor.destroy()
   }
 }

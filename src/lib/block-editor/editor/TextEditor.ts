@@ -59,20 +59,20 @@ function findNodeAtOffset(root: Node, targetOffset: number): { node: globalThis.
 // ─── TextEditor ───────────────────────────────────────────────────────────────
 
 export class TextEditor {
-  private _state: Text
-  private _editable: HTMLDivElement
-  private _toolbar: HTMLDivElement
-  private _listeners: Set<(t: Text) => void> = new Set()
-  private _composing = false
+  #state: Text
+  #editable: HTMLDivElement
+  #toolbar: HTMLDivElement
+  #listeners: Set<(t: Text) => void> = new Set()
+  #composing = false
 
-  private _buttons: Map<InlineTypes, HTMLButtonElement> = new Map()
+  #buttons: Map<InlineTypes, HTMLButtonElement> = new Map()
 
   constructor(container: HTMLElement, initial?: Text) {
-    this._state = initial ?? new Text('', [])
+    this.#state = initial ?? new Text('', [])
 
     // Build toolbar
-    this._toolbar = document.createElement('div')
-    this._toolbar.className = 'text-editor-toolbar'
+    this.#toolbar = document.createElement('div')
+    this.#toolbar.className = 'text-editor-toolbar'
 
     const buttonDefs: { type: InlineTypes; icon: Parameters<typeof createElement>[0] }[] = [
       { type: 'Bold', icon: Bold },
@@ -88,92 +88,92 @@ export class TextEditor {
       // Use mousedown + preventDefault to keep focus in editable
       btn.addEventListener('mousedown', (e) => {
         e.preventDefault()
-        this._applyOrRemoveInline(type)
+        this.#applyOrRemoveInline(type)
       })
-      this._toolbar.appendChild(btn)
-      this._buttons.set(type, btn)
+      this.#toolbar.appendChild(btn)
+      this.#buttons.set(type, btn)
     }
 
     // Build editable
-    this._editable = document.createElement('div')
-    this._editable.className = 'text-editor-editable'
-    this._editable.contentEditable = 'true'
+    this.#editable = document.createElement('div')
+    this.#editable.className = 'text-editor-editable'
+    this.#editable.contentEditable = 'true'
 
-    this._editable.addEventListener('input', () => {
-      if (!this._composing) this._handleInput()
+    this.#editable.addEventListener('input', () => {
+      if (!this.#composing) this.#handleInput()
     })
-    this._editable.addEventListener('compositionstart', () => {
-      this._composing = true
+    this.#editable.addEventListener('compositionstart', () => {
+      this.#composing = true
     })
-    this._editable.addEventListener('compositionend', () => {
-      this._composing = false
-      this._handleInput()
+    this.#editable.addEventListener('compositionend', () => {
+      this.#composing = false
+      this.#handleInput()
     })
 
     document.addEventListener('selectionchange', () => {
-      if (document.activeElement === this._editable) {
-        this._updateToolbarState()
+      if (document.activeElement === this.#editable) {
+        this.#updateToolbarState()
       }
     })
 
-    container.appendChild(this._toolbar)
-    container.appendChild(this._editable)
+    container.appendChild(this.#toolbar)
+    container.appendChild(this.#editable)
 
-    this._render()
+    this.#render()
   }
 
   getValue(): Text {
-    return this._state
+    return this.#state
   }
 
   setValue(text: Text): void {
-    this._state = text
-    this._render()
-    this._notify()
+    this.#state = text
+    this.#render()
+    this.#notify()
   }
 
   /** Registers a change listener. Returns an unsubscribe function. */
   onChange(cb: (text: Text) => void): () => void {
-    this._listeners.add(cb)
-    return () => this._listeners.delete(cb)
+    this.#listeners.add(cb)
+    return () => this.#listeners.delete(cb)
   }
 
   destroy(): void {
-    this._toolbar.remove()
-    this._editable.remove()
+    this.#toolbar.remove()
+    this.#editable.remove()
   }
 
   // ─── Private ───────────────────────────────────────────────────────────────
 
-  private _notify(): void {
-    for (const cb of this._listeners) cb(this._state)
+  #notify(): void {
+    for (const cb of this.#listeners) cb(this.#state)
   }
 
-  private _getSelectionOffsets(): { start: number; end: number } | null {
+  #getSelectionOffsets(): { start: number; end: number } | null {
     const sel = window.getSelection()
     if (!sel || sel.rangeCount === 0) return null
 
     const range = sel.getRangeAt(0)
 
     // Guard: selection must be within the editable
-    if (!this._editable.contains(range.startContainer)) return null
+    if (!this.#editable.contains(range.startContainer)) return null
 
-    const start = getCharOffset(this._editable, range.startContainer, range.startOffset)
-    const end = getCharOffset(this._editable, range.endContainer, range.endOffset)
+    const start = getCharOffset(this.#editable, range.startContainer, range.startOffset)
+    const end = getCharOffset(this.#editable, range.endContainer, range.endOffset)
 
     if (start === -1 || end === -1) return null
     return { start, end }
   }
 
-  private _restoreSelection(start: number, end: number): void {
-    if (document.activeElement !== this._editable) return
+  #restoreSelection(start: number, end: number): void {
+    if (document.activeElement !== this.#editable) return
 
     const sel = window.getSelection()
     if (!sel) return
 
     try {
-      const startPos = findNodeAtOffset(this._editable, start)
-      const endPos = findNodeAtOffset(this._editable, end)
+      const startPos = findNodeAtOffset(this.#editable, start)
+      const endPos = findNodeAtOffset(this.#editable, end)
 
       const range = document.createRange()
       range.setStart(startPos.node, startPos.offset)
@@ -186,14 +186,14 @@ export class TextEditor {
     }
   }
 
-  private _render(savedStart?: number, savedEnd?: number): void {
-    const focused = document.activeElement === this._editable
+  #render(savedStart?: number, savedEnd?: number): void {
+    const focused = document.activeElement === this.#editable
 
     // Save selection if not provided
     let start = savedStart ?? 0
     let end = savedEnd ?? 0
     if (focused && savedStart === undefined) {
-      const offsets = this._getSelectionOffsets()
+      const offsets = this.#getSelectionOffsets()
       if (offsets) {
         start = offsets.start
         end = offsets.end
@@ -201,20 +201,20 @@ export class TextEditor {
     }
 
     // Clear and re-render
-    this._editable.innerHTML = ''
-    const nodes = textSerializer.render(this._state)
+    this.#editable.innerHTML = ''
+    const nodes = textSerializer.render(this.#state)
     for (const node of nodes) {
-      this._editable.appendChild(node)
+      this.#editable.appendChild(node)
     }
 
     // Restore selection
     if (focused) {
-      this._restoreSelection(start, end)
+      this.#restoreSelection(start, end)
     }
   }
 
-  private _applyOrRemoveInline(type: InlineTypes): void {
-    const offsets = this._getSelectionOffsets()
+  #applyOrRemoveInline(type: InlineTypes): void {
+    const offsets = this.#getSelectionOffsets()
     if (!offsets) return
 
     const { start, end } = offsets
@@ -223,47 +223,47 @@ export class TextEditor {
     if (start === end) return
 
     // Guard against out-of-range (can happen with empty text)
-    const textLen = this._state.text.length
+    const textLen = this.#state.text.length
     if (start < 0 || end > textLen || start >= end) return
 
-    const toggled = this._state.isToggled(type, start, end)
-    this._state = toggled
-      ? this._state.removeInline(type, start, end)
-      : this._state.addInline(type, start, end)
+    const toggled = this.#state.isToggled(type, start, end)
+    this.#state = toggled
+      ? this.#state.removeInline(type, start, end)
+      : this.#state.addInline(type, start, end)
 
-    this._render(start, end)
-    this._updateToolbarState()
-    this._notify()
+    this.#render(start, end)
+    this.#updateToolbarState()
+    this.#notify()
   }
 
-  private _handleInput(): void {
-    const offsets = this._getSelectionOffsets()
+  #handleInput(): void {
+    const offsets = this.#getSelectionOffsets()
     const start = offsets?.start ?? 0
     const end = offsets?.end ?? 0
 
     requestAnimationFrame(() => {
-      const nodes = Array.from(this._editable.childNodes)
-      this._state = textSerializer.parse(nodes)
+      const nodes = Array.from(this.#editable.childNodes)
+      this.#state = textSerializer.parse(nodes)
 
       // Re-render to normalize DOM (avoids browser-injected divs/brs accumulating)
-      this._render(start, end)
-      this._notify()
+      this.#render(start, end)
+      this.#notify()
     })
   }
 
-  private _updateToolbarState(): void {
-    const offsets = this._getSelectionOffsets()
+  #updateToolbarState(): void {
+    const offsets = this.#getSelectionOffsets()
 
-    for (const [type, btn] of this._buttons) {
+    for (const [type, btn] of this.#buttons) {
       let active = false
 
       if (offsets && offsets.start !== offsets.end) {
-        const textLen = this._state.text.length
+        const textLen = this.#state.text.length
         const start = Math.max(0, offsets.start)
         const end = Math.min(textLen, offsets.end)
         if (start < end) {
           try {
-            active = this._state.isToggled(type, start, end)
+            active = this.#state.isToggled(type, start, end)
           } catch {
             active = false
           }
