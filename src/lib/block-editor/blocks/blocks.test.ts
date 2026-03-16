@@ -1054,10 +1054,12 @@ describe('Blocks.diff', () => {
     expect(Blocks.diff(b, b)).toEqual([])
   })
 
-  it('returns empty array when no positions changed', () => {
+  it('returns only dataChanged when content changes but positions do not', () => {
     const b1 = Blocks.from([dto('a', 'hello'), dto('b', 'world')])
     const b2 = b1.update('a', new Text('changed', []))
-    expect(Blocks.diff(b1, b2)).toEqual([])
+    const changes = Blocks.diff(b1, b2)
+    expect(changes).toHaveLength(1)
+    expect(changes[0]).toMatchObject({ type: 'dataChanged', id: 'a' })
   })
 
   it('detects removed blocks', () => {
@@ -1091,11 +1093,64 @@ describe('Blocks.diff', () => {
     expect(bMoved).toMatchObject({ type: 'moved', id: 'b', previousBlockId: 'x', parentBlockId: null })
   })
 
-  it('ignores newly added blocks (only reports blocks present in old state)', () => {
-    const b1 = Blocks.from([dto('a')])
-    const b2 = b1.splitAt('a', 0, 'new')
+  it('reports added for blocks absent from oldBlocks (splitAt)', () => {
+    const b1 = Blocks.from([dto('a', 'hello')])
+    const b2 = b1.splitAt('a', 3, 'new')  // [a='hel', new='lo']
     const changes = Blocks.diff(b1, b2)
-    expect(changes.find(c => c.id === 'new')).toBeUndefined()
+    const addedChange = changes.find(c => c.type === 'added' && c.id === 'new')
+    expect(addedChange).toBeDefined()
+  })
+
+  it('added change includes correct data, previousBlockId, and parentBlockId', () => {
+    const b1 = Blocks.from([dto('a', 'hello'), dto('b')])
+    const b2 = b1.splitAt('a', 3, 'new')  // flat: [a='hel', new='lo', b]
+    const changes = Blocks.diff(b1, b2)
+    const addedChange = changes.find(c => c.type === 'added' && c.id === 'new')
+    expect(addedChange).toMatchObject({
+      type: 'added',
+      id: 'new',
+      data: { text: 'lo', inline: [] },
+      previousBlockId: 'a',
+      parentBlockId: null,
+    })
+  })
+
+  it('reports added for a child block with correct parentBlockId', () => {
+    const b1 = Blocks.from([dto('a'), dto('b', '', [dto('c')])])
+    // Insert a new block after 'b' at same indent (root level)
+    const b2 = b1.addAfter('b', { id: 'x', data: new Text('hi', []) })
+    const changes = Blocks.diff(b1, b2)
+    const addedChange = changes.find(c => c.type === 'added' && c.id === 'x')
+    expect(addedChange).toMatchObject({
+      type: 'added',
+      id: 'x',
+      previousBlockId: 'b',
+      parentBlockId: null,
+    })
+  })
+
+  it('reports dataChanged when update changes block content', () => {
+    const b1 = Blocks.from([dto('a', 'hello'), dto('b', 'world')])
+    const b2 = b1.update('a', new Text('changed', []))
+    const changes = Blocks.diff(b1, b2)
+    const dataChanged = changes.find(c => c.type === 'dataChanged' && c.id === 'a')
+    expect(dataChanged).toBeDefined()
+    expect(dataChanged).toMatchObject({ type: 'dataChanged', id: 'a', data: { text: 'changed', inline: [] } })
+  })
+
+  it('reports no dataChanged when data is identical', () => {
+    const b1 = Blocks.from([dto('a', 'hello'), dto('b', 'world')])
+    const changes = Blocks.diff(b1, b1)
+    expect(changes.filter(c => c.type === 'dataChanged')).toHaveLength(0)
+  })
+
+  it('reports dataChanged only for blocks whose content changed', () => {
+    const b1 = Blocks.from([dto('a', 'hello'), dto('b', 'world')])
+    const b2 = b1.update('b', new Text('updated', []))
+    const changes = Blocks.diff(b1, b2)
+    expect(changes.filter(c => c.type === 'dataChanged')).toHaveLength(1)
+    expect(changes.find(c => c.type === 'dataChanged' && c.id === 'b')).toBeDefined()
+    expect(changes.find(c => c.type === 'dataChanged' && c.id === 'a')).toBeUndefined()
   })
 })
 
