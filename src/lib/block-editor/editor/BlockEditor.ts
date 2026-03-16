@@ -184,7 +184,8 @@ export class BlockEditor {
     const toId = sel instanceof BlockRange ? sel.end.blockId : sel.blockId
     const oldState = this._state
     this._state = this._state.indent(fromId, toId)
-    this._applyAndEmit(oldState, sel)
+    this._render(sel)
+    this._emitEvents(oldState)
   }
 
   /** Unindent current block range; re-render preserving full BlockSelection. */
@@ -195,7 +196,8 @@ export class BlockEditor {
     const toId = sel instanceof BlockRange ? sel.end.blockId : sel.blockId
     const oldState = this._state
     this._state = this._state.unindent(fromId, toId)
-    this._applyAndEmit(oldState, sel)
+    this._render(sel)
+    this._emitEvents(oldState)
   }
 
   /** Toggle inline format on selection within focused block. */
@@ -227,7 +229,8 @@ export class BlockEditor {
 
     const oldState = this._state
     this._state = this._state.update(blockId, newText)
-    this._applyAndEmit(oldState, sel)
+    this._render(sel)
+    this._emitEvents(oldState)
   }
 
   /** Returns true if the inline is fully active on the current selection. */
@@ -258,17 +261,9 @@ export class BlockEditor {
 
   // ─── Private helpers ────────────────────────────────────────────────────────
 
-  private _applyAndEmit(oldState: Blocks, selection?: BlockSelection): void {
+  private _emitEvents(oldState: Blocks): void {
     const changes = Blocks.diff(oldState, this._state)
-
-    // Cancel any pending debounced updates for blocks about to be emitted immediately
-    for (const c of changes) {
-      if (c.type === 'dataChanged' || c.type === 'removed') {
-        this._emitter.cancelDataUpdated(c.id)
-      }
-    }
-
-    this._render(selection)
+    this._emitter.cancelAll()
 
     // Emit in a stable semantic order: dataChanged → added → removed → moved
     for (const change of changes) {
@@ -507,14 +502,13 @@ export class BlockEditor {
 
     if (atEnd) {
       this._emitter.flushDataUpdated(blockId)
-    } else {
-      this._emitter.cancelDataUpdated(blockId)
     }
 
     const oldState = this._state
     const newId = crypto.randomUUID()
     this._state = this._state.splitAt(blockId, offset, newId)
-    this._applyAndEmit(oldState, new BlockOffset(newId, 0))
+    this._render(new BlockOffset(newId, 0))
+    this._emitEvents(oldState)
   }
 
   private _handleBackspace(sel: BlockSelection): void {
@@ -528,11 +522,10 @@ export class BlockEditor {
     const prevId = this._state.previousBlockId(blockId)
     if (prevId === null) return  // first block — no-op
     const cursorOffset = this._state.getBlock(prevId).getLength()
-    this._emitter.cancelDataUpdated(blockId)
-    this._emitter.cancelDataUpdated(prevId)
     const oldState = this._state
     this._state = this._state.merge(prevId, blockId)
-    this._applyAndEmit(oldState, new BlockOffset(prevId, cursorOffset))
+    this._render(new BlockOffset(prevId, cursorOffset))
+    this._emitEvents(oldState)
   }
 
   private _handleDelete(sel: BlockSelection): void {
@@ -546,11 +539,10 @@ export class BlockEditor {
     const nextId = this._state.nextBlockId(blockId)
     if (nextId === null) return  // last block — no-op
     const cursorOffset = this._state.getBlock(blockId).getLength()
-    this._emitter.cancelDataUpdated(nextId)
-    this._emitter.cancelDataUpdated(blockId)
     const oldState = this._state
     this._state = this._state.merge(blockId, nextId)
-    this._applyAndEmit(oldState, new BlockOffset(blockId, cursorOffset))
+    this._render(new BlockOffset(blockId, cursorOffset))
+    this._emitEvents(oldState)
   }
 
   private _deleteRange(sel: BlockRange): BlockOffset {
@@ -561,14 +553,13 @@ export class BlockEditor {
       const newText = text.remove(sel.start.offset, length)
       const oldState = this._state
       this._state = this._state.update(sel.start.blockId, newText)
-      this._applyAndEmit(oldState)
+      this._emitEvents(oldState)
       return new BlockOffset(sel.start.blockId, sel.start.offset)
     }
     // Multi-block
-    this._emitter.cancelAll()
     const oldState = this._state
     this._state = this._state.deleteRange(sel)
-    this._applyAndEmit(oldState)
+    this._emitEvents(oldState)
     return new BlockOffset(sel.start.blockId, sel.start.offset)
   }
 }
