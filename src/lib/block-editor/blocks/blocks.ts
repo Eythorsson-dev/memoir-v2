@@ -42,8 +42,10 @@ export class BlockRange {
 }
 
 export type BlocksChange =
-  | { type: 'moved';   id: BlockId; previousBlockId: BlockId | null; parentBlockId: BlockId | null }
-  | { type: 'removed'; id: BlockId }
+  | { type: 'moved';        id: BlockId; previousBlockId: BlockId | null; parentBlockId: BlockId | null }
+  | { type: 'removed';      id: BlockId }
+  | { type: 'added';        id: BlockId; data: TextDto; previousBlockId: BlockId | null; parentBlockId: BlockId | null }
+  | { type: 'dataChanged';  id: BlockId; data: TextDto }
 
 // ─── Internal types ────────────────────────────────────────────────────────────
 
@@ -286,6 +288,7 @@ export class Blocks {
     const changes: BlocksChange[] = []
     const newIds = new Set(newBlocks.#blocks.map(b => b.id))
     const oldIds = new Set(oldBlocks.#blocks.map(b => b.id))
+    const oldDataMap = new Map(oldBlocks.#blocks.map(b => [b.id, b.data]))
 
     for (const b of oldBlocks.#blocks) {
       if (!newIds.has(b.id)) {
@@ -294,13 +297,35 @@ export class Blocks {
     }
 
     for (const b of newBlocks.#blocks) {
-      if (!oldIds.has(b.id)) continue
+      if (!oldIds.has(b.id)) {
+        // New block — report as added
+        const newPrev = newBlocks.prevSibling(b.id)
+        const newParent = newBlocks.parent(b.id)
+        changes.push({
+          type: 'added',
+          id: b.id,
+          data: { text: b.data.text, inline: [...b.data.inline] as InlineDto[] },
+          previousBlockId: newPrev,
+          parentBlockId: newParent,
+        })
+        continue
+      }
+
       const oldParent = oldBlocks.parent(b.id)
       const newParent = newBlocks.parent(b.id)
       const oldPrev = oldBlocks.prevSibling(b.id)
       const newPrev = newBlocks.prevSibling(b.id)
       if (oldParent !== newParent || oldPrev !== newPrev) {
         changes.push({ type: 'moved', id: b.id, previousBlockId: newPrev, parentBlockId: newParent })
+      }
+
+      const oldData = oldDataMap.get(b.id)!
+      if (oldData.text !== b.data.text || JSON.stringify(oldData.inline) !== JSON.stringify(b.data.inline)) {
+        changes.push({
+          type: 'dataChanged',
+          id: b.id,
+          data: { text: b.data.text, inline: [...b.data.inline] as InlineDto[] },
+        })
       }
     }
 
