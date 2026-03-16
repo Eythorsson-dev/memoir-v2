@@ -184,8 +184,7 @@ export class BlockEditor {
     const toId = sel instanceof BlockRange ? sel.end.blockId : sel.blockId
     const oldState = this._state
     this._state = this._state.indent(fromId, toId)
-    this._render(sel)
-    this._emitMoved(Blocks.diff(oldState, this._state))
+    this._applyAndEmit(oldState, sel)
   }
 
   /** Unindent current block range; re-render preserving full BlockSelection. */
@@ -196,8 +195,7 @@ export class BlockEditor {
     const toId = sel instanceof BlockRange ? sel.end.blockId : sel.blockId
     const oldState = this._state
     this._state = this._state.unindent(fromId, toId)
-    this._render(sel)
-    this._emitMoved(Blocks.diff(oldState, this._state))
+    this._applyAndEmit(oldState, sel)
   }
 
   /** Toggle inline format on selection within focused block. */
@@ -227,9 +225,9 @@ export class BlockEditor {
       ? text.removeInline(type, start, end)
       : text.addInline(type, start, end)
 
+    const oldState = this._state
     this._state = this._state.update(blockId, newText)
-    this._render(sel)
-    this._emitter.scheduleDataUpdated(blockId)
+    this._applyAndEmit(oldState, sel)
   }
 
   /** Returns true if the inline is fully active on the current selection. */
@@ -260,9 +258,36 @@ export class BlockEditor {
 
   // ─── Private helpers ────────────────────────────────────────────────────────
 
-  private _emitMoved(changes: ReturnType<typeof Blocks.diff>, excludeId?: BlockId): void {
+  private _applyAndEmit(oldState: Blocks, selection?: BlockSelection): void {
+    const changes = Blocks.diff(oldState, this._state)
+
+    // Cancel any pending debounced updates for blocks about to be emitted immediately
+    for (const c of changes) {
+      if (c.type === 'dataChanged' || c.type === 'removed') {
+        this._emitter.cancelDataUpdated(c.id)
+      }
+    }
+
+    this._render(selection)
+
+    // Emit in a stable semantic order: dataChanged → added → removed → moved
     for (const change of changes) {
-      if (change.type === 'moved' && change.id !== excludeId) {
+      if (change.type === 'dataChanged') {
+        this._emitter.emit('blockDataUpdated', { id: change.id, data: change.data })
+      }
+    }
+    for (const change of changes) {
+      if (change.type === 'added') {
+        this._emitter.emit('blockCreated', { id: change.id, data: change.data, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
+      }
+    }
+    for (const change of changes) {
+      if (change.type === 'removed') {
+        this._emitter.emit('blockRemoved', { id: change.id })
+      }
+    }
+    for (const change of changes) {
+      if (change.type === 'moved') {
         this._emitter.emit('blockMoved', { id: change.id, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
       }
     }
@@ -441,8 +466,8 @@ export class BlockEditor {
       const block = this._state.getBlock(cursor.blockId)
       const text = new Text(block.data.text, [...block.data.inline] as InlineDto[])
       const newText = insertChar(text, cursor.offset, e.key)
-      this._state = this._state.update(cursor.blockId, newText)
       const newCursor = new BlockOffset(cursor.blockId, cursor.offset + 1)
+      this._state = this._state.update(cursor.blockId, newText)
       this._render(newCursor)
       this._emitter.scheduleDataUpdated(cursor.blockId)
       return
@@ -489,20 +514,7 @@ export class BlockEditor {
     const oldState = this._state
     const newId = crypto.randomUUID()
     this._state = this._state.splitAt(blockId, offset, newId)
-    this._render(new BlockOffset(newId, 0))
-
-    if (!atEnd) {
-      this._emitter.emit('blockDataUpdated', { id: blockId, data: this._state.getBlock(blockId).data })
-    }
-
-    this._emitter.emit('blockCreated', {
-      id:              newId,
-      data:            this._state.getBlock(newId).data,
-      previousBlockId: this._state.prevSibling(newId),
-      parentBlockId:   this._state.parent(newId),
-    })
-
-    this._emitMoved(Blocks.diff(oldState, this._state), newId)
+    this._applyAndEmit(oldState, new BlockOffset(newId, 0))
   }
 
   private _handleBackspace(sel: BlockSelection): void {
@@ -516,14 +528,11 @@ export class BlockEditor {
     const prevId = this._state.previousBlockId(blockId)
     if (prevId === null) return  // first block — no-op
     const cursorOffset = this._state.getBlock(prevId).getLength()
-    const oldState = this._state
     this._emitter.cancelDataUpdated(blockId)
     this._emitter.cancelDataUpdated(prevId)
+    const oldState = this._state
     this._state = this._state.merge(prevId, blockId)
-    this._render(new BlockOffset(prevId, cursorOffset))
-    this._emitter.emit('blockDataUpdated', { id: prevId, data: this._state.getBlock(prevId).data })
-    this._emitter.emit('blockRemoved', { id: blockId })
-    this._emitMoved(Blocks.diff(oldState, this._state))
+    this._applyAndEmit(oldState, new BlockOffset(prevId, cursorOffset))
   }
 
   private _handleDelete(sel: BlockSelection): void {
@@ -537,14 +546,11 @@ export class BlockEditor {
     const nextId = this._state.nextBlockId(blockId)
     if (nextId === null) return  // last block — no-op
     const cursorOffset = this._state.getBlock(blockId).getLength()
-    const oldState = this._state
     this._emitter.cancelDataUpdated(nextId)
     this._emitter.cancelDataUpdated(blockId)
+    const oldState = this._state
     this._state = this._state.merge(blockId, nextId)
-    this._render(new BlockOffset(blockId, cursorOffset))
-    this._emitter.emit('blockDataUpdated', { id: blockId, data: this._state.getBlock(blockId).data })
-    this._emitter.emit('blockRemoved', { id: nextId })
-    this._emitMoved(Blocks.diff(oldState, this._state))
+    this._applyAndEmit(oldState, new BlockOffset(blockId, cursorOffset))
   }
 
   private _deleteRange(sel: BlockRange): BlockOffset {
@@ -553,21 +559,16 @@ export class BlockEditor {
       const text = new Text(block.data.text, [...block.data.inline] as InlineDto[])
       const length = sel.end.offset - sel.start.offset
       const newText = text.remove(sel.start.offset, length)
-      this._emitter.cancelDataUpdated(sel.start.blockId)
+      const oldState = this._state
       this._state = this._state.update(sel.start.blockId, newText)
-      this._emitter.emit('blockDataUpdated', { id: sel.start.blockId, data: this._state.getBlock(sel.start.blockId).data })
+      this._applyAndEmit(oldState)
       return new BlockOffset(sel.start.blockId, sel.start.offset)
     }
     // Multi-block
-    const oldState = this._state
     this._emitter.cancelAll()
+    const oldState = this._state
     this._state = this._state.deleteRange(sel)
-    this._emitter.emit('blockDataUpdated', { id: sel.start.blockId, data: this._state.getBlock(sel.start.blockId).data })
-    const changes = Blocks.diff(oldState, this._state)
-    for (const change of changes) {
-      if (change.type === 'removed') this._emitter.emit('blockRemoved', { id: change.id })
-    }
-    this._emitMoved(changes)
+    this._applyAndEmit(oldState)
     return new BlockOffset(sel.start.blockId, sel.start.offset)
   }
 }
