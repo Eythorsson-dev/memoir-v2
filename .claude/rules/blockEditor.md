@@ -38,6 +38,16 @@ Do not inject styles via JavaScript or use inline `style` attributes for anythin
 - Do not test DOM rendering directly; test the data transformations that drive it
 - Run a single file: `pnpm vitest run src/lib/block-editor/text/text.test.ts`
 
+## Private Fields
+
+Use **JavaScript native `#` private fields** for all private class members. Do not use TypeScript's `private` keyword or the `_` prefix convention.
+
+- `#` fields are enforced at **runtime** — they cannot be bypassed via bracket notation, `Object.keys`, JSON serialization, or Proxy.
+- TypeScript's `private` keyword is compile-time only; the field is a plain public property at runtime.
+- The `_` prefix is a legacy convention with no enforcement — actively discouraged by the Google TypeScript Style Guide and the TypeScript team.
+- For members that subclasses must access, use TypeScript's `protected` keyword (no `#` equivalent exists).
+- When accessing a private **static** `#` field, always reference it via the class name — never via `this` — to avoid a `TypeError` when the method is inherited.
+
 ## Component Patterns
 
 All UI components follow a **class-based pattern** — no Web Components, no framework.
@@ -48,30 +58,30 @@ All UI components follow a **class-based pattern** — no Web Components, no fra
 
 ```typescript
 class MyComponent {
-  private _root: HTMLElement
-  private _onFoo = () => { /* arrow fn stored as field for removeEventListener */ }
+  #root: HTMLElement
+  #onFoo = () => { /* arrow fn stored as field for removeEventListener */ }
 
   constructor(container: HTMLElement, opts: MyOptions) {
-    // Build DOM, attach listeners, call _render()
-    document.addEventListener('selectionchange', this._onFoo)
+    // Build DOM, attach listeners, call #render()
+    document.addEventListener('selectionchange', this.#onFoo)
   }
 
   getValue(): State { ... }
-  setValue(state: State): void { this._state = state; this._render() }
+  setValue(state: State): void { this.#state = state; this.#render() }
   onChange(cb: (state: State) => void): () => void { /* return unsubscribe fn */ }
 
   destroy(): void {
-    this._root.remove()
-    document.removeEventListener('selectionchange', this._onFoo) // must remove global listeners
+    this.#root.remove()
+    document.removeEventListener('selectionchange', this.#onFoo) // must remove global listeners
   }
 
-  private _render(): void { /* idempotent DOM sync — never recreate; only patch */ }
+  #render(): void { /* idempotent DOM sync — never recreate; only patch */ }
 }
 ```
 
 **Lifecycle rules:**
-- `constructor` — create DOM, register listeners, call `_render()`
-- `_render()` — private, idempotent, projects state → DOM; never recreate chrome, only patch (toggle classes/attributes)
+- `constructor` — create DOM, register listeners, call `#render()`
+- `#render()` — private, idempotent, projects state → DOM; never recreate chrome, only patch (toggle classes/attributes)
 - `destroy()` — remove created DOM, **always detach global listeners** (`document`, `window`) stored as private arrow-function fields
 - Upward communication via subscription (`onChange(cb): () => void`) — fully type-safe, no `CustomEvent` dispatch
 
@@ -107,9 +117,9 @@ Bidirectional conversion between `Text` and arrays of DOM nodes.
 
 `TextEditor` is a self-contained UI component. It imports its CSS, builds a toolbar + `contenteditable` div, and wires everything together.
 
-- `_render()` serializes the current `Text` state to DOM and restores selection.
-- `_handleInput()` parses the edited DOM back to `Text` and calls change listeners.
-- `_applyOrRemoveInline()` toggles formatting on the current selection using `isToggled`.
+- `#render()` serializes the current `Text` state to DOM and restores selection.
+- `#handleInput()` parses the edited DOM back to `Text` and calls change listeners.
+- `#applyOrRemoveInline()` toggles formatting on the current selection using `isToggled`.
 - Selection is mapped between DOM positions and character offsets via `getCharOffset` / `findNodeAtOffset`.
 - IME composition events are handled separately to avoid premature parses.
 
@@ -144,6 +154,6 @@ Newly added blocks (not in old state) are ignored. Use this to compute `blockRem
 - Immediate `emit`
 - Debounced `scheduleDataUpdated` (with `flushDataUpdated`, `cancelDataUpdated`, `flushAll`, `cancelAll`)
 
-`BlockEditor` holds a single `private _emitter: BlockEventEmitter` — it never manages listener maps or timers directly.
+`BlockEditor` holds a single `#emitter: BlockEventEmitter` — it never manages listener maps or timers directly.
 
 `BLOCK_EDITOR_EVENT_NAMES` (exported from `events.ts` and `index.ts`) is a compile-time-exhaustive tuple of all event names. Use it in tests and any code that must handle every event type.

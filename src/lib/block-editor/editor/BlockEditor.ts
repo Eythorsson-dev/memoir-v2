@@ -90,33 +90,33 @@ function insertChar(text: Text, offset: number, char: string): Text {
 // ─── BlockEditor ─────────────────────────────────────────────────────────────
 
 export class BlockEditor {
-  private _state: Blocks
-  private _editable: HTMLDivElement
-  private _emitter: BlockEventEmitter
+  #state: Blocks
+  #editable: HTMLDivElement
+  #emitter: BlockEventEmitter
   /**
    * IME composition guard.
    * Set true on compositionstart, false on compositionend.
-   * _handleInput is a no-op while composing, then fires once on compositionend.
+   * #handleInput is a no-op while composing, then fires once on compositionend.
    */
-  private _composing = false
+  #composing = false
 
-  private _onSelectionChange = (): void => {
-    if (document.activeElement === this._editable) {
-      this._emitter.emit('selectionChange', this._getSelection())
+  #onSelectionChange = (): void => {
+    if (document.activeElement === this.#editable) {
+      this.#emitter.emit('selectionChange', this.#getSelection())
     }
   }
 
-  private _onBlur = (): void => {
-    this._emitter.flushAll()
-    this._emitter.emit('selectionChange', null)
+  #onBlur = (): void => {
+    this.#emitter.flushAll()
+    this.#emitter.emit('selectionChange', null)
   }
 
   constructor(container: HTMLElement, initial?: Blocks, opts: BlockEditorOptions = {}) {
-    this._state = initial ?? Blocks.from([Blocks.createBlock()])
-    this._emitter = new BlockEventEmitter(
+    this.#state = initial ?? Blocks.from([Blocks.createBlock()])
+    this.#emitter = new BlockEventEmitter(
       (id) => {
         try {
-          const block = this._state.getBlock(id)
+          const block = this.#state.getBlock(id)
           return { id, data: block.data }
         } catch {
           return null  // block was removed; skip
@@ -128,43 +128,43 @@ export class BlockEditor {
       },
     )
 
-    this._editable = document.createElement('div')
-    this._editable.className = 'block-editor-editable'
-    this._editable.contentEditable = 'true'
+    this.#editable = document.createElement('div')
+    this.#editable.className = 'block-editor-editable'
+    this.#editable.contentEditable = 'true'
 
-    this._editable.addEventListener('keydown', (e) => this._handleKeyDown(e))
-    this._editable.addEventListener('input', () => this._handleInput())
-    this._editable.addEventListener('blur', this._onBlur)
-    this._editable.addEventListener('compositionstart', () => {
+    this.#editable.addEventListener('keydown', (e) => this.#handleKeyDown(e))
+    this.#editable.addEventListener('input', () => this.#handleInput())
+    this.#editable.addEventListener('blur', this.#onBlur)
+    this.#editable.addEventListener('compositionstart', () => {
       // If there is a multi-block selection, delete it before composition starts
-      const sel = this._getSelection()
+      const sel = this.#getSelection()
       if (sel instanceof BlockRange) {
-        const cursor = this._deleteRange(sel)
-        this._render(cursor)
+        const cursor = this.#deleteRange(sel)
+        this.#render(cursor)
       }
-      this._composing = true
+      this.#composing = true
     })
-    this._editable.addEventListener('compositionend', () => {
-      this._composing = false
-      this._handleInput()
+    this.#editable.addEventListener('compositionend', () => {
+      this.#composing = false
+      this.#handleInput()
     })
 
-    document.addEventListener('selectionchange', this._onSelectionChange)
+    document.addEventListener('selectionchange', this.#onSelectionChange)
 
-    container.appendChild(this._editable)
-    this._render()
+    container.appendChild(this.#editable)
+    this.#render()
   }
 
   // ─── Public API ────────────────────────────────────────────────────────────
 
   getValue(): Blocks {
-    return this._state
+    return this.#state
   }
 
   setValue(blocks: Blocks): void {
-    this._emitter.cancelAll()
-    this._state = blocks
-    this._render()
+    this.#emitter.cancelAll()
+    this.#state = blocks
+    this.#render()
     // no events
   }
 
@@ -173,36 +173,36 @@ export class BlockEditor {
     event: K,
     handler: (payload: BlockEditorEventMap[K]) => void,
   ): () => void {
-    return this._emitter.addEventListener(event, handler)
+    return this.#emitter.addEventListener(event, handler)
   }
 
   /** Indent current block range; re-render preserving full BlockSelection. */
   indent(): void {
-    const sel = this._getSelection()
+    const sel = this.#getSelection()
     if (!sel) return
     const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
     const toId = sel instanceof BlockRange ? sel.end.blockId : sel.blockId
-    const oldState = this._state
-    this._state = this._state.indent(fromId, toId)
-    this._render(sel)
-    this._emitEvents(oldState)
+    const oldState = this.#state
+    this.#state = this.#state.indent(fromId, toId)
+    this.#render(sel)
+    this.#emitEvents(oldState)
   }
 
   /** Unindent current block range; re-render preserving full BlockSelection. */
   outdent(): void {
-    const sel = this._getSelection()
+    const sel = this.#getSelection()
     if (!sel) return
     const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
     const toId = sel instanceof BlockRange ? sel.end.blockId : sel.blockId
-    const oldState = this._state
-    this._state = this._state.unindent(fromId, toId)
-    this._render(sel)
-    this._emitEvents(oldState)
+    const oldState = this.#state
+    this.#state = this.#state.unindent(fromId, toId)
+    this.#render(sel)
+    this.#emitEvents(oldState)
   }
 
   /** Toggle inline format on selection within focused block. */
   toggleInline(type: InlineTypes): void {
-    const sel = this._getSelection()
+    const sel = this.#getSelection()
     if (!sel) return
 
     let blockId: BlockId
@@ -218,7 +218,7 @@ export class BlockEditor {
       return
     }
 
-    const block = this._state.getBlock(blockId)
+    const block = this.#state.getBlock(blockId)
     const text = new Text(block.data.text, [...block.data.inline] as InlineDto[])
     if (start >= end || end > text.text.length) return
 
@@ -227,19 +227,19 @@ export class BlockEditor {
       ? text.removeInline(type, start, end)
       : text.addInline(type, start, end)
 
-    const oldState = this._state
-    this._state = this._state.update(blockId, newText)
-    this._render(sel)
-    this._emitEvents(oldState)
+    const oldState = this.#state
+    this.#state = this.#state.update(blockId, newText)
+    this.#render(sel)
+    this.#emitEvents(oldState)
   }
 
   /** Returns true if the inline is fully active on the current selection. */
   isInlineActive(type: InlineTypes): boolean {
-    const sel = this._getSelection()
+    const sel = this.#getSelection()
     if (!(sel instanceof BlockRange)) return false
     if (sel.start.blockId !== sel.end.blockId) return false
 
-    const block = this._state.getBlock(sel.start.blockId)
+    const block = this.#state.getBlock(sel.start.blockId)
     const start = sel.start.offset
     const end = sel.end.offset
     if (start >= end || end > block.data.text.length) return false
@@ -253,83 +253,83 @@ export class BlockEditor {
   }
 
   destroy(): void {
-    this._emitter.flushAll()
-    this._emitter.cancelAll()
-    document.removeEventListener('selectionchange', this._onSelectionChange)
-    this._editable.remove()
+    this.#emitter.flushAll()
+    this.#emitter.cancelAll()
+    document.removeEventListener('selectionchange', this.#onSelectionChange)
+    this.#editable.remove()
   }
 
   // ─── Private helpers ────────────────────────────────────────────────────────
 
-  private _emitEvents(oldState: Blocks): void {
-    const changes = Blocks.diff(oldState, this._state)
-    this._emitter.cancelAll()
+  #emitEvents(oldState: Blocks): void {
+    const changes = Blocks.diff(oldState, this.#state)
+    this.#emitter.cancelAll()
 
     // Emit in a stable semantic order: dataChanged → added → removed → moved
     for (const change of changes) {
       if (change.type === 'dataChanged') {
-        this._emitter.emit('blockDataUpdated', { id: change.id, data: change.data })
+        this.#emitter.emit('blockDataUpdated', { id: change.id, data: change.data })
       }
     }
     for (const change of changes) {
       if (change.type === 'added') {
-        this._emitter.emit('blockCreated', { id: change.id, data: change.data, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
+        this.#emitter.emit('blockCreated', { id: change.id, data: change.data, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
       }
     }
     for (const change of changes) {
       if (change.type === 'removed') {
-        this._emitter.emit('blockRemoved', { id: change.id })
+        this.#emitter.emit('blockRemoved', { id: change.id })
       }
     }
     for (const change of changes) {
       if (change.type === 'moved') {
-        this._emitter.emit('blockMoved', { id: change.id, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
+        this.#emitter.emit('blockMoved', { id: change.id, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
       }
     }
   }
 
   // ─── Private ───────────────────────────────────────────────────────────────
 
-  private _render(selection?: BlockSelection): void {
-    const focused = document.activeElement === this._editable
+  #render(selection?: BlockSelection): void {
+    const focused = document.activeElement === this.#editable
 
     let savedSel: BlockSelection | undefined = selection
     if (savedSel === undefined && focused) {
-      savedSel = this._getSelection() ?? undefined
+      savedSel = this.#getSelection() ?? undefined
     }
 
-    this._editable.innerHTML = ''
-    const nodes = blocksSerializer.render(this._state)
+    this.#editable.innerHTML = ''
+    const nodes = blocksSerializer.render(this.#state)
     for (const node of nodes) {
-      this._editable.appendChild(node)
+      this.#editable.appendChild(node)
     }
 
     // Restore when selection was explicitly passed, or when we saved it because we were focused
     if (savedSel !== undefined) {
       try {
-        this._restoreSelection(savedSel)
+        this.#restoreSelection(savedSel)
       } catch {
         // best-effort
       }
     }
   }
 
-  private _restoreSelection(sel: BlockSelection): void {
+  #restoreSelection(sel: BlockSelection): void {
     const domSel = window.getSelection()
     if (!domSel) return
 
     const range = document.createRange()
 
     if (sel instanceof BlockOffset) {
-      const blockEl = this._editable.querySelector(`[id="${sel.blockId}"]`)
+      const blockEl = this.#editable.querySelector(`[id="${sel.blockId}"]`)
       if (!blockEl) return
       const p = getBlockElementContent(blockEl)
       const { node, offset } = findNodeAtOffset(p, sel.offset)
       range.setStart(node, offset)
       range.setEnd(node, offset)
     } else {
-      const startBlockEl = this._editable.querySelector(`[id="${sel.start.blockId}"]`)
-      const endBlockEl = this._editable.querySelector(`[id="${sel.end.blockId}"]`)
+      const startBlockEl = this.#editable.querySelector(`[id="${sel.start.blockId}"]`)
+      const endBlockEl = this.#editable.querySelector(`[id="${sel.end.blockId}"]`)
       if (!startBlockEl || !endBlockEl) return
       const startP = getBlockElementContent(startBlockEl)
       const endP = getBlockElementContent(endBlockEl)
@@ -343,13 +343,13 @@ export class BlockEditor {
     domSel.addRange(range)
   }
 
-  private _getSelection(): BlockSelection | null {
+  #getSelection(): BlockSelection | null {
     const domSel = window.getSelection()
     if (!domSel || domSel.rangeCount === 0) return null
 
     const range = domSel.getRangeAt(0)
-    if (!this._editable.contains(range.startContainer)) return null
-    if (!this._editable.contains(range.endContainer)) return null
+    if (!this.#editable.contains(range.startContainer)) return null
+    if (!this.#editable.contains(range.endContainer)) return null
 
     const startBlockEl = getBlockElement(range.startContainer)
     const endBlockEl = getBlockElement(range.endContainer)
@@ -381,14 +381,14 @@ export class BlockEditor {
     )
   }
 
-  private _handleKeyDown(e: KeyboardEvent): void {
-    if (this._composing) return
+  #handleKeyDown(e: KeyboardEvent): void {
+    if (this.#composing) return
 
-    const sel = this._getSelection()
+    const sel = this.#getSelection()
 
     if (e.key === 'Enter') {
       e.preventDefault()
-      if (sel) this._handleEnter(sel)
+      if (sel) this.#handleEnter(sel)
       return
     }
 
@@ -420,12 +420,12 @@ export class BlockEditor {
     if (e.key === 'Backspace') {
       if (sel instanceof BlockRange) {
         e.preventDefault()
-        this._handleBackspace(sel)
+        this.#handleBackspace(sel)
         return
       }
       if (sel instanceof BlockOffset && sel.offset === 0) {
         e.preventDefault()
-        this._handleBackspace(sel)
+        this.#handleBackspace(sel)
         return
       }
       return
@@ -434,14 +434,14 @@ export class BlockEditor {
     if (e.key === 'Delete') {
       if (sel instanceof BlockRange) {
         e.preventDefault()
-        this._handleDelete(sel)
+        this.#handleDelete(sel)
         return
       }
       if (sel instanceof BlockOffset) {
-        const block = this._state.getBlock(sel.blockId)
+        const block = this.#state.getBlock(sel.blockId)
         if (sel.offset === block.getLength()) {
           e.preventDefault()
-          this._handleDelete(sel)
+          this.#handleDelete(sel)
           return
         }
       }
@@ -457,109 +457,109 @@ export class BlockEditor {
       !e.altKey
     ) {
       e.preventDefault()
-      const cursor = this._deleteRange(sel)
-      const block = this._state.getBlock(cursor.blockId)
+      const cursor = this.#deleteRange(sel)
+      const block = this.#state.getBlock(cursor.blockId)
       const text = new Text(block.data.text, [...block.data.inline] as InlineDto[])
       const newText = insertChar(text, cursor.offset, e.key)
       const newCursor = new BlockOffset(cursor.blockId, cursor.offset + 1)
-      this._state = this._state.update(cursor.blockId, newText)
-      this._render(newCursor)
-      this._emitter.scheduleDataUpdated(cursor.blockId)
+      this.#state = this.#state.update(cursor.blockId, newText)
+      this.#render(newCursor)
+      this.#emitter.scheduleDataUpdated(cursor.blockId)
       return
     }
   }
 
-  private _handleInput(): void {
-    if (this._composing) return
+  #handleInput(): void {
+    if (this.#composing) return
 
-    const sel = this._getSelection()
+    const sel = this.#getSelection()
     if (sel instanceof BlockRange) {
       throw new Error('BlockEditor invariant violated: multi-block selection during input')
     }
     if (!sel) return
 
     const { blockId } = sel
-    const blockEl = this._editable.querySelector(`[id="${blockId}"]`)
+    const blockEl = this.#editable.querySelector(`[id="${blockId}"]`)
     if (!blockEl) return
 
     const pEl = getBlockElementContent(blockEl)
     const newText = textSerializer.parse(Array.from(pEl.childNodes))
-    this._state = this._state.update(blockId, newText)
-    this._render(sel)
-    this._emitter.scheduleDataUpdated(blockId)
+    this.#state = this.#state.update(blockId, newText)
+    this.#render(sel)
+    this.#emitter.scheduleDataUpdated(blockId)
   }
 
-  private _handleEnter(sel: BlockSelection): void {
+  #handleEnter(sel: BlockSelection): void {
     if (sel instanceof BlockRange) {
-      const cursor = this._deleteRange(sel)
-      this._render(cursor)
+      const cursor = this.#deleteRange(sel)
+      this.#render(cursor)
       return
     }
     // BlockOffset: split
     const { blockId, offset } = sel
-    const block = this._state.getBlock(blockId)
+    const block = this.#state.getBlock(blockId)
     const atEnd = offset === block.getLength()
 
     if (atEnd) {
-      this._emitter.flushDataUpdated(blockId)
+      this.#emitter.flushDataUpdated(blockId)
     }
 
-    const oldState = this._state
+    const oldState = this.#state
     const newId = crypto.randomUUID()
-    this._state = this._state.splitAt(blockId, offset, newId)
-    this._render(new BlockOffset(newId, 0))
-    this._emitEvents(oldState)
+    this.#state = this.#state.splitAt(blockId, offset, newId)
+    this.#render(new BlockOffset(newId, 0))
+    this.#emitEvents(oldState)
   }
 
-  private _handleBackspace(sel: BlockSelection): void {
+  #handleBackspace(sel: BlockSelection): void {
     if (sel instanceof BlockRange) {
-      const cursor = this._deleteRange(sel)
-      this._render(cursor)
+      const cursor = this.#deleteRange(sel)
+      this.#render(cursor)
       return
     }
     // BlockOffset at offset 0
     const { blockId } = sel
-    const prevId = this._state.previousBlockId(blockId)
+    const prevId = this.#state.previousBlockId(blockId)
     if (prevId === null) return  // first block — no-op
-    const cursorOffset = this._state.getBlock(prevId).getLength()
-    const oldState = this._state
-    this._state = this._state.merge(prevId, blockId)
-    this._render(new BlockOffset(prevId, cursorOffset))
-    this._emitEvents(oldState)
+    const cursorOffset = this.#state.getBlock(prevId).getLength()
+    const oldState = this.#state
+    this.#state = this.#state.merge(prevId, blockId)
+    this.#render(new BlockOffset(prevId, cursorOffset))
+    this.#emitEvents(oldState)
   }
 
-  private _handleDelete(sel: BlockSelection): void {
+  #handleDelete(sel: BlockSelection): void {
     if (sel instanceof BlockRange) {
-      const cursor = this._deleteRange(sel)
-      this._render(cursor)
+      const cursor = this.#deleteRange(sel)
+      this.#render(cursor)
       return
     }
     // BlockOffset at end of block
     const { blockId } = sel
-    const nextId = this._state.nextBlockId(blockId)
+    const nextId = this.#state.nextBlockId(blockId)
     if (nextId === null) return  // last block — no-op
-    const cursorOffset = this._state.getBlock(blockId).getLength()
-    const oldState = this._state
-    this._state = this._state.merge(blockId, nextId)
-    this._render(new BlockOffset(blockId, cursorOffset))
-    this._emitEvents(oldState)
+    const cursorOffset = this.#state.getBlock(blockId).getLength()
+    const oldState = this.#state
+    this.#state = this.#state.merge(blockId, nextId)
+    this.#render(new BlockOffset(blockId, cursorOffset))
+    this.#emitEvents(oldState)
   }
 
-  private _deleteRange(sel: BlockRange): BlockOffset {
+  #deleteRange(sel: BlockRange): BlockOffset {
     if (sel.start.blockId === sel.end.blockId) {
-      const block = this._state.getBlock(sel.start.blockId)
+      const block = this.#state.getBlock(sel.start.blockId)
       const text = new Text(block.data.text, [...block.data.inline] as InlineDto[])
       const length = sel.end.offset - sel.start.offset
       const newText = text.remove(sel.start.offset, length)
-      const oldState = this._state
-      this._state = this._state.update(sel.start.blockId, newText)
-      this._emitEvents(oldState)
+      const oldState = this.#state
+      this.#state = this.#state.update(sel.start.blockId, newText)
+      this.#emitEvents(oldState)
       return new BlockOffset(sel.start.blockId, sel.start.offset)
     }
     // Multi-block
-    const oldState = this._state
-    this._state = this._state.deleteRange(sel)
-    this._emitEvents(oldState)
+    const oldState = this.#state
+    this.#state = this.#state.deleteRange(sel)
+    this.#emitEvents(oldState)
     return new BlockOffset(sel.start.blockId, sel.start.offset)
   }
 }
