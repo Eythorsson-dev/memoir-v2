@@ -603,4 +603,73 @@ export class Blocks {
 
     return new Blocks(clampPass(newBlocks))
   }
+
+  // ─── Private helpers ──────────────────────────────────────────────────────────
+
+  /**
+   * Removes the block identified by `id` and all its descendants in one step.
+   * @throws if the block is not found.
+   * @throws if the result would be empty (via constructor).
+   */
+  #deleteSubtree(id: BlockId): Blocks {
+    const idx = this.#blocks.findIndex(b => b.id === id)
+    if (idx === -1) throw new Error(`Block not found: ${id}`)
+    const targetIndent = this.#blocks[idx].indent
+    let end = idx + 1
+    while (end < this.#blocks.length && this.#blocks[end].indent > targetIndent) {
+      end++
+    }
+    return new Blocks([
+      ...this.#blocks.slice(0, idx),
+      ...this.#blocks.slice(end),
+    ])
+  }
+
+  // ─── Static helpers ───────────────────────────────────────────────────────────
+
+  /**
+   * Replays a sequence of `BlocksChange` events onto `base`, returning the
+   * resulting `Blocks` state. Used by `BlockHistory` to reconstruct states
+   * without storing snapshots.
+   */
+  static fromEvents(base: Blocks, changes: readonly BlocksChange[]): Blocks {
+    let state = base
+    for (const change of changes) {
+      if (change instanceof BlockDataChanged) {
+        state = state.update(change.id, new Text(change.data.text, [...change.data.inline] as InlineDto[]))
+      } else if (change instanceof BlockAdded) {
+        const data = new Text(change.data.text, [...change.data.inline] as InlineDto[])
+        if (change.previousBlockId !== null) {
+          state = state.addAfter(change.previousBlockId, { id: change.id, data })
+        } else if (change.parentBlockId !== null) {
+          state = state.prependChild(change.parentBlockId, { id: change.id, data })
+        } else {
+          state = state.addBefore(state.#blocks[0].id, { id: change.id, data })
+        }
+      } else if (change instanceof BlockRemoved) {
+        const idx = state.#blocks.findIndex(b => b.id === change.id)
+        if (idx !== -1) {
+          state = state.#deleteSubtree(change.id)
+        }
+        // if not found, already removed — skip
+      } else if (change instanceof BlockMoved) {
+        // Determine target indent from the new position context
+        const idx = state.#blocks.findIndex(b => b.id === change.id)
+        if (idx === -1) continue
+        const targetIndent = change.parentBlockId !== null
+          ? (() => {
+              const parentIdx = state.#blocks.findIndex(b => b.id === change.parentBlockId)
+              return parentIdx !== -1 ? state.#blocks[parentIdx].indent + 1 : 0
+            })()
+          : 0
+        const updated = [...state.#blocks]
+        updated[idx] = new FlatBlock(updated[idx].id, updated[idx].data, targetIndent)
+        state = new Blocks(clampPass(updated))
+      } else {
+        const _exhaustive: never = change
+        throw new Error(`Unhandled change type: ${JSON.stringify(_exhaustive)}`)
+      }
+    }
+    return state
+  }
 }
