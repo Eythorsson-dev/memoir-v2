@@ -39,7 +39,7 @@ pnpm vitest
 3. Run `pnpm vitest run` and confirm all tests pass.
 4. Run `pnpm check` to catch any type errors.
 
-Use small, atomic commits with [Conventional Commits](https://www.conventionalcommits.org/) messages (`feat:`, `fix:`, `test:`, `refactor:`, `chore:`).
+Use small, atomic commits. Follow the commit message and PR description conventions in `@rules/git-conventions.md`.
 
 **Commit after each completed and verified step** — do not batch multiple steps into one commit. Ask for confirmation before committing.
 
@@ -91,3 +91,4 @@ git rebase --exec "git commit --amend --no-edit -S" origin/master
 
 @rules/demo.md
 @rules/blockEditor.md
+@rules/git-conventions.md
