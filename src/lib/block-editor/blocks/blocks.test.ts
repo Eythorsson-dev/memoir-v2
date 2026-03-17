@@ -1193,3 +1193,110 @@ describe('value objects are frozen', () => {
     expect(() => { (r as any).start = null }).toThrow(TypeError)
   })
 })
+
+// ─── Blocks.fromEvents ────────────────────────────────────────────────────────
+
+describe('Blocks.fromEvents', () => {
+  it('empty changes returns base unchanged', () => {
+    const base = Blocks.from([dto('a')])
+    const result = Blocks.fromEvents(base, [])
+    expect(preorder(result)).toEqual(['a'])
+  })
+
+  it('BlockDataChanged updates block text', () => {
+    const base = Blocks.from([dto('a', 'hello')])
+    const result = Blocks.fromEvents(base, [
+      new BlockDataChanged('a', { text: 'world', inline: [] }),
+    ])
+    expect(result.getBlock('a').data.text).toBe('world')
+  })
+
+  it('BlockAdded with previousBlockId inserts after', () => {
+    const base = Blocks.from([dto('a'), dto('b')])
+    const result = Blocks.fromEvents(base, [
+      new BlockAdded('c', { text: '', inline: [] }, 'a', null),
+    ])
+    expect(preorder(result)).toEqual(['a', 'c', 'b'])
+  })
+
+  it('BlockAdded with parentBlockId prepends as first child', () => {
+    const base = Blocks.from([dto('a', '', [dto('b')])])
+    const result = Blocks.fromEvents(base, [
+      new BlockAdded('c', { text: '', inline: [] }, null, 'a'),
+    ])
+    // prependChild: c becomes first child of a, before b
+    expect(preorder(result)).toEqual(['a', 'c', 'b'])
+  })
+
+  it('BlockAdded with both null adds before first block', () => {
+    const base = Blocks.from([dto('a')])
+    const result = Blocks.fromEvents(base, [
+      new BlockAdded('z', { text: '', inline: [] }, null, null),
+    ])
+    expect(preorder(result)[0]).toBe('z')
+  })
+
+  it('BlockRemoved removes leaf block', () => {
+    const base = Blocks.from([dto('a'), dto('b')])
+    const result = Blocks.fromEvents(base, [
+      new BlockRemoved('b'),
+    ])
+    expect(preorder(result)).toEqual(['a'])
+  })
+
+  it('BlockRemoved removes parent and its children (deleteSubtree)', () => {
+    const base = Blocks.from([dto('a', '', [dto('b'), dto('c')]), dto('d')])
+    const result = Blocks.fromEvents(base, [
+      new BlockRemoved('a'),
+    ])
+    expect(preorder(result)).toEqual(['d'])
+  })
+
+  it('BlockRemoved skips already-removed blocks', () => {
+    const base = Blocks.from([dto('a'), dto('b')])
+    // removing 'b' twice should not throw
+    const result = Blocks.fromEvents(base, [
+      new BlockRemoved('b'),
+      new BlockRemoved('b'),
+    ])
+    expect(preorder(result)).toEqual(['a'])
+  })
+
+  it('BlockMoved changes block position via parent indent patch', () => {
+    // Build: a, b (child of a), c
+    const base = Blocks.from([dto('a', '', [dto('b')]), dto('c')])
+    // In the new state after move, b should be at root level after c
+    const newState = Blocks.from([dto('a'), dto('c'), dto('b')])
+    const newParent = newState.parent('b')
+    const newPrev = newState.prevSibling('b')
+    const result = Blocks.fromEvents(base, [
+      new BlockMoved('b', newPrev, newParent),
+    ])
+    expect(result.parent('b')).toBeNull()
+  })
+
+  it('round-trip: add then remove returns base structure', () => {
+    const base = Blocks.from([dto('a'), dto('b')])
+    const changes = [
+      new BlockAdded('c', { text: 'c', inline: [] }, 'a', null),
+      new BlockRemoved('c'),
+    ]
+    const result = Blocks.fromEvents(base, changes)
+    expect(preorder(result)).toEqual(['a', 'b'])
+  })
+
+  it('multiple BlockDataChanged on same block uses last value', () => {
+    const base = Blocks.from([dto('a', 'initial')])
+    const result = Blocks.fromEvents(base, [
+      new BlockDataChanged('a', { text: 'first', inline: [] }),
+      new BlockDataChanged('a', { text: 'second', inline: [] }),
+    ])
+    expect(result.getBlock('a').data.text).toBe('second')
+  })
+
+  it('deleteSubtree: throws if last block would be removed', () => {
+    const base = Blocks.from([dto('a', '', [dto('b')])])
+    // Removing 'a' (only root) should throw
+    expect(() => Blocks.fromEvents(base, [new BlockRemoved('a')])).toThrow()
+  })
+})
