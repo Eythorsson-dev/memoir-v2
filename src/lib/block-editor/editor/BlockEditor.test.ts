@@ -4,7 +4,7 @@ import { BlockEditorWithToolbar } from './BlockEditorWithToolbar'
 import { Blocks, Block } from '../blocks/blocks'
 import { type InlineTypes } from '../text/text'
 import { BLOCK_EDITOR_EVENT_NAMES } from './events'
-import type { BlockDataUpdatedEvent } from './events'
+import type { BlockDataUpdatedEventDto } from './events'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -240,7 +240,7 @@ describe('blockDataUpdated debouncing', () => {
   it('does not fire immediately after input', () => {
     const container = makeContainer()
     const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
-    const events: BlockDataUpdatedEvent[] = []
+    const events: BlockDataUpdatedEventDto[] = []
     editor.addEventListener('blockDataUpdated', (e) => events.push(e))
 
     getEditable(container).focus()
@@ -253,7 +253,7 @@ describe('blockDataUpdated debouncing', () => {
   it('fires after debounce delay', () => {
     const container = makeContainer()
     const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]), { dataUpdateDebounceMs: 1000 })
-    const events: BlockDataUpdatedEvent[] = []
+    const events: BlockDataUpdatedEventDto[] = []
     editor.addEventListener('blockDataUpdated', (e) => events.push(e))
 
     getEditable(container).focus()
@@ -271,7 +271,7 @@ describe('blockDataUpdated debouncing', () => {
       dataUpdateDebounceMs: 1000,
       dataUpdateMaxWaitMs: 3000,
     })
-    const events: BlockDataUpdatedEvent[] = []
+    const events: BlockDataUpdatedEventDto[] = []
     editor.addEventListener('blockDataUpdated', (e) => events.push(e))
 
     getEditable(container).focus()
@@ -290,7 +290,7 @@ describe('blockDataUpdated debouncing', () => {
   it('blur flushes pending synchronously', () => {
     const container = makeContainer()
     const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
-    const events: BlockDataUpdatedEvent[] = []
+    const events: BlockDataUpdatedEventDto[] = []
     editor.addEventListener('blockDataUpdated', (e) => events.push(e))
 
     getEditable(container).focus()
@@ -305,7 +305,7 @@ describe('blockDataUpdated debouncing', () => {
   it('unsubscribe stops delivery', () => {
     const container = makeContainer()
     const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]), { dataUpdateDebounceMs: 100 })
-    const events: BlockDataUpdatedEvent[] = []
+    const events: BlockDataUpdatedEventDto[] = []
     const unsub = editor.addEventListener('blockDataUpdated', (e) => events.push(e))
     unsub()
 

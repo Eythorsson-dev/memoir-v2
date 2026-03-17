@@ -2,13 +2,13 @@
   import CodePreview from './code-preview.svelte'
   import RelativeTimestamp from './relative-timestamp.svelte'
   import { popup } from './popup-attachment'
-  import type { BlockEditorEventMap } from '$lib/block-editor'
+  import type { BlockEditorEventDtoMap } from '$lib/block-editor'
   import { Trash2Icon } from '@lucide/svelte'
 
-  export type LogEntry<T extends keyof BlockEditorEventMap = keyof BlockEditorEventMap> = {
+  export type LogEntry<T extends keyof BlockEditorEventDtoMap = keyof BlockEditorEventDtoMap> = {
     timestamp: number
     name: T
-    payload: BlockEditorEventMap[T]
+    payload: BlockEditorEventDtoMap[T]
   }
 
   let {
@@ -17,7 +17,7 @@
     entries?: LogEntry[]
   } = $props()
 
-  const eventColors: Record<keyof BlockEditorEventMap, string> = {
+  const eventColors: Record<keyof BlockEditorEventDtoMap, string> = {
     blockCreated:     'text-emerald-600 dark:text-emerald-400',
     blockDataUpdated: 'text-blue-600 dark:text-blue-400',
     blockRemoved:     'text-rose-600 dark:text-rose-400',
@@ -25,7 +25,7 @@
     selectionChange:  'text-(--fg) opacity-50',
   }
 
-  function colorFor(name: keyof BlockEditorEventMap): string {
+  function colorFor(name: keyof BlockEditorEventDtoMap): string {
     return eventColors[name]
   }
 </script>

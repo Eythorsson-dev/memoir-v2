@@ -45,11 +45,35 @@ export class BlockRange {
   }
 }
 
-export type BlocksChange =
-  | { type: 'moved';        id: BlockId; previousBlockId: BlockId | null; parentBlockId: BlockId | null }
-  | { type: 'removed';      id: BlockId }
-  | { type: 'added';        id: BlockId; data: TextDto; previousBlockId: BlockId | null; parentBlockId: BlockId | null }
-  | { type: 'dataChanged';  id: BlockId; data: TextDto }
+export class BlockMoved {
+  constructor(
+    readonly id: BlockId,
+    readonly previousBlockId: BlockId | null,
+    readonly parentBlockId: BlockId | null,
+  ) { Object.freeze(this) }
+}
+
+export class BlockRemoved {
+  constructor(readonly id: BlockId) { Object.freeze(this) }
+}
+
+export class BlockAdded {
+  constructor(
+    readonly id: BlockId,
+    readonly data: TextDto,
+    readonly previousBlockId: BlockId | null,
+    readonly parentBlockId: BlockId | null,
+  ) { Object.freeze(this) }
+}
+
+export class BlockDataChanged {
+  constructor(
+    readonly id: BlockId,
+    readonly data: TextDto,
+  ) { Object.freeze(this) }
+}
+
+export type BlocksChange = BlockMoved | BlockRemoved | BlockAdded | BlockDataChanged
 
 // ─── Internal types ────────────────────────────────────────────────────────────
 
@@ -299,7 +323,7 @@ export class Blocks {
 
     for (const b of oldBlocks.#blocks) {
       if (!newIds.has(b.id)) {
-        changes.push({ type: 'removed', id: b.id })
+        changes.push(new BlockRemoved(b.id))
       }
     }
 
@@ -308,13 +332,12 @@ export class Blocks {
         // New block — report as added
         const newPrev = newBlocks.prevSibling(b.id)
         const newParent = newBlocks.parent(b.id)
-        changes.push({
-          type: 'added',
-          id: b.id,
-          data: { text: b.data.text, inline: [...b.data.inline] as InlineDto[] },
-          previousBlockId: newPrev,
-          parentBlockId: newParent,
-        })
+        changes.push(new BlockAdded(
+          b.id,
+          { text: b.data.text, inline: [...b.data.inline] as InlineDto[] },
+          newPrev,
+          newParent,
+        ))
         continue
       }
 
@@ -323,16 +346,15 @@ export class Blocks {
       const oldPrev = oldBlocks.prevSibling(b.id)
       const newPrev = newBlocks.prevSibling(b.id)
       if (oldParent !== newParent || oldPrev !== newPrev) {
-        changes.push({ type: 'moved', id: b.id, previousBlockId: newPrev, parentBlockId: newParent })
+        changes.push(new BlockMoved(b.id, newPrev, newParent))
       }
 
       const oldData = oldDataMap.get(b.id)!
       if (!oldData.equals(b.data)) {
-        changes.push({
-          type: 'dataChanged',
-          id: b.id,
-          data: { text: b.data.text, inline: [...b.data.inline] as InlineDto[] },
-        })
+        changes.push(new BlockDataChanged(
+          b.id,
+          { text: b.data.text, inline: [...b.data.inline] as InlineDto[] },
+        ))
       }
     }
 

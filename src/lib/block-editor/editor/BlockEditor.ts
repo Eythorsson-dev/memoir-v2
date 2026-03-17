@@ -1,8 +1,8 @@
 import { Text, type InlineTypes, type InlineDto } from '../text/text'
 import { textSerializer } from '../text/serializer'
-import { Blocks, type BlockId, BlockOffset, BlockRange } from '../blocks/blocks'
+import { Blocks, type BlockId, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved } from '../blocks/blocks'
 import { blocksSerializer } from '../blocks/serializer'
-import type { BlockEditorEventMap, BlockEditorOptions, BlockSelection } from './events'
+import type { BlockEditorEventDtoMap, BlockEditorOptions, BlockSelection } from './events'
 import { BlockEventEmitter } from './BlockEventEmitter'
 import './block-editor.css'
 
@@ -169,9 +169,9 @@ export class BlockEditor {
   }
 
   /** Registers a typed event listener. Returns an unsubscribe function. */
-  addEventListener<K extends keyof BlockEditorEventMap>(
+  addEventListener<K extends keyof BlockEditorEventDtoMap>(
     event: K,
-    handler: (payload: BlockEditorEventMap[K]) => void,
+    handler: (payload: BlockEditorEventDtoMap[K]) => void,
   ): () => void {
     return this.#emitter.addEventListener(event, handler)
   }
@@ -267,22 +267,22 @@ export class BlockEditor {
 
     // Emit in a stable semantic order: dataChanged → added → removed → moved
     for (const change of changes) {
-      if (change.type === 'dataChanged') {
+      if (change instanceof BlockDataChanged) {
         this.#emitter.emit('blockDataUpdated', { id: change.id, data: change.data })
       }
     }
     for (const change of changes) {
-      if (change.type === 'added') {
+      if (change instanceof BlockAdded) {
         this.#emitter.emit('blockCreated', { id: change.id, data: change.data, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
       }
     }
     for (const change of changes) {
-      if (change.type === 'removed') {
+      if (change instanceof BlockRemoved) {
         this.#emitter.emit('blockRemoved', { id: change.id })
       }
     }
     for (const change of changes) {
-      if (change.type === 'moved') {
+      if (change instanceof BlockMoved) {
         this.#emitter.emit('blockMoved', { id: change.id, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
       }
     }
