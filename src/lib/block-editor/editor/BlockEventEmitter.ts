@@ -1,16 +1,16 @@
 import type { BlockId } from '../blocks/blocks'
-import type { BlockEditorEventMap, BlockDataUpdatedEvent } from './events'
+import type { BlockEditorEventDtoMap, BlockDataUpdatedEventDto } from './events'
 import { makeDebounced, type DebouncedFn } from './debounce'
 
 export class BlockEventEmitter {
-  #listeners: Map<keyof BlockEditorEventMap, Set<(payload: unknown) => void>> = new Map()
+  #listeners: Map<keyof BlockEditorEventDtoMap, Set<(payload: unknown) => void>> = new Map()
   #pending: Map<BlockId, DebouncedFn> = new Map()
-  #getBlockData: (id: BlockId) => BlockDataUpdatedEvent | null
+  #getBlockData: (id: BlockId) => BlockDataUpdatedEventDto | null
   #debounceMs: number
   #maxWaitMs: number
 
   constructor(
-    getBlockData: (id: BlockId) => BlockDataUpdatedEvent | null,
+    getBlockData: (id: BlockId) => BlockDataUpdatedEventDto | null,
     opts: { debounceMs: number; maxWaitMs: number },
   ) {
     this.#getBlockData = getBlockData
@@ -18,9 +18,9 @@ export class BlockEventEmitter {
     this.#maxWaitMs = opts.maxWaitMs
   }
 
-  addEventListener<K extends keyof BlockEditorEventMap>(
+  addEventListener<K extends keyof BlockEditorEventDtoMap>(
     event: K,
-    handler: (payload: BlockEditorEventMap[K]) => void,
+    handler: (payload: BlockEditorEventDtoMap[K]) => void,
   ): () => void {
     if (!this.#listeners.has(event)) {
       this.#listeners.set(event, new Set())
@@ -29,7 +29,7 @@ export class BlockEventEmitter {
     return () => this.#listeners.get(event)?.delete(handler as (payload: unknown) => void)
   }
 
-  emit<K extends keyof BlockEditorEventMap>(event: K, payload: BlockEditorEventMap[K]): void {
+  emit<K extends keyof BlockEditorEventDtoMap>(event: K, payload: BlockEditorEventDtoMap[K]): void {
     const listeners = this.#listeners.get(event)
     if (!listeners) return
     for (const cb of listeners) cb(payload as unknown)

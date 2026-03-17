@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Blocks, Block, BlockOffset, BlockRange } from './blocks'
+import { Blocks, Block, BlockOffset, BlockRange, BlockMoved, BlockRemoved, BlockAdded, BlockDataChanged } from './blocks'
 import { Text } from '../text/text'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -1059,27 +1059,30 @@ describe('Blocks.diff', () => {
     const b2 = b1.update('a', new Text('changed', []))
     const changes = Blocks.diff(b1, b2)
     expect(changes).toHaveLength(1)
-    expect(changes[0]).toMatchObject({ type: 'dataChanged', id: 'a' })
+    expect(changes[0]).toBeInstanceOf(BlockDataChanged)
+    expect(changes[0]).toMatchObject({ id: 'a' })
   })
 
   it('detects removed blocks', () => {
     const b1 = Blocks.from([dto('a'), dto('b'), dto('c')])
     const b2 = b1.delete('b')
     const changes = Blocks.diff(b1, b2)
-    expect(changes).toContainEqual({ type: 'removed', id: 'b' })
+    expect(changes).toContainEqual(new BlockRemoved('b'))
     // 'a' is unchanged
     expect(changes).not.toContainEqual(expect.objectContaining({ id: 'a' }))
     // 'c' prevSibling changed from 'b' → 'a', so it gets a moved entry
-    expect(changes).toContainEqual(expect.objectContaining({ type: 'moved', id: 'c' }))
+    expect(changes).toContainEqual(expect.objectContaining({ id: 'c' }))
+    expect(changes.find(c => c instanceof BlockMoved && c.id === 'c')).toBeDefined()
   })
 
   it('detects moved blocks when parent changes (indent)', () => {
     const b1 = Blocks.from([dto('a'), dto('b')])
     const b2 = b1.indent('b', 'b')  // b becomes child of a
     const changes = Blocks.diff(b1, b2)
-    const bMoved = changes.find(c => c.type === 'moved' && c.id === 'b')
+    const bMoved = changes.find(c => c instanceof BlockMoved && c.id === 'b')
     expect(bMoved).toBeDefined()
-    expect(bMoved).toMatchObject({ type: 'moved', id: 'b', parentBlockId: 'a', previousBlockId: null })
+    expect(bMoved).toBeInstanceOf(BlockMoved)
+    expect(bMoved).toMatchObject({ id: 'b', parentBlockId: 'a', previousBlockId: null })
   })
 
   it('detects moved blocks when prevSibling changes', () => {
@@ -1088,16 +1091,17 @@ describe('Blocks.diff', () => {
     const b1 = Blocks.from([dto('a'), dto('b')])
     const b2 = b1.splitAt('a', 0, 'x')  // flat: [a, x, b]
     const changes = Blocks.diff(b1, b2)
-    const bMoved = changes.find(c => c.type === 'moved' && c.id === 'b')
+    const bMoved = changes.find(c => c instanceof BlockMoved && c.id === 'b')
     expect(bMoved).toBeDefined()
-    expect(bMoved).toMatchObject({ type: 'moved', id: 'b', previousBlockId: 'x', parentBlockId: null })
+    expect(bMoved).toBeInstanceOf(BlockMoved)
+    expect(bMoved).toMatchObject({ id: 'b', previousBlockId: 'x', parentBlockId: null })
   })
 
   it('reports added for blocks absent from oldBlocks (splitAt)', () => {
     const b1 = Blocks.from([dto('a', 'hello')])
     const b2 = b1.splitAt('a', 3, 'new')  // [a='hel', new='lo']
     const changes = Blocks.diff(b1, b2)
-    const addedChange = changes.find(c => c.type === 'added' && c.id === 'new')
+    const addedChange = changes.find(c => c instanceof BlockAdded && c.id === 'new')
     expect(addedChange).toBeDefined()
   })
 
@@ -1105,9 +1109,9 @@ describe('Blocks.diff', () => {
     const b1 = Blocks.from([dto('a', 'hello'), dto('b')])
     const b2 = b1.splitAt('a', 3, 'new')  // flat: [a='hel', new='lo', b]
     const changes = Blocks.diff(b1, b2)
-    const addedChange = changes.find(c => c.type === 'added' && c.id === 'new')
+    const addedChange = changes.find(c => c instanceof BlockAdded && c.id === 'new')
+    expect(addedChange).toBeInstanceOf(BlockAdded)
     expect(addedChange).toMatchObject({
-      type: 'added',
       id: 'new',
       data: { text: 'lo', inline: [] },
       previousBlockId: 'a',
@@ -1120,9 +1124,9 @@ describe('Blocks.diff', () => {
     // Insert a new block after 'b' at same indent (root level)
     const b2 = b1.addAfter('b', { id: 'x', data: new Text('hi', []) })
     const changes = Blocks.diff(b1, b2)
-    const addedChange = changes.find(c => c.type === 'added' && c.id === 'x')
+    const addedChange = changes.find(c => c instanceof BlockAdded && c.id === 'x')
+    expect(addedChange).toBeInstanceOf(BlockAdded)
     expect(addedChange).toMatchObject({
-      type: 'added',
       id: 'x',
       previousBlockId: 'b',
       parentBlockId: null,
@@ -1133,24 +1137,25 @@ describe('Blocks.diff', () => {
     const b1 = Blocks.from([dto('a', 'hello'), dto('b', 'world')])
     const b2 = b1.update('a', new Text('changed', []))
     const changes = Blocks.diff(b1, b2)
-    const dataChanged = changes.find(c => c.type === 'dataChanged' && c.id === 'a')
+    const dataChanged = changes.find(c => c instanceof BlockDataChanged && c.id === 'a')
     expect(dataChanged).toBeDefined()
-    expect(dataChanged).toMatchObject({ type: 'dataChanged', id: 'a', data: { text: 'changed', inline: [] } })
+    expect(dataChanged).toBeInstanceOf(BlockDataChanged)
+    expect(dataChanged).toMatchObject({ id: 'a', data: { text: 'changed', inline: [] } })
   })
 
   it('reports no dataChanged when data is identical', () => {
     const b1 = Blocks.from([dto('a', 'hello'), dto('b', 'world')])
     const changes = Blocks.diff(b1, b1)
-    expect(changes.filter(c => c.type === 'dataChanged')).toHaveLength(0)
+    expect(changes.filter(c => c instanceof BlockDataChanged)).toHaveLength(0)
   })
 
   it('reports dataChanged only for blocks whose content changed', () => {
     const b1 = Blocks.from([dto('a', 'hello'), dto('b', 'world')])
     const b2 = b1.update('b', new Text('updated', []))
     const changes = Blocks.diff(b1, b2)
-    expect(changes.filter(c => c.type === 'dataChanged')).toHaveLength(1)
-    expect(changes.find(c => c.type === 'dataChanged' && c.id === 'b')).toBeDefined()
-    expect(changes.find(c => c.type === 'dataChanged' && c.id === 'a')).toBeUndefined()
+    expect(changes.filter(c => c instanceof BlockDataChanged)).toHaveLength(1)
+    expect(changes.find(c => c instanceof BlockDataChanged && c.id === 'b')).toBeDefined()
+    expect(changes.find(c => c instanceof BlockDataChanged && c.id === 'a')).toBeUndefined()
   })
 })
 

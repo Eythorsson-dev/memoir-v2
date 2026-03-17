@@ -1,6 +1,6 @@
 <script lang="ts">
     import { Blocks, Block, BlockEditorWithToolbar, BLOCK_EDITOR_EVENT_NAMES } from "$lib/block-editor";
-    import type { BlockSelection, BlockEditorEventMap } from "$lib/block-editor";
+    import type { BlockSelection, BlockEditorEventDtoMap } from "$lib/block-editor";
     import ResizableLayout from "../components/resizable-layout.svelte";
     import CollapsibleSection from "../components/collapsible-section.svelte";
     import CodePreview from "../components/code-preview.svelte";
@@ -36,7 +36,7 @@
 
     let selection = $state<BlockSelection | null>(null);
     let blocks = $state(initialBlocks.blocks);
-    const log = localState<LogEntry<keyof BlockEditorEventMap>[]>('event-log', []);
+    const log = localState<LogEntry<keyof BlockEditorEventDtoMap>[]>('event-log', []);
 
     const selectionOpen = localState('inspector-selection', true)
     const stateOpen     = localState('inspector-state',     true)

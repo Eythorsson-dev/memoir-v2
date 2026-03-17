@@ -1,7 +1,7 @@
 import { type InlineTypes, type InlineDtoMap } from '../text/text'
 import { Blocks } from '../blocks/blocks'
 import { BlockEditor } from './BlockEditor'
-import type { BlockEditorEventMap, BlockEditorOptions } from './events'
+import type { BlockEditorEventDtoMap, BlockEditorOptions } from './events'
 import { createElement, Bold, Italic, Underline, IndentIncrease, IndentDecrease } from 'lucide'
 import './block-editor-toolbar.css'
 
@@ -97,9 +97,9 @@ export class BlockEditorWithToolbar {
     this.#editor.setValue(blocks)
   }
 
-  addEventListener<K extends keyof BlockEditorEventMap>(
+  addEventListener<K extends keyof BlockEditorEventDtoMap>(
     event: K,
-    handler: (payload: BlockEditorEventMap[K]) => void,
+    handler: (payload: BlockEditorEventDtoMap[K]) => void,
   ): () => void {
     return this.#editor.addEventListener(event, handler)
   }

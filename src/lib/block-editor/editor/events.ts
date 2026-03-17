@@ -3,17 +3,17 @@ import type { TextDto } from '../text/text'
 import { BlockOffset, BlockRange } from '../blocks/blocks'
 
 export type BlockSelection        = BlockOffset | BlockRange
-export type BlockCreatedEvent     = { id: BlockId; data: TextDto; previousBlockId: BlockId | null; parentBlockId: BlockId | null }
-export type BlockDataUpdatedEvent = { id: BlockId; data: TextDto }
-export type BlockRemovedEvent     = { id: BlockId }
-export type BlockMovedEvent       = { id: BlockId; previousBlockId: BlockId | null; parentBlockId: BlockId | null }
+export type BlockCreatedEventDto     = { id: BlockId; data: TextDto; previousBlockId: BlockId | null; parentBlockId: BlockId | null }
+export type BlockDataUpdatedEventDto = { id: BlockId; data: TextDto }
+export type BlockRemovedEventDto     = { id: BlockId }
+export type BlockMovedEventDto       = { id: BlockId; previousBlockId: BlockId | null; parentBlockId: BlockId | null }
 
-export type BlockEditorEventMap = {
+export type BlockEditorEventDtoMap = {
   selectionChange:  BlockSelection | null
-  blockCreated:     BlockCreatedEvent
-  blockDataUpdated: BlockDataUpdatedEvent
-  blockRemoved:     BlockRemovedEvent
-  blockMoved:       BlockMovedEvent
+  blockCreated:     BlockCreatedEventDto
+  blockDataUpdated: BlockDataUpdatedEventDto
+  blockRemoved:     BlockRemovedEventDto
+  blockMoved:       BlockMovedEventDto
 }
 
 export interface BlockEditorOptions {
@@ -24,11 +24,11 @@ export interface BlockEditorOptions {
 
 export const BLOCK_EDITOR_EVENT_NAMES = [
   'selectionChange', 'blockCreated', 'blockDataUpdated', 'blockRemoved', 'blockMoved',
-] as const satisfies ReadonlyArray<keyof BlockEditorEventMap>
+] as const satisfies ReadonlyArray<keyof BlockEditorEventDtoMap>
 
 // Compile-time exhaustiveness checks: both directions must hold
-type _AllIncluded = keyof BlockEditorEventMap extends (typeof BLOCK_EDITOR_EVENT_NAMES)[number] ? true : never
-type _NoExtras    = (typeof BLOCK_EDITOR_EVENT_NAMES)[number] extends keyof BlockEditorEventMap ? true : never
+type _AllIncluded = keyof BlockEditorEventDtoMap extends (typeof BLOCK_EDITOR_EVENT_NAMES)[number] ? true : never
+type _NoExtras    = (typeof BLOCK_EDITOR_EVENT_NAMES)[number] extends keyof BlockEditorEventDtoMap ? true : never
 
 // Re-export so consumers can do instanceof checks
 export { BlockOffset, BlockRange }
