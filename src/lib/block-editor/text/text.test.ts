@@ -499,3 +499,27 @@ describe('remove', () => {
     expect(() => t.remove(3, 3)).toThrow(RangeError)
   })
 })
+
+// ─── equals ───────────────────────────────────────────────────────────────────
+
+describe('equals', () => {
+  it('returns true for same instance', () => {
+    const t = new Text('hello', [])
+    expect(t.equals(t)).toBe(true)
+  })
+  it('returns true for equal values, different instances', () => {
+    expect(new Text('hi', [{ type: 'Bold', start: 0, end: 2 }])
+      .equals(new Text('hi', [{ type: 'Bold', start: 0, end: 2 }]))).toBe(true)
+  })
+  it('returns false when text differs', () => {
+    expect(new Text('a', []).equals(new Text('b', []))).toBe(false)
+  })
+  it('returns false when inline count differs', () => {
+    expect(new Text('hi', [{ type: 'Bold', start: 0, end: 2 }])
+      .equals(new Text('hi', []))).toBe(false)
+  })
+  it('returns false when inline fields differ', () => {
+    expect(new Text('hi', [{ type: 'Bold', start: 0, end: 1 }])
+      .equals(new Text('hi', [{ type: 'Bold', start: 0, end: 2 }]))).toBe(false)
+  })
+})

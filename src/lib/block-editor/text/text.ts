@@ -113,6 +113,20 @@ export class Text implements TextDto {
   }
 
   /**
+   * Returns `true` if this `Text` instance is field-by-field equal to `other`.
+   * Comparison is index-by-index on the sorted `inline` array.
+   */
+  equals(other: Text): boolean {
+    if (this.text !== other.text) return false
+    if (this.inline.length !== other.inline.length) return false
+    for (let i = 0; i < this.inline.length; i++) {
+      const a = this.inline[i], b = other.inline[i]
+      if (a.type !== b.type || a.start !== b.start || a.end !== b.end) return false
+    }
+    return true
+  }
+
+  /**
    * Returns only the `TextDto` fields so that `JSON.stringify(instance)`
    * produces a clean DTO without class-specific metadata.
    */
