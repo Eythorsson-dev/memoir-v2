@@ -33,6 +33,18 @@ describe('Text constructor – valid inputs', () => {
     expect(t.inline[1]).toMatchObject({ type: 'Bold', start: 0, end: 4 })
     expect(t.inline[2]).toMatchObject({ type: 'Bold', start: 6, end: 11 })
   })
+
+  it('auto-sorts inline by type asc when start and end are equal', () => {
+    // Bold and Underline share [0,5); Italic shares [0,5) too — should sort alphabetically by type
+    const t = new Text('hello', [
+      { type: 'Underline', start: 0, end: 5 },
+      { type: 'Bold', start: 0, end: 5 },
+      { type: 'Italic', start: 0, end: 5 },
+    ])
+    expect(t.inline[0]).toMatchObject({ type: 'Bold' })
+    expect(t.inline[1]).toMatchObject({ type: 'Italic' })
+    expect(t.inline[2]).toMatchObject({ type: 'Underline' })
+  })
 })
 
 describe('Text constructor – invariant violations', () => {

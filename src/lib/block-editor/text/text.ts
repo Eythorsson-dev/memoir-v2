@@ -34,7 +34,9 @@ export type TextDto = {
  * Returns a copy of `inlines` sorted by start ascending, then end descending.
  */
 function sortInlines(inlines: InlineDto[]): InlineDto[] {
-  return [...inlines].sort((a, b) => a.start - b.start || b.end - a.end)
+  return [...inlines].sort(
+    (a, b) => a.start - b.start || b.end - a.end || a.type.localeCompare(b.type)
+  )
 }
 
 /**
