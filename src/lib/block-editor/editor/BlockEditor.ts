@@ -4,6 +4,7 @@ import { Blocks, type BlockId, BlockOffset, BlockRange, BlockDataChanged, BlockA
 import { blocksSerializer } from '../blocks/serializer'
 import type { BlockEditorEventDtoMap, BlockEditorOptions, BlockSelection } from './events'
 import { BlockEventEmitter } from './BlockEventEmitter'
+import { BlockHistory } from './BlockHistory'
 import './block-editor.css'
 
 export { BlockOffset, BlockRange } from '../blocks/blocks'
@@ -91,6 +92,7 @@ function insertChar(text: Text, offset: number, char: string): Text {
 
 export class BlockEditor {
   #state: Blocks
+  #history: BlockHistory
   #editable: HTMLDivElement
   #emitter: BlockEventEmitter
   /**
@@ -113,6 +115,7 @@ export class BlockEditor {
 
   constructor(container: HTMLElement, initial?: Blocks, opts: BlockEditorOptions = {}) {
     this.#state = initial ?? Blocks.from([Blocks.createBlock()])
+    this.#history = new BlockHistory(this.#state)
     this.#emitter = new BlockEventEmitter(
       (id) => {
         try {
@@ -252,6 +255,23 @@ export class BlockEditor {
     }
   }
 
+  canUndo(): boolean { return this.#history.canUndo() }
+  canRedo(): boolean { return this.#history.canRedo() }
+
+  undo(): void {
+    if (!this.#history.canUndo()) return
+    this.#state = this.#history.undo()
+    this.#emitter.cancelAll()
+    this.#render()
+  }
+
+  redo(): void {
+    if (!this.#history.canRedo()) return
+    this.#state = this.#history.redo()
+    this.#emitter.cancelAll()
+    this.#render()
+  }
+
   destroy(): void {
     this.#emitter.flushAll()
     this.#emitter.cancelAll()
@@ -263,6 +283,7 @@ export class BlockEditor {
 
   #emitEvents(oldState: Blocks): void {
     const changes = Blocks.diff(oldState, this.#state)
+    if (changes.length > 0) this.#history.add(changes)
     this.#emitter.cancelAll()
 
     // Emit in a stable semantic order: dataChanged → added → removed → moved
@@ -384,6 +405,23 @@ export class BlockEditor {
   #handleKeyDown(e: KeyboardEvent): void {
     if (this.#composing) return
 
+    // Undo: Ctrl/Cmd+Z
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault()
+      this.undo()
+      return
+    }
+
+    // Redo: Ctrl/Cmd+Shift+Z or Ctrl+Y
+    if (
+      ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') ||
+      (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'y')
+    ) {
+      e.preventDefault()
+      this.redo()
+      return
+    }
+
     const sel = this.#getSelection()
 
     if (e.key === 'Enter') {
@@ -485,6 +523,7 @@ export class BlockEditor {
     const pEl = getBlockElementContent(blockEl)
     const newText = textSerializer.parse(Array.from(pEl.childNodes))
     this.#state = this.#state.update(blockId, newText)
+    this.#history.updateOrAdd(blockId, new BlockDataChanged(blockId, newText.toJSON()))
     this.#render(sel)
     this.#emitter.scheduleDataUpdated(blockId)
   }
