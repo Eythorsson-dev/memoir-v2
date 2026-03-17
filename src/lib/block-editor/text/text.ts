@@ -110,6 +110,7 @@ export class Text implements TextDto {
     validateInlines(inline, text.length)
     this.text = text
     this.inline = sortInlines(inline)
+    Object.freeze(this)
   }
 
   /**

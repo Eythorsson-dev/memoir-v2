@@ -523,3 +523,12 @@ describe('equals', () => {
       .equals(new Text('hi', [{ type: 'Bold', start: 0, end: 2 }]))).toBe(false)
   })
 })
+
+// ─── freeze ───────────────────────────────────────────────────────────────────
+
+describe('Text is frozen', () => {
+  it('assigning a property throws', () => {
+    const t = new Text('hello', [])
+    expect(() => { (t as any).text = 'x' }).toThrow(TypeError)
+  })
+})
