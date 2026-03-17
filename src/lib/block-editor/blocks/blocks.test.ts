@@ -1171,3 +1171,20 @@ describe('BlockOffset', () => {
     expect(bo.offset).toBe(3)
   })
 })
+
+// ─── freeze ───────────────────────────────────────────────────────────────────
+
+describe('value objects are frozen', () => {
+  it('Block is frozen', () => {
+    const b = new Block('a', { text: '', inline: [] }, [])
+    expect(() => { (b as any).id = 'z' }).toThrow(TypeError)
+  })
+  it('BlockOffset is frozen', () => {
+    const o = new BlockOffset('a', 0)
+    expect(() => { (o as any).offset = 9 }).toThrow(TypeError)
+  })
+  it('BlockRange is frozen', () => {
+    const r = new BlockRange(new BlockOffset('a', 0), new BlockOffset('a', 1))
+    expect(() => { (r as any).start = null }).toThrow(TypeError)
+  })
+})

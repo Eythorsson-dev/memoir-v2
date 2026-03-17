@@ -9,7 +9,9 @@ export class Block {
     readonly id: BlockId,
     readonly data: TextDto,
     readonly children: ReadonlyArray<Block>,
-  ) {}
+  ) {
+    Object.freeze(this)
+  }
 
   /**
    * Returns the length of this block's content.
@@ -27,6 +29,7 @@ export class BlockOffset {
   ) {
     if (blockId.length === 0) throw new Error('blockId must be non-empty')
     if (offset < 0) throw new Error(`offset must be >= 0, got ${offset}`)
+    Object.freeze(this)
   }
 }
 
@@ -38,6 +41,7 @@ export class BlockRange {
     if (start.blockId === end.blockId && start.offset === end.offset) {
       throw new Error('BlockRange must not be collapsed (start equals end)')
     }
+    Object.freeze(this)
   }
 }
 
@@ -59,7 +63,9 @@ class FlatBlock {
     readonly id: BlockId,
     readonly data: Text,
     readonly indent: number,
-  ) {}
+  ) {
+    Object.freeze(this)
+  }
 }
 
 // ─── Validation ────────────────────────────────────────────────────────────────
@@ -168,6 +174,7 @@ export class Blocks {
   private constructor(blocks: ReadonlyArray<FlatBlock>) {
     validate(blocks)
     this.#blocks = blocks
+    Object.freeze(this)
   }
 
   static from(dtos: ReadonlyArray<Block>): Blocks {
