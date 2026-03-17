@@ -320,7 +320,7 @@ export class Blocks {
       }
 
       const oldData = oldDataMap.get(b.id)!
-      if (oldData.text !== b.data.text || JSON.stringify(oldData.inline) !== JSON.stringify(b.data.inline)) {
+      if (!oldData.equals(b.data)) {
         changes.push({
           type: 'dataChanged',
           id: b.id,
