@@ -1067,7 +1067,7 @@ describe('BlockEditorWithToolbar', () => {
     const editable = container.querySelector('.block-editor-editable') as HTMLElement
     editable.focus()
     setCursor(container, 'b', 0)
-    const indentBtn = container.querySelector('[title="Indent"]') as HTMLButtonElement
+    const indentBtn = container.querySelector('[aria-label="Indent"]') as HTMLButtonElement
     indentBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
     const blocks = editor.getValue()
     expect(find(blocks, 'a').children.map(x => x.id)).toContain('b')
@@ -1080,7 +1080,7 @@ describe('BlockEditorWithToolbar', () => {
     const editable = container.querySelector('.block-editor-editable') as HTMLElement
     editable.focus()
     setCursor(container, 'b', 0)
-    const outdentBtn = container.querySelector('[title="Outdent"]') as HTMLButtonElement
+    const outdentBtn = container.querySelector('[aria-label="Outdent"]') as HTMLButtonElement
     outdentBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
     const blocks = editor.getValue()
     expect(blocks.blocks.map(x => x.id)).toContain('b')
