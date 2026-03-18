@@ -92,3 +92,4 @@ git rebase --exec "git commit --amend --no-edit -S" origin/master
 @rules/demo.md
 @rules/blockEditor.md
 @rules/git-conventions.md
+@rules/toolbar-button-ux.md
