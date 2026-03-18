@@ -630,15 +630,14 @@ export class Blocks {
       } else if (change instanceof BlockRemoved) {
         state = state.delete(change.id)
       } else if (change instanceof BlockMoved) {
-        // Determine target indent from the new position context
         const idx = state.#blocks.findIndex(b => b.id === change.id)
-        if (idx === -1) continue
-        const targetIndent = change.parentBlockId !== null
-          ? (() => {
-              const parentIdx = state.#blocks.findIndex(b => b.id === change.parentBlockId)
-              return parentIdx !== -1 ? state.#blocks[parentIdx].indent + 1 : 0
-            })()
-          : 0
+        if (idx === -1) throw new Error(`Block not found: ${change.id}`)
+        let targetIndent = 0
+        if (change.parentBlockId !== null) {
+          const parentFlat = state.#blocks.find(b => b.id === change.parentBlockId)
+          if (!parentFlat) throw new Error(`Parent block not found: ${change.parentBlockId}`)
+          targetIndent = parentFlat.indent + 1
+        }
         const updated = [...state.#blocks]
         updated[idx] = new FlatBlock(updated[idx].id, updated[idx].data, targetIndent)
         state = new Blocks(clampPass(updated))
