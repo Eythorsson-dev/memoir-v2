@@ -1089,6 +1089,112 @@ describe('BlockEditorWithToolbar', () => {
   })
 })
 
+// ─── undo/redo events ─────────────────────────────────────────────────────────
+
+describe('undo/redo events', () => {
+  it('undo after Enter mid-block emits blockRemoved for created block + blockDataUpdated for split block', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
+    const events: string[] = []
+    editor.addEventListener('blockDataUpdated', (e) => events.push(`data:${e.id}`))
+    editor.addEventListener('blockCreated', (e) => events.push(`created:${e.id}`))
+    editor.addEventListener('blockRemoved', (e) => events.push(`removed:${e.id}`))
+
+    // Press Enter mid-block at offset 2 → 'a' becomes "He", new block gets "llo"
+    getEditable(container).focus()
+    setCursor(container, 'a', 2)
+    keydown(container, 'Enter')
+
+    // Record the new block id
+    const blocksAfterEnter = editor.getValue()
+    expect(preorder(blocksAfterEnter)).toHaveLength(2)
+    const newId = preorder(blocksAfterEnter)[1]
+
+    // Clear events and undo
+    events.length = 0
+    editor.undo()
+
+    expect(events).toContain(`removed:${newId}`)
+    // 'a' was split at 2 ("He"), undoing restores original text "Hello"
+    expect(events).toContain('data:a')
+    cleanup(editor, container)
+  })
+
+  it('redo after undo emits blockCreated + blockDataUpdated', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
+    const events: string[] = []
+    editor.addEventListener('blockDataUpdated', (e) => events.push(`data:${e.id}`))
+    editor.addEventListener('blockCreated', (e) => events.push(`created:${e.id}`))
+    editor.addEventListener('blockRemoved', (e) => events.push(`removed:${e.id}`))
+
+    getEditable(container).focus()
+    setCursor(container, 'a', 2)
+    keydown(container, 'Enter')
+
+    const blocksAfterEnter = editor.getValue()
+    const newId = preorder(blocksAfterEnter)[1]
+
+    editor.undo()
+
+    events.length = 0
+    editor.redo()
+
+    expect(events).toContain(`created:${newId}`)
+    expect(events).toContain('data:a')
+    cleanup(editor, container)
+  })
+
+  it('undo after Backspace merge emits blockCreated for restored block + blockDataUpdated', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello'), dto('b', ' World')]))
+    const events: string[] = []
+    editor.addEventListener('blockDataUpdated', (e) => events.push(`data:${e.id}`))
+    editor.addEventListener('blockCreated', (e) => events.push(`created:${e.id}`))
+    editor.addEventListener('blockRemoved', (e) => events.push(`removed:${e.id}`))
+
+    // Backspace at start of 'b' merges 'b' into 'a'
+    getEditable(container).focus()
+    setCursor(container, 'b', 0)
+    keydown(container, 'Backspace')
+    expect(preorder(editor.getValue())).toEqual(['a'])
+
+    events.length = 0
+    editor.undo()
+
+    // 'b' was removed by Backspace, so undo re-creates it
+    expect(events).toContain('created:b')
+    // 'a' data is restored to 'Hello'
+    expect(events).toContain('data:a')
+    cleanup(editor, container)
+  })
+
+  it('undo/redo do not push new history entries', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
+
+    getEditable(container).focus()
+    setCursor(container, 'a', 5)
+    keydown(container, 'Enter')
+
+    // After Enter: canUndo=true, canRedo=false
+    expect(editor.canUndo()).toBe(true)
+    expect(editor.canRedo()).toBe(false)
+
+    editor.undo()
+    // After undo: canUndo=false (back to initial), canRedo=true
+    expect(editor.canUndo()).toBe(false)
+    expect(editor.canRedo()).toBe(true)
+
+    editor.redo()
+    // After redo: canUndo=true again, canRedo=false
+    expect(editor.canUndo()).toBe(true)
+    expect(editor.canRedo()).toBe(false)
+
+    cleanup(editor, container)
+  })
+})
+
 // ─── Record<InlineTypes, ...> exhaustiveness ─────────────────────────────────
 
 describe('Record<InlineTypes, HTMLButtonElement> exhaustiveness', () => {

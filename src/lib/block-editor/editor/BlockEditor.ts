@@ -1,6 +1,6 @@
 import { Text, type InlineTypes, type InlineDto } from '../text/text'
 import { textSerializer } from '../text/serializer'
-import { Blocks, type BlockId, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved } from '../blocks/blocks'
+import { Blocks, type BlockId, type BlocksChange, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved } from '../blocks/blocks'
 import { blocksSerializer } from '../blocks/serializer'
 import type { BlockEditorEventDtoMap, BlockEditorOptions, BlockSelection } from './events'
 import { BlockEventEmitter } from './BlockEventEmitter'
@@ -264,18 +264,20 @@ export class BlockEditor {
 
   undo(): void {
     if (!this.#history.canUndo()) return
+    const oldState = this.#state
     const { blocks, selection } = this.#history.undo()
     this.#state = blocks
-    this.#emitter.cancelAll()
     this.#render(selection ?? undefined)
+    this.#dispatchChanges(Blocks.diff(oldState, this.#state))
   }
 
   redo(): void {
     if (!this.#history.canRedo()) return
+    const oldState = this.#state
     const { blocks, selection } = this.#history.redo()
     this.#state = blocks
-    this.#emitter.cancelAll()
     this.#render(selection ?? undefined)
+    this.#dispatchChanges(Blocks.diff(oldState, this.#state))
   }
 
   destroy(): void {
@@ -287,13 +289,7 @@ export class BlockEditor {
 
   // ─── Private helpers ────────────────────────────────────────────────────────
 
-  #emitEvents(oldState: Blocks): void {
-    const changes = Blocks.diff(oldState, this.#state)
-    if (changes.length > 0) {
-      const selAfter = this.#getSelection()
-      this.#history.add(changes, this.#pendingSelectionBefore, selAfter)
-    }
-    this.#pendingSelectionBefore = null
+  #dispatchChanges(changes: BlocksChange[]): void {
     this.#emitter.cancelAll()
 
     // Emit in a stable semantic order: dataChanged → added → removed → moved
@@ -317,6 +313,16 @@ export class BlockEditor {
         this.#emitter.emit('blockMoved', { id: change.id, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
       }
     }
+  }
+
+  #emitEvents(oldState: Blocks): void {
+    const changes = Blocks.diff(oldState, this.#state)
+    if (changes.length > 0) {
+      const selAfter = this.#getSelection()
+      this.#history.add(changes, this.#pendingSelectionBefore, selAfter)
+    }
+    this.#pendingSelectionBefore = null
+    this.#dispatchChanges(changes)
   }
 
   // ─── Private ───────────────────────────────────────────────────────────────
