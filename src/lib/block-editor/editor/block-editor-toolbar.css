@@ -19,8 +19,13 @@
   position: relative;
 }
 
-.text-editor-toolbar button:hover {
+.text-editor-toolbar button:hover:not(:disabled) {
   background: var(--toolbar-btn-hover-bg);
+}
+
+.text-editor-toolbar button:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .text-editor-toolbar button.is-active {

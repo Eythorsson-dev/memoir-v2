@@ -2,7 +2,7 @@ import { type InlineTypes, type InlineDtoMap } from '../text/text'
 import { Blocks } from '../blocks/blocks'
 import { BlockEditor } from './BlockEditor'
 import type { BlockEditorEventDtoMap, BlockEditorOptions } from './events'
-import { createElement, Bold, Italic, Underline, IndentIncrease, IndentDecrease } from 'lucide'
+import { createElement, Bold, Italic, Underline, IndentIncrease, IndentDecrease, Undo2, Redo2 } from 'lucide'
 import './block-editor-toolbar.css'
 
 function addTooltip(btn: HTMLButtonElement, label: string, shortcut?: string): void {
@@ -27,6 +27,8 @@ export class BlockEditorWithToolbar {
   #inlineButtons: Record<InlineTypes, HTMLButtonElement>
   #indentBtn: HTMLButtonElement
   #outdentBtn: HTMLButtonElement
+  #undoBtn: HTMLButtonElement
+  #redoBtn: HTMLButtonElement
   #unsubscribeSelection: () => void
 
   constructor(container: HTMLElement, initial?: Blocks, opts: BlockEditorOptions = {}) {
@@ -39,6 +41,28 @@ export class BlockEditorWithToolbar {
       { type: 'Italic', icon: Italic, shortcut: '⌘I' },
       { type: 'Underline', icon: Underline, shortcut: '⌘U' },
     ] satisfies { type: keyof InlineDtoMap; icon: Parameters<typeof createElement>[0]; shortcut: string }[]
+
+    this.#undoBtn = document.createElement('button')
+    this.#undoBtn.appendChild(createElement(Undo2))
+    this.#undoBtn.ariaLabel = 'Undo'
+    addTooltip(this.#undoBtn, 'Undo', '⌘Z')
+    this.#undoBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      this.#editor.undo()
+      this.#updateUndoRedo()
+    })
+    this.#toolbar.appendChild(this.#undoBtn)
+
+    this.#redoBtn = document.createElement('button')
+    this.#redoBtn.appendChild(createElement(Redo2))
+    this.#redoBtn.ariaLabel = 'Redo'
+    addTooltip(this.#redoBtn, 'Redo', '⌘⇧Z')
+    this.#redoBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      this.#editor.redo()
+      this.#updateUndoRedo()
+    })
+    this.#toolbar.appendChild(this.#redoBtn)
 
     this.#inlineButtons = {} as Record<InlineTypes, HTMLButtonElement>
     for (const { type, icon, shortcut } of inlineDefs) {
@@ -81,11 +105,14 @@ export class BlockEditorWithToolbar {
 
     this.#editor = new BlockEditor(container, initial, opts)
 
+    this.#updateUndoRedo()
+
     // Update toolbar active state on selection change
     this.#unsubscribeSelection = this.#editor.addEventListener('selectionChange', () => {
       for (const type of Object.keys(this.#inlineButtons) as InlineTypes[]) {
         this.#inlineButtons[type].classList.toggle('is-active', this.#editor.isInlineActive(type))
       }
+      this.#updateUndoRedo()
     })
   }
 
@@ -102,6 +129,11 @@ export class BlockEditorWithToolbar {
     handler: (payload: BlockEditorEventDtoMap[K]) => void,
   ): () => void {
     return this.#editor.addEventListener(event, handler)
+  }
+
+  #updateUndoRedo(): void {
+    this.#undoBtn.disabled = !this.#editor.canUndo()
+    this.#redoBtn.disabled = !this.#editor.canRedo()
   }
 
   destroy(): void {
