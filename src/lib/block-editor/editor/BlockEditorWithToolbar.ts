@@ -35,6 +35,8 @@ export class BlockEditorWithToolbar {
     // Build toolbar
     this.#toolbar = document.createElement('div')
     this.#toolbar.className = 'text-editor-toolbar'
+    this.#toolbar.role = 'toolbar'
+    this.#toolbar.setAttribute('aria-label', 'Text formatting')
 
     const inlineDefs: { type: InlineTypes; icon: Parameters<typeof createElement>[0]; shortcut: string }[] = [
       { type: 'Bold', icon: Bold, shortcut: '⌘B' },
@@ -64,11 +66,17 @@ export class BlockEditorWithToolbar {
     })
     this.#toolbar.appendChild(this.#redoBtn)
 
+    const sep1 = document.createElement('div')
+    sep1.className = 'toolbar-separator'
+    sep1.setAttribute('aria-hidden', 'true')
+    this.#toolbar.appendChild(sep1)
+
     this.#inlineButtons = {} as Record<InlineTypes, HTMLButtonElement>
     for (const { type, icon, shortcut } of inlineDefs) {
       const btn = document.createElement('button')
       btn.appendChild(createElement(icon))
       btn.ariaLabel = type
+      btn.setAttribute('aria-pressed', 'false')
       btn.dataset.inlineType = type
       addTooltip(btn, type, shortcut)
       btn.addEventListener('mousedown', (e) => {
@@ -79,10 +87,14 @@ export class BlockEditorWithToolbar {
       this.#inlineButtons[type] = btn
     }
 
+    const sep2 = document.createElement('div')
+    sep2.className = 'toolbar-separator'
+    sep2.setAttribute('aria-hidden', 'true')
+    this.#toolbar.appendChild(sep2)
+
     this.#indentBtn = document.createElement('button')
     this.#indentBtn.appendChild(createElement(IndentIncrease))
-    this.#indentBtn.ariaLabel = 'Indent'
-    this.#indentBtn.title = 'Indent'
+    this.#indentBtn.setAttribute('aria-label', 'Indent')
     addTooltip(this.#indentBtn, 'Indent', 'Tab')
     this.#indentBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -92,8 +104,7 @@ export class BlockEditorWithToolbar {
 
     this.#outdentBtn = document.createElement('button')
     this.#outdentBtn.appendChild(createElement(IndentDecrease))
-    this.#outdentBtn.ariaLabel = 'Outdent'
-    this.#outdentBtn.title = 'Outdent'
+    this.#outdentBtn.setAttribute('aria-label', 'Outdent')
     addTooltip(this.#outdentBtn, 'Outdent', '⇧Tab')
     this.#outdentBtn.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -110,7 +121,9 @@ export class BlockEditorWithToolbar {
     // Update toolbar active state on selection change
     this.#unsubscribeSelection = this.#editor.addEventListener('selectionChange', () => {
       for (const type of Object.keys(this.#inlineButtons) as InlineTypes[]) {
-        this.#inlineButtons[type].classList.toggle('is-active', this.#editor.isInlineActive(type))
+        const active = this.#editor.isInlineActive(type)
+        this.#inlineButtons[type].classList.toggle('is-active', active)
+        this.#inlineButtons[type].setAttribute('aria-pressed', String(active))
       }
       this.#updateUndoRedo()
     })

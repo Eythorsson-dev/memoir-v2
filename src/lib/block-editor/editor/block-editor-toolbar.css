@@ -19,8 +19,21 @@
   position: relative;
 }
 
+.text-editor-toolbar .toolbar-separator {
+  width: 1px;
+  height: 16px;
+  background: var(--toolbar-separator-color, currentColor);
+  opacity: 0.2;
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
 .text-editor-toolbar button:hover:not(:disabled) {
   background: var(--toolbar-btn-hover-bg);
+}
+
+.text-editor-toolbar button:active:not(:disabled) {
+  background: var(--toolbar-btn-active-bg);
 }
 
 .text-editor-toolbar button:disabled {
