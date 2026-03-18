@@ -1244,22 +1244,26 @@ describe('Blocks.fromEvents', () => {
     expect(preorder(result)).toEqual(['a'])
   })
 
-  it('BlockRemoved removes parent and its children (deleteSubtree)', () => {
+  it('BlockRemoved removes parent after children are removed first', () => {
     const base = Blocks.from([dto('a', '', [dto('b'), dto('c')]), dto('d')])
     const result = Blocks.fromEvents(base, [
+      new BlockRemoved('b'),
+      new BlockRemoved('c'),
       new BlockRemoved('a'),
     ])
     expect(preorder(result)).toEqual(['d'])
   })
 
-  it('BlockRemoved skips already-removed blocks', () => {
+  it('BlockRemoved throws if children have not been removed first', () => {
+    const base = Blocks.from([dto('a', '', [dto('b'), dto('c')]), dto('d')])
+    expect(() => Blocks.fromEvents(base, [new BlockRemoved('a')])).toThrow()
+  })
+
+  it('BlockRemoved throws if block is not found', () => {
     const base = Blocks.from([dto('a'), dto('b')])
-    // removing 'b' twice should not throw
-    const result = Blocks.fromEvents(base, [
-      new BlockRemoved('b'),
-      new BlockRemoved('b'),
-    ])
-    expect(preorder(result)).toEqual(['a'])
+    expect(() =>
+      Blocks.fromEvents(base, [new BlockRemoved('b'), new BlockRemoved('b')])
+    ).toThrow()
   })
 
   it('BlockMoved changes block position via parent indent patch', () => {
@@ -1294,9 +1298,8 @@ describe('Blocks.fromEvents', () => {
     expect(result.getBlock('a').data.text).toBe('second')
   })
 
-  it('deleteSubtree: throws if last block would be removed', () => {
-    const base = Blocks.from([dto('a', '', [dto('b')])])
-    // Removing 'a' (only root) should throw
+  it('BlockRemoved throws if removing the last block', () => {
+    const base = Blocks.from([dto('a')])
     expect(() => Blocks.fromEvents(base, [new BlockRemoved('a')])).toThrow()
   })
 })

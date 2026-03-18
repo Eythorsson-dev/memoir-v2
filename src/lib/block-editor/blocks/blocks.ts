@@ -606,25 +606,6 @@ export class Blocks {
 
   // ─── Private helpers ──────────────────────────────────────────────────────────
 
-  /**
-   * Removes the block identified by `id` and all its descendants in one step.
-   * @throws if the block is not found.
-   * @throws if the result would be empty (via constructor).
-   */
-  #deleteSubtree(id: BlockId): Blocks {
-    const idx = this.#blocks.findIndex(b => b.id === id)
-    if (idx === -1) throw new Error(`Block not found: ${id}`)
-    const targetIndent = this.#blocks[idx].indent
-    let end = idx + 1
-    while (end < this.#blocks.length && this.#blocks[end].indent > targetIndent) {
-      end++
-    }
-    return new Blocks([
-      ...this.#blocks.slice(0, idx),
-      ...this.#blocks.slice(end),
-    ])
-  }
-
   // ─── Static helpers ───────────────────────────────────────────────────────────
 
   /**
@@ -647,11 +628,7 @@ export class Blocks {
           state = state.addBefore(state.#blocks[0].id, { id: change.id, data })
         }
       } else if (change instanceof BlockRemoved) {
-        const idx = state.#blocks.findIndex(b => b.id === change.id)
-        if (idx !== -1) {
-          state = state.#deleteSubtree(change.id)
-        }
-        // if not found, already removed — skip
+        state = state.delete(change.id)
       } else if (change instanceof BlockMoved) {
         // Determine target indent from the new position context
         const idx = state.#blocks.findIndex(b => b.id === change.id)
