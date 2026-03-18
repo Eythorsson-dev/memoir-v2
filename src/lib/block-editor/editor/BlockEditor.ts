@@ -101,6 +101,7 @@ export class BlockEditor {
    * #handleInput is a no-op while composing, then fires once on compositionend.
    */
   #composing = false
+  #pendingSelectionBefore: BlockSelection | null = null
 
   #onSelectionChange = (): void => {
     if (document.activeElement === this.#editable) {
@@ -141,6 +142,7 @@ export class BlockEditor {
     this.#editable.addEventListener('compositionstart', () => {
       // If there is a multi-block selection, delete it before composition starts
       const sel = this.#getSelection()
+      this.#pendingSelectionBefore = sel
       if (sel instanceof BlockRange) {
         const cursor = this.#deleteRange(sel)
         this.#render(cursor)
@@ -183,6 +185,7 @@ export class BlockEditor {
   indent(): void {
     const sel = this.#getSelection()
     if (!sel) return
+    this.#pendingSelectionBefore = sel
     const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
     const toId = sel instanceof BlockRange ? sel.end.blockId : sel.blockId
     const oldState = this.#state
@@ -195,6 +198,7 @@ export class BlockEditor {
   outdent(): void {
     const sel = this.#getSelection()
     if (!sel) return
+    this.#pendingSelectionBefore = sel
     const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
     const toId = sel instanceof BlockRange ? sel.end.blockId : sel.blockId
     const oldState = this.#state
@@ -260,16 +264,18 @@ export class BlockEditor {
 
   undo(): void {
     if (!this.#history.canUndo()) return
-    this.#state = this.#history.undo()
+    const { blocks, selection } = this.#history.undo()
+    this.#state = blocks
     this.#emitter.cancelAll()
-    this.#render()
+    this.#render(selection ?? undefined)
   }
 
   redo(): void {
     if (!this.#history.canRedo()) return
-    this.#state = this.#history.redo()
+    const { blocks, selection } = this.#history.redo()
+    this.#state = blocks
     this.#emitter.cancelAll()
-    this.#render()
+    this.#render(selection ?? undefined)
   }
 
   destroy(): void {
@@ -283,7 +289,11 @@ export class BlockEditor {
 
   #emitEvents(oldState: Blocks): void {
     const changes = Blocks.diff(oldState, this.#state)
-    if (changes.length > 0) this.#history.add(changes)
+    if (changes.length > 0) {
+      const selAfter = this.#getSelection()
+      this.#history.add(changes, this.#pendingSelectionBefore, selAfter)
+    }
+    this.#pendingSelectionBefore = null
     this.#emitter.cancelAll()
 
     // Emit in a stable semantic order: dataChanged → added → removed → moved
@@ -423,6 +433,7 @@ export class BlockEditor {
     }
 
     const sel = this.#getSelection()
+    this.#pendingSelectionBefore = sel
 
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -523,7 +534,8 @@ export class BlockEditor {
     const pEl = getBlockElementContent(blockEl)
     const newText = textSerializer.parse(Array.from(pEl.childNodes))
     this.#state = this.#state.update(blockId, newText)
-    this.#history.updateOrAdd(blockId, new BlockDataChanged(blockId, newText.toJSON()))
+    this.#history.updateOrAdd(blockId, new BlockDataChanged(blockId, newText.toJSON()), this.#pendingSelectionBefore, sel)
+    this.#pendingSelectionBefore = null
     this.#render(sel)
     this.#emitter.scheduleDataUpdated(blockId)
   }
