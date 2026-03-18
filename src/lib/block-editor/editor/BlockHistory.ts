@@ -1,10 +1,17 @@
 import { Blocks, type BlockId, BlockDataChanged, type BlocksChange } from '../blocks/blocks'
+import type { BlockSelection } from './events'
+
+interface Entry {
+  changes:         BlocksChange[]
+  selectionBefore: BlockSelection | null
+  selectionAfter:  BlockSelection | null
+}
 
 export class BlockHistory {
   static readonly MAX_DEPTH = 100
 
   #base: Blocks
-  #transactions: BlocksChange[][] = []
+  #transactions: Entry[] = []
   #pointer = 0
 
   constructor(base: Blocks) {
@@ -19,22 +26,24 @@ export class BlockHistory {
     return this.#pointer < this.#transactions.length
   }
 
-  undo(): Blocks {
+  undo(): { blocks: Blocks; selection: BlockSelection | null } {
     if (!this.canUndo()) throw new Error('Nothing to undo')
+    const entry = this.#transactions[this.#pointer - 1]
     this.#pointer--
-    return Blocks.fromEvents(this.#base, this.events)
+    return { blocks: Blocks.fromEvents(this.#base, this.events), selection: entry.selectionBefore }
   }
 
-  redo(): Blocks {
+  redo(): { blocks: Blocks; selection: BlockSelection | null } {
     if (!this.canRedo()) throw new Error('Nothing to redo')
+    const entry = this.#transactions[this.#pointer]
     this.#pointer++
-    return Blocks.fromEvents(this.#base, this.events)
+    return { blocks: Blocks.fromEvents(this.#base, this.events), selection: entry.selectionAfter }
   }
 
-  add(changes: BlocksChange[]): void {
+  add(changes: BlocksChange[], selectionBefore: BlockSelection | null, selectionAfter: BlockSelection | null): void {
     // Clear redo stack
     this.#transactions.splice(this.#pointer)
-    this.#transactions.push(changes)
+    this.#transactions.push({ changes, selectionBefore, selectionAfter })
     this.#pointer++
     // Cap at MAX_DEPTH
     if (this.#transactions.length > BlockHistory.MAX_DEPTH) {
@@ -44,24 +53,32 @@ export class BlockHistory {
   }
 
   get events(): readonly BlocksChange[] {
-    return this.#transactions.slice(0, this.#pointer).flat()
+    return this.#transactions.slice(0, this.#pointer).flatMap(e => e.changes)
   }
 
   /**
    * If the last transaction is a single `BlockDataChanged` for `blockId`,
    * replace it in-place (text edit coalescing). Otherwise add a new transaction.
+   *
+   * When coalescing: preserves the original `selectionBefore` (burst-start caret)
+   * and updates `selectionAfter` to the latest position.
    */
-  updateOrAdd(blockId: BlockId, change: BlockDataChanged): void {
+  updateOrAdd(blockId: BlockId, change: BlockDataChanged, selectionBefore: BlockSelection | null, selectionAfter: BlockSelection | null): void {
     const lastTx = this.#pointer > 0 ? this.#transactions[this.#pointer - 1] : null
     if (
       lastTx !== null &&
-      lastTx.length === 1 &&
-      lastTx[0] instanceof BlockDataChanged &&
-      lastTx[0].id === blockId
+      lastTx.changes.length === 1 &&
+      lastTx.changes[0] instanceof BlockDataChanged &&
+      lastTx.changes[0].id === blockId
     ) {
-      this.#transactions[this.#pointer - 1] = [change]
+      // Coalesce: preserve original selectionBefore, update selectionAfter
+      this.#transactions[this.#pointer - 1] = {
+        changes: [change],
+        selectionBefore: lastTx.selectionBefore,
+        selectionAfter,
+      }
     } else {
-      this.add([change])
+      this.add([change], selectionBefore, selectionAfter)
     }
   }
 }
