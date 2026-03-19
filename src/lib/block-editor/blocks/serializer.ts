@@ -1,6 +1,5 @@
 import { type Serializer } from '../serializer'
 import { Blocks, Block, type BlockId } from './blocks'
-import { Text, type InlineDto } from '../text/text'
 import { textSerializer } from '../text/serializer'
 
 // ─── Render ───────────────────────────────────────────────────────────────────
@@ -11,7 +10,7 @@ function renderBlock(block: Block): Element {
   div.id = block.id
 
   const p = document.createElement('p')
-  const text = new Text(block.data.text, [...block.data.inline] as InlineDto[])
+  const text = block.data
   if (text.text.length === 0) {
     p.appendChild(document.createElement('br'))
   } else {
@@ -82,7 +81,7 @@ function parseBlock(el: Element): Block {
     }
   }
 
-  return new Block(id, data.toJSON(), children)
+  return new Block(id, data, children)
 }
 
 function parse(nodes: Node[]): Blocks {

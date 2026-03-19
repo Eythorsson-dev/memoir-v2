@@ -7,7 +7,7 @@ export type BlockId = string
 export class Block {
   constructor(
     readonly id: BlockId,
-    readonly data: TextDto,
+    readonly data: Text,
     readonly children: ReadonlyArray<Block>,
   ) {
     Object.freeze(this)
@@ -147,7 +147,7 @@ function clampPass(blocks: FlatBlock[]): FlatBlock[] {
 
 function dtoToFlat(dtos: ReadonlyArray<Block>, depth = 0, result: FlatBlock[] = []): FlatBlock[] {
   for (const dto of dtos) {
-    result.push(new FlatBlock(dto.id, new Text(dto.data.text, [...dto.data.inline] as InlineDto[]), depth))
+    result.push(new FlatBlock(dto.id, dto.data, depth))
     dtoToFlat(dto.children, depth + 1, result)
   }
   return result
@@ -156,7 +156,7 @@ function dtoToFlat(dtos: ReadonlyArray<Block>, depth = 0, result: FlatBlock[] = 
 // ─── FlatBlock → Block (tree DTO) conversion ──────────────────────────────────
 
 function flatToDto(blocks: ReadonlyArray<FlatBlock>): ReadonlyArray<Block> {
-  type MutableBlock = { id: BlockId; data: TextDto; children: MutableBlock[] }
+  type MutableBlock = { id: BlockId; data: Text; children: MutableBlock[] }
 
   const roots: MutableBlock[] = []
   const stack: Array<{ node: MutableBlock; indent: number }> = []
@@ -164,7 +164,7 @@ function flatToDto(blocks: ReadonlyArray<FlatBlock>): ReadonlyArray<Block> {
   for (const block of blocks) {
     const node: MutableBlock = {
       id: block.id,
-      data: { text: block.data.text, inline: [...block.data.inline] as InlineDto[] },
+      data: block.data,
       children: [],
     }
     while (stack.length > 0 && stack[stack.length - 1].indent >= block.indent) {
@@ -217,10 +217,10 @@ export class Blocks {
    * All code that constructs new blocks should use this method so that
    * ID generation is centralised.
    */
-  static createBlock(data?: TextDto, children?: ReadonlyArray<Block>): Block {
+  static createBlock(data?: Text, children?: ReadonlyArray<Block>): Block {
     return new Block(
       crypto.randomUUID(),
-      data ?? { text: '', inline: [] },
+      data ?? new Text('', []),
       children ?? [],
     )
   }
@@ -363,7 +363,7 @@ export class Blocks {
         const newParent = newBlocks.parent(b.id)
         changes.push(new BlockAdded(
           b.id,
-          { text: b.data.text, inline: [...b.data.inline] as InlineDto[] },
+          b.data,
           newPrev,
           newParent,
         ))
@@ -382,7 +382,7 @@ export class Blocks {
       if (!oldData.equals(b.data)) {
         changes.push(new BlockDataChanged(
           b.id,
-          { text: b.data.text, inline: [...b.data.inline] as InlineDto[] },
+          b.data,
         ))
       }
     }
