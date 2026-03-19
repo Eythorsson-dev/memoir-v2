@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { Blocks, Block, BlockEditorWithToolbar, BLOCK_EDITOR_EVENT_NAMES } from "$lib/block-editor";
+    import { Blocks, Block, Text, BlockEditorWithToolbar, BLOCK_EDITOR_EVENT_NAMES } from "$lib/block-editor";
     import type { BlockSelection, BlockEditorEventDtoMap } from "$lib/block-editor";
     import ResizableLayout from "../components/resizable-layout.svelte";
     import CollapsibleSection from "../components/collapsible-section.svelte";
@@ -26,11 +26,8 @@
         Blocks.from([
             new Block(
                 "b1",
-                {
-                    text: "Hello world!",
-                    inline: [{ type: "Bold", start: 0, end: 5 }],
-                },
-                [new Block("b2", { text: "Nested block", inline: [] }, [])],
+                new Text("Hello world!", [{ type: "Bold", start: 0, end: 5 }]),
+                [new Block("b2", new Text("Nested block", []), [])],
             ),
         ]);
 
