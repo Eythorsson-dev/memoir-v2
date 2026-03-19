@@ -10,7 +10,7 @@ const worldText = new Text('World', [])
 
 /** Build a Block (tree format) for use with Blocks.from */
 function dto(id: string, text = '', children: Block[] = []): Block {
-  return new Block(id, { text, inline: [] }, children)
+  return new Block(id, new Text(text, []), children)
 }
 
 /** Build a block arg for use with mutation methods (addBefore, addAfter, etc.) */
@@ -92,7 +92,7 @@ describe('Blocks.from', () => {
   })
 
   it('throws if block id is empty string', () => {
-    expect(() => Blocks.from([new Block('', { text: '', inline: [] }, [])])).toThrow()
+    expect(() => Blocks.from([new Block('', new Text('', []), [])])).toThrow()
   })
 })
 
@@ -580,12 +580,12 @@ describe('delete', () => {
 
 describe('Block.getLength', () => {
   it('returns the text length of the block data', () => {
-    const b = new Block('a', { text: 'Hello', inline: [] }, [])
+    const b = new Block('a', new Text('Hello', []), [])
     expect(b.getLength()).toBe(5)
   })
 
   it('returns 0 for empty text', () => {
-    const b = new Block('a', { text: '', inline: [] }, [])
+    const b = new Block('a', new Text('', []), [])
     expect(b.getLength()).toBe(0)
   })
 })
@@ -606,7 +606,7 @@ describe('Blocks.createBlock', () => {
   })
 
   it('uses the provided data', () => {
-    const b = Blocks.createBlock({ text: 'Hello', inline: [] })
+    const b = Blocks.createBlock(new Text('Hello', []))
     expect(b.data.text).toBe('Hello')
   })
 
@@ -1181,7 +1181,7 @@ describe('BlockOffset', () => {
 
 describe('value objects are frozen', () => {
   it('Block is frozen', () => {
-    const b = new Block('a', { text: '', inline: [] }, [])
+    const b = new Block('a', new Text('', []), [])
     expect(() => { (b as any).id = 'z' }).toThrow(TypeError)
   })
   it('BlockOffset is frozen', () => {

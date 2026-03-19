@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { BlockEditor } from './BlockEditor'
 import { BlockEditorWithToolbar } from './BlockEditorWithToolbar'
 import { Blocks, Block } from '../blocks/blocks'
-import { type InlineTypes } from '../text/text'
+import { Text, type InlineTypes } from '../text/text'
 import { BLOCK_EDITOR_EVENT_NAMES } from './events'
 import type { BlockDataUpdatedEventDto } from './events'
 
@@ -20,7 +20,7 @@ function cleanup(editor: BlockEditor | BlockEditorWithToolbar, container: HTMLEl
 }
 
 function dto(id: string, text = '', children: Block[] = []): Block {
-  return new Block(id, { text, inline: [] }, children)
+  return new Block(id, new Text(text, []), children)
 }
 
 /** Get the block-editor-editable div from a container */
@@ -977,7 +977,7 @@ describe('isInlineActive', () => {
   it('returns true when format is active on selection', () => {
     const container = makeContainer()
     const initial = Blocks.from([
-      new Block('a', { text: 'Hello', inline: [{ type: 'Bold', start: 0, end: 5 }] }, []),
+      new Block('a', new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }]), []),
     ])
     const editor = new BlockEditor(container, initial)
     getEditable(container).focus()

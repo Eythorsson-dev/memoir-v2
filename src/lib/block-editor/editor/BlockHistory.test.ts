@@ -6,7 +6,7 @@ import { Text } from '../text/text'
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function dto(id: string, text = '', children: Block[] = []): Block {
-  return new Block(id, { text, inline: [] }, children)
+  return new Block(id, new Text(text, []), children)
 }
 
 function makeBlocks(...ids: string[]): Blocks {
