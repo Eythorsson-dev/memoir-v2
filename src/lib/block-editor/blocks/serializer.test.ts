@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { blocksSerializer } from './serializer'
 import { Blocks, Block } from './blocks'
+import { Text } from '../text/text'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -11,7 +12,7 @@ function nodesToHtml(nodes: Node[]): string {
 }
 
 function dto(id: string, text = '', children: Block[] = []): Block {
-  return new Block(id, { text, inline: [] }, children)
+  return new Block(id, new Text(text, []), children)
 }
 
 // ─── render ───────────────────────────────────────────────────────────────────
@@ -49,10 +50,10 @@ describe('blocksSerializer.render', () => {
 
   it('renders the plan example correctly', () => {
     const blocks = Blocks.from([
-      new Block('block-1', { text: 'Hello World', inline: [] }, [
-        new Block('block-2', { text: 'This is a test', inline: [] }, []),
+      new Block('block-1', new Text('Hello World', []), [
+        new Block('block-2', new Text('This is a test', []), []),
       ]),
-      new Block('block-3', { text: 'This is another', inline: [] }, []),
+      new Block('block-3', new Text('This is another', []), []),
     ])
     const html = nodesToHtml(blocksSerializer.render(blocks))
     expect(html).toBe(
@@ -64,7 +65,7 @@ describe('blocksSerializer.render', () => {
 
   it('renders inline formatting inside <p>', () => {
     const blocks = Blocks.from([
-      new Block('b1', { text: 'Hello', inline: [{ type: 'Bold', start: 0, end: 5 }] }, []),
+      new Block('b1', new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }]), []),
     ])
     const html = nodesToHtml(blocksSerializer.render(blocks))
     expect(html).toBe('<div class="block" id="b1"><p><strong>Hello</strong></p></div>')
@@ -218,16 +219,16 @@ describe('roundtrip: parse(render(blocks)) === blocks', () => {
 
   it('plan example roundtrip', () => {
     roundtrip(Blocks.from([
-      new Block('block-1', { text: 'Hello World', inline: [] }, [
-        new Block('block-2', { text: 'This is a test', inline: [] }, []),
+      new Block('block-1', new Text('Hello World', []), [
+        new Block('block-2', new Text('This is a test', []), []),
       ]),
-      new Block('block-3', { text: 'This is another', inline: [] }, []),
+      new Block('block-3', new Text('This is another', []), []),
     ]))
   })
 
   it('block with inline formatting roundtrip', () => {
     roundtrip(Blocks.from([
-      new Block('b1', { text: 'Hello World', inline: [{ type: 'Bold', start: 0, end: 5 }] }, []),
+      new Block('b1', new Text('Hello World', [{ type: 'Bold', start: 0, end: 5 }]), []),
     ]))
   })
 
