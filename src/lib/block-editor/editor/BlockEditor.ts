@@ -1,4 +1,4 @@
-import { Text, type InlineTypes, type InlineDto } from '../text/text'
+import { Text, type InlineTypes } from '../text/text'
 import { textSerializer } from '../text/serializer'
 import { Blocks, type BlockId, type BlocksChange, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved } from '../blocks/blocks'
 import { blocksSerializer } from '../blocks/serializer'
@@ -226,7 +226,7 @@ export class BlockEditor {
     }
 
     const block = this.#state.getBlock(blockId)
-    const text = new Text(block.data.text, [...block.data.inline] as InlineDto[])
+    const text = block.data
     if (start >= end || end > text.text.length) return
 
     const toggled = text.isToggled(type, start, end)
@@ -252,8 +252,7 @@ export class BlockEditor {
     if (start >= end || end > block.data.text.length) return false
 
     try {
-      const text = new Text(block.data.text, [...block.data.inline] as InlineDto[])
-      return text.isToggled(type, start, end)
+      return block.data.isToggled(type, start, end)
     } catch {
       return false
     }
@@ -519,7 +518,7 @@ export class BlockEditor {
       e.preventDefault()
       const cursor = this.#deleteRange(sel)
       const block = this.#state.getBlock(cursor.blockId)
-      const text = new Text(block.data.text, [...block.data.inline] as InlineDto[])
+      const text = block.data
       const newText = insertChar(text, cursor.offset, e.key)
       const newCursor = new BlockOffset(cursor.blockId, cursor.offset + 1)
       this.#state = this.#state.update(cursor.blockId, newText)
@@ -545,7 +544,7 @@ export class BlockEditor {
     const pEl = getBlockElementContent(blockEl)
     const newText = textSerializer.parse(Array.from(pEl.childNodes))
     this.#state = this.#state.update(blockId, newText)
-    this.#history.updateOrAdd(blockId, new BlockDataChanged(blockId, newText.toJSON()), this.#pendingSelectionBefore, sel)
+    this.#history.updateOrAdd(blockId, new BlockDataChanged(blockId, newText), this.#pendingSelectionBefore, sel)
     this.#pendingSelectionBefore = null
     this.#render(sel)
     this.#emitter.scheduleDataUpdated(blockId)
@@ -610,7 +609,7 @@ export class BlockEditor {
   #deleteRange(sel: BlockRange): BlockOffset {
     if (sel.start.blockId === sel.end.blockId) {
       const block = this.#state.getBlock(sel.start.blockId)
-      const text = new Text(block.data.text, [...block.data.inline] as InlineDto[])
+      const text = block.data
       const length = sel.end.offset - sel.start.offset
       const newText = text.remove(sel.start.offset, length)
       const oldState = this.#state

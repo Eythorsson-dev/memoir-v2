@@ -11,4 +11,5 @@ export type {
   BlockMovedEventDto,
   BlockSelection,
 } from "./editor/events"
+export { Text } from "./text/text"
 export type { TextDto } from "./text/text"
