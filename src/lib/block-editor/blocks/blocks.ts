@@ -23,6 +23,9 @@ export class Block {
 }
 
 export class BlockOffset {
+  /**
+   * @throws {Error} if `blockId` is empty or `offset` is negative.
+   */
   constructor(
     readonly blockId: BlockId,
     readonly offset: number,
@@ -34,6 +37,9 @@ export class BlockOffset {
 }
 
 export class BlockRange {
+  /**
+   * @throws {Error} if `start` and `end` describe the same position (collapsed range).
+   */
   constructor(
     readonly start: BlockOffset,
     readonly end: BlockOffset,
@@ -201,6 +207,7 @@ export class Blocks {
     Object.freeze(this)
   }
 
+  /** Creates a `Blocks` instance from an array of tree-structured `Block` DTOs. */
   static from(dtos: ReadonlyArray<Block>): Blocks {
     return new Blocks(dtoToFlat(dtos))
   }
@@ -224,7 +231,10 @@ export class Blocks {
 
   // ─── Navigation ──────────────────────────────────────────────────────────────
 
-  /** Returns the Block DTO (with full subtree) for the given id. */
+  /**
+   * Returns the Block DTO (with full subtree) for the given id.
+   * @throws {Error} if no block with `id` exists.
+   */
   getBlock(id: BlockId): Block {
     function search(blocks: ReadonlyArray<Block>): Block | undefined {
       for (const b of blocks) {
@@ -238,14 +248,20 @@ export class Blocks {
     return result
   }
 
-  /** Returns the ID immediately before `id` in pre-order flat sequence, or null if first. */
+  /**
+   * Returns the ID immediately before `id` in pre-order flat sequence, or null if first.
+   * @throws {Error} if no block with `id` exists.
+   */
   previousBlockId(id: BlockId): BlockId | null {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`Block not found: ${id}`)
     return idx === 0 ? null : this.#blocks[idx - 1].id
   }
 
-  /** Returns the ID immediately after `id` in pre-order flat sequence, or null if last. */
+  /**
+   * Returns the ID immediately after `id` in pre-order flat sequence, or null if last.
+   * @throws {Error} if no block with `id` exists.
+   */
   nextBlockId(id: BlockId): BlockId | null {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`Block not found: ${id}`)
@@ -255,6 +271,7 @@ export class Blocks {
   /**
    * Returns the first block after the entire subtree of `id` whose indent ≤ indent(id).
    * i.e. the next sibling, or parent's next sibling, etc. Returns null if none exists.
+   * @throws {Error} if no block with `id` exists.
    */
   nextSiblingOrNextAscendantSiblingId(id: BlockId): BlockId | null {
     const idx = this.#blocks.findIndex(b => b.id === id)
@@ -266,14 +283,20 @@ export class Blocks {
     return null
   }
 
-  /** Returns true if the block immediately after `id` in flat order has indent > indent(id). */
+  /**
+   * Returns true if the block immediately after `id` in flat order has indent > indent(id).
+   * @throws {Error} if no block with `id` exists.
+   */
   hasChildren(id: BlockId): boolean {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`Block not found: ${id}`)
     return idx + 1 < this.#blocks.length && this.#blocks[idx + 1].indent > this.#blocks[idx].indent
   }
 
-  /** Returns the parent block's ID, or null if the block is at the root level. */
+  /**
+   * Returns the parent block's ID, or null if the block is at the root level.
+   * @throws {Error} if no block with `id` exists.
+   */
   parent(id: BlockId): BlockId | null {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`Block not found: ${id}`)
@@ -285,7 +308,10 @@ export class Blocks {
     return null
   }
 
-  /** Returns the previous sibling's ID, or null if this is the first child. */
+  /**
+   * Returns the previous sibling's ID, or null if this is the first child.
+   * @throws {Error} if no block with `id` exists.
+   */
   prevSibling(id: BlockId): BlockId | null {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`Block not found: ${id}`)
@@ -297,7 +323,10 @@ export class Blocks {
     return null
   }
 
-  /** Returns the next sibling's ID, or null if this is the last child. */
+  /**
+   * Returns the next sibling's ID, or null if this is the last child.
+   * @throws {Error} if no block with `id` exists.
+   */
   nextSibling(id: BlockId): BlockId | null {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`Block not found: ${id}`)

@@ -280,6 +280,11 @@ export class BlockEditor {
     this.#dispatchChanges(Blocks.diff(oldState, this.#state))
   }
 
+  /**
+   * Removes the editor DOM from the page and detaches the global
+   * `document` `selectionchange` listener added in the constructor.
+   * Flushes any pending debounced events before tearing down.
+   */
   destroy(): void {
     this.#emitter.flushAll()
     this.#emitter.cancelAll()
