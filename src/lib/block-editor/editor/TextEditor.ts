@@ -138,6 +138,7 @@ export class TextEditor {
     return () => this.#listeners.delete(cb)
   }
 
+  /** Removes the toolbar and editable DOM elements from the page. */
   destroy(): void {
     this.#toolbar.remove()
     this.#editable.remove()

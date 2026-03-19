@@ -149,6 +149,10 @@ export class BlockEditorWithToolbar {
     this.#redoBtn.disabled = !this.#editor.canRedo()
   }
 
+  /**
+   * Removes the toolbar and editor DOM from the page, unsubscribes from
+   * selection events, and delegates to the inner editor's `destroy()`.
+   */
   destroy(): void {
     this.#unsubscribeSelection()
     this.#toolbar.remove()

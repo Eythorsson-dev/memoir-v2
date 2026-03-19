@@ -188,22 +188,6 @@ export class Text implements TextDto {
   }
 
   /**
-   * Returns a new `Text` with the given inline type removed from `[start, end)`.
-   *
-   * Only the `inline` array is affected — the `text` string is never modified.
-   * For each existing same-type inline that overlaps the remove range:
-   * - The portion **inside** the range is discarded.
-   * - The portion(s) **outside** the range are preserved as separate inlines.
-   * Inlines of other types, and non-overlapping inlines of the same type,
-   * are left unchanged.
-   *
-   * @param type - The inline type to remove.
-   * @param start - Inclusive start of the remove range (>= 0).
-   * @param end - Exclusive end of the remove range (> start, <= text.length).
-   * @returns A new `Text` instance; the original is not mutated.
-   * @throws {RangeError} if `start < 0`, `end <= start`, or `end > text.length`.
-   */
-  /**
    * Splits the Text at the given character offset into two new `Text` instances.
    *
    * - An inline entirely left of offset (`end <= offset`) goes to the left half unchanged.
@@ -299,6 +283,22 @@ export class Text implements TextDto {
     return result
   }
 
+  /**
+   * Returns a new `Text` with the given inline type removed from `[start, end)`.
+   *
+   * Only the `inline` array is affected — the `text` string is never modified.
+   * For each existing same-type inline that overlaps the remove range:
+   * - The portion **inside** the range is discarded.
+   * - The portion(s) **outside** the range are preserved as separate inlines.
+   * Inlines of other types, and non-overlapping inlines of the same type,
+   * are left unchanged.
+   *
+   * @param type - The inline type to remove.
+   * @param start - Inclusive start of the remove range (>= 0).
+   * @param end - Exclusive end of the remove range (> start, <= text.length).
+   * @returns A new `Text` instance; the original is not mutated.
+   * @throws {RangeError} if `start < 0`, `end <= start`, or `end > text.length`.
+   */
   removeInline(type: InlineTypes, start: number, end: number): Text {
     validateRange(start, end, this.text.length)
 
