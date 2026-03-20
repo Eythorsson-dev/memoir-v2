@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { BlockEventEmitter } from './BlockEventEmitter'
+import { Text } from '../text/text'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function makeEmitter(debounceMs = 1000, maxWaitMs = 10000): BlockEventEmitter {
   return new BlockEventEmitter(
-    (id) => ({ id, data: { text: 'test', inline: [] } }),
+    (id) => ({ id, data: new Text('test', []) }),
     { debounceMs, maxWaitMs },
   )
 }
@@ -19,7 +20,7 @@ describe('addEventListener / unsubscribe', () => {
     emitter.addEventListener('blockCreated', (e) => events.push(e.id))
     emitter.emit('blockCreated', {
       id: 'a',
-      data: { text: '', inline: [] },
+      data: new Text('', []),
       previousBlockId: null,
       parentBlockId: null,
     })
@@ -33,7 +34,7 @@ describe('addEventListener / unsubscribe', () => {
     unsub()
     emitter.emit('blockCreated', {
       id: 'a',
-      data: { text: '', inline: [] },
+      data: new Text('', []),
       previousBlockId: null,
       parentBlockId: null,
     })

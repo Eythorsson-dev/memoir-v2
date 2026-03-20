@@ -1,10 +1,10 @@
 import type { BlockId } from '../blocks/blocks'
-import type { TextDto } from '../text/text'
+import type { Text } from '../text/text'
 import { BlockOffset, BlockRange } from '../blocks/blocks'
 
 export type BlockSelection        = BlockOffset | BlockRange
-export type BlockCreatedEventDto     = { id: BlockId; data: TextDto; previousBlockId: BlockId | null; parentBlockId: BlockId | null }
-export type BlockDataUpdatedEventDto = { id: BlockId; data: TextDto }
+export type BlockCreatedEventDto     = { id: BlockId; data: Text; previousBlockId: BlockId | null; parentBlockId: BlockId | null }
+export type BlockDataUpdatedEventDto = { id: BlockId; data: Text }
 export type BlockRemovedEventDto     = { id: BlockId }
 export type BlockMovedEventDto       = { id: BlockId; previousBlockId: BlockId | null; parentBlockId: BlockId | null }
 

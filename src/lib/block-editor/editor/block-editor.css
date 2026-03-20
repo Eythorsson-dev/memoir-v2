@@ -6,3 +6,30 @@
 .block-editor-editable .children {
   padding-left: 1.5rem;
 }
+
+.block-editor-editable {
+  counter-reset: ol-0 ol-1 ol-2;
+}
+[data-block-type="ordered-list"][data-depth="0"] {
+  counter-increment: ol-0;
+  counter-reset: ol-1 ol-2;
+}
+[data-block-type="ordered-list"][data-depth="0"] > p::before {
+  content: counter(ol-0, decimal) ". ";
+}
+[data-block-type="ordered-list"][data-depth="1"] {
+  counter-increment: ol-1;
+  counter-reset: ol-2;
+}
+[data-block-type="ordered-list"][data-depth="1"] > p::before {
+  content: counter(ol-1, lower-alpha) ". ";
+}
+[data-block-type="ordered-list"][data-depth="2"] {
+  counter-increment: ol-2;
+}
+[data-block-type="ordered-list"][data-depth="2"] > p::before {
+  content: counter(ol-2, lower-roman) ". ";
+}
+.block:not([data-block-type="ordered-list"]) {
+  counter-reset: ol-0 ol-1 ol-2;
+}

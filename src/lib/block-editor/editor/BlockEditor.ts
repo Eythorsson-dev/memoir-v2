@@ -115,7 +115,7 @@ export class BlockEditor {
   }
 
   constructor(container: HTMLElement, initial?: Blocks, opts: BlockEditorOptions = {}) {
-    this.#state = initial ?? Blocks.from([Blocks.createBlock()])
+    this.#state = initial ?? Blocks.from([Blocks.createTextBlock()])
     this.#history = new BlockHistory(this.#state)
     this.#emitter = new BlockEventEmitter(
       (id) => {
@@ -226,7 +226,7 @@ export class BlockEditor {
     }
 
     const block = this.#state.getBlock(blockId)
-    const text = block.data
+    const text = block.getText()
     if (start >= end || end > text.text.length) return
 
     const toggled = text.isToggled(type, start, end)
@@ -249,10 +249,10 @@ export class BlockEditor {
     const block = this.#state.getBlock(sel.start.blockId)
     const start = sel.start.offset
     const end = sel.end.offset
-    if (start >= end || end > block.data.text.length) return false
+    if (start >= end || end > block.getText().text.length) return false
 
     try {
-      return block.data.isToggled(type, start, end)
+      return block.getText().isToggled(type, start, end)
     } catch {
       return false
     }
@@ -518,7 +518,7 @@ export class BlockEditor {
       e.preventDefault()
       const cursor = this.#deleteRange(sel)
       const block = this.#state.getBlock(cursor.blockId)
-      const text = block.data
+      const text = block.getText()
       const newText = insertChar(text, cursor.offset, e.key)
       const newCursor = new BlockOffset(cursor.blockId, cursor.offset + 1)
       this.#state = this.#state.update(cursor.blockId, newText)
@@ -609,7 +609,7 @@ export class BlockEditor {
   #deleteRange(sel: BlockRange): BlockOffset {
     if (sel.start.blockId === sel.end.blockId) {
       const block = this.#state.getBlock(sel.start.blockId)
-      const text = block.data
+      const text = block.getText()
       const length = sel.end.offset - sel.start.offset
       const newText = text.remove(sel.start.offset, length)
       const oldState = this.#state
