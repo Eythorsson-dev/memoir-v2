@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Blocks, Block, TextBlock, OrderedListBlock, BlockOffset, BlockRange, BlockMoved, BlockRemoved, BlockAdded, BlockDataChanged } from './blocks'
+import { Blocks, Block, TextBlock, OrderedListBlock, BlockOffset, BlockRange, BlockMoved, BlockRemoved, BlockAdded, BlockDataChanged, type BlockTypes } from './blocks'
 import { Text } from '../text/text'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -1235,7 +1235,7 @@ describe('Blocks.fromEvents', () => {
   it('BlockDataChanged updates block text', () => {
     const base = Blocks.from([dto('a', 'hello')])
     const result = Blocks.fromEvents(base, [
-      new BlockDataChanged('a', new Text('world', [])),
+      new BlockDataChanged('a', new Text('world', []), 'text'),
     ])
     expect(result.getBlock('a').data.text).toBe('world')
   })
@@ -1321,8 +1321,8 @@ describe('Blocks.fromEvents', () => {
   it('multiple BlockDataChanged on same block uses last value', () => {
     const base = Blocks.from([dto('a', 'initial')])
     const result = Blocks.fromEvents(base, [
-      new BlockDataChanged('a', new Text('first', [])),
-      new BlockDataChanged('a', new Text('second', [])),
+      new BlockDataChanged('a', new Text('first', []), 'text'),
+      new BlockDataChanged('a', new Text('second', []), 'text'),
     ])
     expect(result.getBlock('a').data.text).toBe('second')
   })
@@ -1330,5 +1330,94 @@ describe('Blocks.fromEvents', () => {
   it('BlockRemoved throws if removing the last block', () => {
     const base = Blocks.from([dto('a')])
     expect(() => Blocks.fromEvents(base, [new BlockRemoved('a')])).toThrow()
+  })
+
+  it('BlockDataChanged with blockType round-trips the block type', () => {
+    const base = Blocks.from([dto('a', 'hello')])
+    const result = Blocks.fromEvents(base, [
+      new BlockDataChanged('a', new Text('hello', []), 'ordered-list'),
+    ])
+    expect(result.getBlock('a')).toBeInstanceOf(OrderedListBlock)
+  })
+})
+
+// ─── convertType ──────────────────────────────────────────────────────────────
+
+describe('convertType', () => {
+  it('converts a single TextBlock to ordered-list', () => {
+    const b = Blocks.from([dto('a', 'Item')])
+    const result = b.convertType('a', 'a', 'ordered-list')
+    expect(result.getBlock('a')).toBeInstanceOf(OrderedListBlock)
+  })
+
+  it('converts a range spanning multiple blocks', () => {
+    const b = Blocks.from([dto('a'), dto('b'), dto('c')])
+    const result = b.convertType('a', 'b', 'ordered-list')
+    expect(result.getBlock('a')).toBeInstanceOf(OrderedListBlock)
+    expect(result.getBlock('b')).toBeInstanceOf(OrderedListBlock)
+    expect(result.getBlock('c')).toBeInstanceOf(TextBlock)
+  })
+
+  it('is a no-op when all blocks are already the target type', () => {
+    const b = Blocks.from([new OrderedListBlock('a', new Text('', []), [])])
+    const result = b.convertType('a', 'a', 'ordered-list')
+    expect(result.getBlock('a')).toBeInstanceOf(OrderedListBlock)
+    expect(result).not.toBe(b)  // still returns new instance
+  })
+
+  it('converts ordered-list back to text', () => {
+    const b = Blocks.from([new OrderedListBlock('a', new Text('Item', []), [])])
+    const result = b.convertType('a', 'a', 'text')
+    expect(result.getBlock('a')).toBeInstanceOf(TextBlock)
+  })
+
+  it('throws for unknown from id', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.convertType('missing', 'a', 'ordered-list')).toThrow()
+  })
+
+  it('throws for unknown to id', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.convertType('a', 'missing', 'ordered-list')).toThrow()
+  })
+
+  it('throws if to precedes from in document order', () => {
+    const b = Blocks.from([dto('a'), dto('b'), dto('c')])
+    expect(() => b.convertType('c', 'a', 'ordered-list')).toThrow()
+  })
+
+  it('returns a new Blocks instance (immutable)', () => {
+    const b = Blocks.from([dto('a')])
+    const result = b.convertType('a', 'a', 'ordered-list')
+    expect(result).not.toBe(b)
+  })
+})
+
+// ─── Blocks.diff with blockType ───────────────────────────────────────────────
+
+describe('Blocks.diff blockType changes', () => {
+  it('emits BlockDataChanged with new blockType when only type changes', () => {
+    const b1 = Blocks.from([dto('a', 'hello')])
+    const b2 = b1.convertType('a', 'a', 'ordered-list')
+    const changes = Blocks.diff(b1, b2)
+    const dataChanged = changes.find(c => c instanceof BlockDataChanged && c.id === 'a')
+    expect(dataChanged).toBeDefined()
+    expect(dataChanged).toBeInstanceOf(BlockDataChanged)
+    expect((dataChanged as BlockDataChanged).blockType).toBe('ordered-list')
+  })
+
+  it('emits BlockDataChanged carrying blockType when only data changes (regression)', () => {
+    const b1 = Blocks.from([dto('a', 'hello')])
+    const b2 = b1.update('a', new Text('changed', []))
+    const changes = Blocks.diff(b1, b2)
+    const dataChanged = changes.find(c => c instanceof BlockDataChanged && c.id === 'a')
+    expect(dataChanged).toBeDefined()
+    expect((dataChanged as BlockDataChanged).blockType).toBe('text')
+  })
+
+  it('emits no BlockDataChanged when neither data nor type changes', () => {
+    const b1 = Blocks.from([dto('a', 'hello')])
+    const changes = Blocks.diff(b1, b1)
+    expect(changes.filter(c => c instanceof BlockDataChanged)).toHaveLength(0)
   })
 })

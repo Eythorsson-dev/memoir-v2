@@ -1,6 +1,6 @@
 import { Text, type InlineTypes } from '../text/text'
 import { textSerializer } from '../text/serializer'
-import { Blocks, type BlockId, type BlocksChange, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved } from '../blocks/blocks'
+import { Blocks, type BlockId, type BlockTypes, type BlocksChange, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved, OrderedListBlock } from '../blocks/blocks'
 import { blocksSerializer } from '../blocks/serializer'
 import type { BlockEditorEventDtoMap, BlockEditorOptions, BlockSelection } from './events'
 import { BlockEventEmitter } from './BlockEventEmitter'
@@ -121,7 +121,8 @@ export class BlockEditor {
       (id) => {
         try {
           const block = this.#state.getBlock(id)
-          return { id, data: block.data }
+          const blockType: BlockTypes = block instanceof OrderedListBlock ? 'ordered-list' : 'text'
+          return { id, data: block.data, blockType }
         } catch {
           return null  // block was removed; skip
         }
@@ -205,6 +206,43 @@ export class BlockEditor {
     this.#state = this.#state.unindent(fromId, toId)
     this.#render(sel)
     this.#emitEvents(oldState)
+  }
+
+  /** Converts all blocks in the current selection to `newType`. */
+  convertBlockType(newType: BlockTypes): void {
+    const sel = this.#getSelection()
+    if (!sel) return
+    this.#pendingSelectionBefore = sel
+    const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
+    const toId   = sel instanceof BlockRange ? sel.end.blockId   : sel.blockId
+    const oldState = this.#state
+    this.#state = this.#state.convertType(fromId, toId, newType)
+    this.#render(sel)
+    this.#emitEvents(oldState)
+  }
+
+  /**
+   * Returns true only when every block in the current selection is `type`.
+   * Returns false for no selection or a mixed selection.
+   */
+  isBlockTypeActive(type: BlockTypes): boolean {
+    const sel = this.#getSelection()
+    if (!sel) return false
+    const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
+    const toId   = sel instanceof BlockRange ? sel.end.blockId   : sel.blockId
+    try {
+      let id: BlockId | null = fromId
+      while (id !== null) {
+        const block = this.#state.getBlock(id)
+        const actual: BlockTypes = block instanceof OrderedListBlock ? 'ordered-list' : 'text'
+        if (actual !== type) return false
+        if (id === toId) break
+        id = this.#state.nextBlockId(id)
+      }
+      return true
+    } catch {
+      return false
+    }
   }
 
   /** Toggle inline format on selection within focused block. */
@@ -299,7 +337,7 @@ export class BlockEditor {
     // Emit in a stable semantic order: dataChanged → added → removed → moved
     for (const change of changes) {
       if (change instanceof BlockDataChanged) {
-        this.#emitter.emit('blockDataUpdated', { id: change.id, data: change.data })
+        this.#emitter.emit('blockDataUpdated', { id: change.id, data: change.data, blockType: change.blockType })
       }
     }
     for (const change of changes) {
@@ -544,7 +582,8 @@ export class BlockEditor {
     const pEl = getBlockElementContent(blockEl)
     const newText = textSerializer.parse(Array.from(pEl.childNodes))
     this.#state = this.#state.update(blockId, newText)
-    this.#history.updateOrAdd(blockId, new BlockDataChanged(blockId, newText), this.#pendingSelectionBefore, sel)
+    const blockType: BlockTypes = this.#state.getBlock(blockId) instanceof OrderedListBlock ? 'ordered-list' : 'text'
+    this.#history.updateOrAdd(blockId, new BlockDataChanged(blockId, newText, blockType), this.#pendingSelectionBefore, sel)
     this.#pendingSelectionBefore = null
     this.#render(sel)
     this.#emitter.scheduleDataUpdated(blockId)

@@ -2,7 +2,7 @@ import { type InlineTypes, type InlineDtoMap } from '../text/text'
 import { Blocks } from '../blocks/blocks'
 import { BlockEditor } from './BlockEditor'
 import type { BlockEditorEventDtoMap, BlockEditorOptions } from './events'
-import { createElement, Bold, Italic, Underline, IndentIncrease, IndentDecrease, Undo2, Redo2 } from 'lucide'
+import { createElement, Bold, Italic, Underline, IndentIncrease, IndentDecrease, Undo2, Redo2, ListOrdered } from 'lucide'
 import './block-editor-toolbar.css'
 
 function addTooltip(btn: HTMLButtonElement, label: string, shortcut?: string): void {
@@ -29,6 +29,7 @@ export class BlockEditorWithToolbar {
   #outdentBtn: HTMLButtonElement
   #undoBtn: HTMLButtonElement
   #redoBtn: HTMLButtonElement
+  #orderedListBtn: HTMLButtonElement
   #unsubscribeSelection: () => void
 
   constructor(container: HTMLElement, initial?: Blocks, opts: BlockEditorOptions = {}) {
@@ -112,6 +113,23 @@ export class BlockEditorWithToolbar {
     })
     this.#toolbar.appendChild(this.#outdentBtn)
 
+    const sep3 = document.createElement('div')
+    sep3.className = 'toolbar-separator'
+    sep3.setAttribute('aria-hidden', 'true')
+    this.#toolbar.appendChild(sep3)
+
+    this.#orderedListBtn = document.createElement('button')
+    this.#orderedListBtn.appendChild(createElement(ListOrdered))
+    this.#orderedListBtn.setAttribute('aria-label', 'Ordered list')
+    this.#orderedListBtn.setAttribute('aria-pressed', 'false')
+    addTooltip(this.#orderedListBtn, 'Ordered list')
+    this.#orderedListBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      const newType = this.#editor.isBlockTypeActive('ordered-list') ? 'text' : 'ordered-list'
+      this.#editor.convertBlockType(newType)
+    })
+    this.#toolbar.appendChild(this.#orderedListBtn)
+
     container.appendChild(this.#toolbar)
 
     this.#editor = new BlockEditor(container, initial, opts)
@@ -125,6 +143,9 @@ export class BlockEditorWithToolbar {
         this.#inlineButtons[type].classList.toggle('is-active', active)
         this.#inlineButtons[type].setAttribute('aria-pressed', String(active))
       }
+      const olActive = this.#editor.isBlockTypeActive('ordered-list')
+      this.#orderedListBtn.classList.toggle('is-active', olActive)
+      this.#orderedListBtn.setAttribute('aria-pressed', String(olActive))
       this.#updateUndoRedo()
     })
   }

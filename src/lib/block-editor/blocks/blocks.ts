@@ -2,6 +2,19 @@ import { Text } from '../text/text'
 
 export type BlockId = string
 
+/**
+ * Discriminated union map of all block types.
+ * Adding a new key here propagates exhaustiveness errors to every
+ * switch on `BlockTypes` throughout the codebase.
+ */
+export type BlockTypeDtoMap = {
+  'text': never
+  'ordered-list': never
+}
+
+/** Union of all valid block type names. */
+export type BlockTypes = keyof BlockTypeDtoMap
+
 // ─── Public types ──────────────────────────────────────────────────────────────
 
 /**
@@ -116,6 +129,7 @@ export class BlockDataChanged {
   constructor(
     readonly id: BlockId,
     readonly data: Text,
+    readonly blockType: BlockTypes,
   ) { Object.freeze(this) }
 }
 
@@ -133,7 +147,7 @@ class FlatBlock {
     readonly id: BlockId,
     readonly data: Text,
     readonly indent: number,
-    readonly blockType: 'text' | 'ordered-list',
+    readonly blockType: BlockTypes,
   ) {
     Object.freeze(this)
   }
@@ -188,7 +202,7 @@ function clampPass(blocks: FlatBlock[]): FlatBlock[] {
 
 function dtoToFlat(dtos: ReadonlyArray<TextBlock | OrderedListBlock>, depth = 0, result: FlatBlock[] = []): FlatBlock[] {
   for (const dto of dtos) {
-    let blockType: 'text' | 'ordered-list'
+    let blockType: BlockTypes
     if (dto instanceof TextBlock) {
       blockType = 'text'
     } else if (dto instanceof OrderedListBlock) {
@@ -206,7 +220,7 @@ function dtoToFlat(dtos: ReadonlyArray<TextBlock | OrderedListBlock>, depth = 0,
 // ─── FlatBlock → Block (tree DTO) conversion ──────────────────────────────────
 
 function flatToDto(blocks: ReadonlyArray<FlatBlock>): ReadonlyArray<TextBlock | OrderedListBlock> {
-  type MutableBlock = { id: BlockId; data: Text; blockType: 'text' | 'ordered-list'; children: MutableBlock[] }
+  type MutableBlock = { id: BlockId; data: Text; blockType: BlockTypes; children: MutableBlock[] }
 
   const roots: MutableBlock[] = []
   const stack: Array<{ node: MutableBlock; indent: number }> = []
@@ -410,6 +424,7 @@ export class Blocks {
     const newIds = new Set(newBlocks.#blocks.map(b => b.id))
     const oldIds = new Set(oldBlocks.#blocks.map(b => b.id))
     const oldDataMap = new Map(oldBlocks.#blocks.map(b => [b.id, b.data]))
+    const oldTypeMap = new Map(oldBlocks.#blocks.map(b => [b.id, b.blockType]))
 
     for (const b of oldBlocks.#blocks) {
       if (!newIds.has(b.id)) {
@@ -440,11 +455,9 @@ export class Blocks {
       }
 
       const oldData = oldDataMap.get(b.id)!
-      if (!oldData.equals(b.data)) {
-        changes.push(new BlockDataChanged(
-          b.id,
-          b.data,
-        ))
+      const oldType = oldTypeMap.get(b.id)!
+      if (!oldData.equals(b.data) || oldType !== b.blockType) {
+        changes.push(new BlockDataChanged(b.id, b.data, b.blockType))
       }
     }
 
@@ -540,6 +553,22 @@ export class Blocks {
     const block = this.#blocks[idx]
     const updated = [...this.#blocks]
     updated[idx] = new FlatBlock(id, data, block.indent, block.blockType)
+    return new Blocks(updated)
+  }
+
+  /**
+   * Returns a new `Blocks` where every block in the pre-order range [`from`, `to`]
+   * has its `blockType` set to `newType`.
+   * @throws {Error} if `from` or `to` are not found, or `to` precedes `from`.
+   */
+  convertType(from: BlockId, to: BlockId, newType: BlockTypes): Blocks {
+    const [fromIdx, toIdx] = getRange(this.#blocks, from, to)
+    const rangeIds = new Set(this.#blocks.slice(fromIdx, toIdx + 1).map(b => b.id))
+    const updated = this.#blocks.map(b =>
+      rangeIds.has(b.id) && b.blockType !== newType
+        ? new FlatBlock(b.id, b.data, b.indent, newType)
+        : b
+    )
     return new Blocks(updated)
   }
 
@@ -713,6 +742,7 @@ export class Blocks {
     for (const change of changes) {
       if (change instanceof BlockDataChanged) {
         state = state.update(change.id, change.data)
+        state = state.convertType(change.id, change.id, change.blockType)
       } else if (change instanceof BlockAdded) {
         const data = change.data
         if (change.previousBlockId !== null) {
