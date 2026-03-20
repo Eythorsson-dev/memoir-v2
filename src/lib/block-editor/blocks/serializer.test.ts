@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { blocksSerializer } from './serializer'
-import { Blocks, Block } from './blocks'
+import { Blocks, TextBlock, OrderedListBlock } from './blocks'
 import { Text } from '../text/text'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -11,25 +11,25 @@ function nodesToHtml(nodes: Node[]): string {
   return div.innerHTML
 }
 
-function dto(id: string, text = '', children: Block[] = []): Block {
-  return new Block(id, new Text(text, []), children)
+function dto(id: string, text = '', children: TextBlock[] = []): TextBlock {
+  return new TextBlock(id, new Text(text, []), children)
 }
 
 // ─── render ───────────────────────────────────────────────────────────────────
 
 describe('blocksSerializer.render', () => {
-  it('renders a single block with a <p> element', () => {
+  it('renders a single TextBlock with data-block-type="text"', () => {
     const blocks = Blocks.from([dto('b1', 'Hello')])
     const html = nodesToHtml(blocksSerializer.render(blocks))
-    expect(html).toBe('<div class="block" id="b1"><p>Hello</p></div>')
+    expect(html).toBe('<div class="block" id="b1" data-block-type="text"><p>Hello</p></div>')
   })
 
-  it('renders multiple root blocks', () => {
+  it('renders multiple root TextBlocks', () => {
     const blocks = Blocks.from([dto('b1', 'Hello'), dto('b2', 'World')])
     const html = nodesToHtml(blocksSerializer.render(blocks))
     expect(html).toBe(
-      '<div class="block" id="b1"><p>Hello</p></div>' +
-        '<div class="block" id="b2"><p>World</p></div>'
+      '<div class="block" id="b1" data-block-type="text"><p>Hello</p></div>' +
+        '<div class="block" id="b2" data-block-type="text"><p>World</p></div>'
     )
   })
 
@@ -37,8 +37,8 @@ describe('blocksSerializer.render', () => {
     const blocks = Blocks.from([dto('p1', 'Parent', [dto('c1', 'Child')])])
     const html = nodesToHtml(blocksSerializer.render(blocks))
     expect(html).toBe(
-      '<div class="block" id="p1"><p>Parent</p>' +
-        '<div class="children"><div class="block" id="c1"><p>Child</p></div></div></div>'
+      '<div class="block" id="p1" data-block-type="text"><p>Parent</p>' +
+        '<div class="children"><div class="block" id="c1" data-block-type="text"><p>Child</p></div></div></div>'
     )
   })
 
@@ -50,41 +50,60 @@ describe('blocksSerializer.render', () => {
 
   it('renders the plan example correctly', () => {
     const blocks = Blocks.from([
-      new Block('block-1', new Text('Hello World', []), [
-        new Block('block-2', new Text('This is a test', []), []),
+      new TextBlock('block-1', new Text('Hello World', []), [
+        new TextBlock('block-2', new Text('This is a test', []), []),
       ]),
-      new Block('block-3', new Text('This is another', []), []),
+      new TextBlock('block-3', new Text('This is another', []), []),
     ])
     const html = nodesToHtml(blocksSerializer.render(blocks))
     expect(html).toBe(
-      '<div class="block" id="block-1"><p>Hello World</p>' +
-        '<div class="children"><div class="block" id="block-2"><p>This is a test</p></div></div></div>' +
-        '<div class="block" id="block-3"><p>This is another</p></div>'
+      '<div class="block" id="block-1" data-block-type="text"><p>Hello World</p>' +
+        '<div class="children"><div class="block" id="block-2" data-block-type="text"><p>This is a test</p></div></div></div>' +
+        '<div class="block" id="block-3" data-block-type="text"><p>This is another</p></div>'
     )
   })
 
   it('renders inline formatting inside <p>', () => {
     const blocks = Blocks.from([
-      new Block('b1', new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }]), []),
+      new TextBlock('b1', new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }]), []),
     ])
     const html = nodesToHtml(blocksSerializer.render(blocks))
-    expect(html).toBe('<div class="block" id="b1"><p><strong>Hello</strong></p></div>')
+    expect(html).toBe('<div class="block" id="b1" data-block-type="text"><p><strong>Hello</strong></p></div>')
   })
 
   it('renders an empty block with a <br> placeholder inside <p>', () => {
     const blocks = Blocks.from([dto('b1', '')])
     const html = nodesToHtml(blocksSerializer.render(blocks))
-    expect(html).toBe('<div class="block" id="b1"><p><br></p></div>')
+    expect(html).toBe('<div class="block" id="b1" data-block-type="text"><p><br></p></div>')
+  })
+
+  it('renders an OrderedListBlock with data-block-type="ordered-list" and data-depth', () => {
+    const blocks = Blocks.from([new OrderedListBlock('ol1', new Text('Item 1', []), [])])
+    const html = nodesToHtml(blocksSerializer.render(blocks))
+    expect(html).toBe('<div class="block" id="ol1" data-block-type="ordered-list" data-depth="0"><p>Item 1</p></div>')
+  })
+
+  it('renders nested OrderedListBlock with incremented data-depth', () => {
+    const blocks = Blocks.from([
+      new OrderedListBlock('ol1', new Text('Item 1', []), [
+        new OrderedListBlock('ol2', new Text('Item 1.1', []), []),
+      ]),
+    ])
+    const html = nodesToHtml(blocksSerializer.render(blocks))
+    expect(html).toContain('data-depth="0"')
+    expect(html).toContain('data-depth="1"')
+    expect(html).toContain('"ol2"')
   })
 })
 
 // ─── parse ────────────────────────────────────────────────────────────────────
 
 describe('blocksSerializer.parse', () => {
-  function makeBlockEl(id: string, content: string, children?: Element[]): Element {
+  function makeBlockEl(id: string, content: string, children?: Element[], blockType = 'text'): Element {
     const div = document.createElement('div')
     div.className = 'block'
     div.id = id
+    div.setAttribute('data-block-type', blockType)
     const p = document.createElement('p')
     p.textContent = content
     div.appendChild(p)
@@ -97,12 +116,20 @@ describe('blocksSerializer.parse', () => {
     return div
   }
 
-  it('parses a single block element', () => {
+  it('parses a single TextBlock element', () => {
     const el = makeBlockEl('b1', 'Hello')
     const result = blocksSerializer.parse([el])
     expect(result.blocks).toHaveLength(1)
     expect(result.blocks[0].id).toBe('b1')
     expect(result.blocks[0].data.text).toBe('Hello')
+    expect(result.blocks[0]).toBeInstanceOf(TextBlock)
+  })
+
+  it('parses a single OrderedListBlock element', () => {
+    const el = makeBlockEl('ol1', 'Item', [], 'ordered-list')
+    const result = blocksSerializer.parse([el])
+    expect(result.blocks[0]).toBeInstanceOf(OrderedListBlock)
+    expect(result.blocks[0].data.text).toBe('Item')
   })
 
   it('parses multiple root block elements', () => {
@@ -116,15 +143,35 @@ describe('blocksSerializer.parse', () => {
     const result = blocksSerializer.parse([parent])
     expect(result.blocks[0].children).toHaveLength(1)
     expect(result.blocks[0].children[0].id).toBe('child')
-    expect(result.blocks[0].children[0].data.text).toBe('Child text')
+    expect((result.blocks[0].children[0] as TextBlock).data.text).toBe('Child text')
   })
 
   it('throws when a block element is missing its id attribute', () => {
     const div = document.createElement('div')
     div.className = 'block'
+    div.setAttribute('data-block-type', 'text')
     const p = document.createElement('p')
     p.textContent = 'hi'
     div.appendChild(p)
+    expect(() => blocksSerializer.parse([div])).toThrow()
+  })
+
+  it('throws when a block element is missing data-block-type attribute', () => {
+    const div = document.createElement('div')
+    div.className = 'block'
+    div.id = 'b1'
+    const p = document.createElement('p')
+    p.textContent = 'hi'
+    div.appendChild(p)
+    expect(() => blocksSerializer.parse([div])).toThrow()
+  })
+
+  it('throws when data-block-type is an unknown value', () => {
+    const div = document.createElement('div')
+    div.className = 'block'
+    div.id = 'b1'
+    div.setAttribute('data-block-type', 'unknown-type')
+    div.appendChild(document.createElement('p'))
     expect(() => blocksSerializer.parse([div])).toThrow()
   })
 
@@ -132,6 +179,7 @@ describe('blocksSerializer.parse', () => {
     const div = document.createElement('div')
     div.className = 'block'
     div.id = 'b1'
+    div.setAttribute('data-block-type', 'text')
     expect(() => blocksSerializer.parse([div])).toThrow()
   })
 
@@ -139,6 +187,7 @@ describe('blocksSerializer.parse', () => {
     const div = document.createElement('div')
     div.className = 'block'
     div.id = 'b1'
+    div.setAttribute('data-block-type', 'text')
     div.appendChild(document.createElement('p'))
     div.appendChild(document.createElement('span'))
     expect(() => blocksSerializer.parse([div])).toThrow()
@@ -148,6 +197,7 @@ describe('blocksSerializer.parse', () => {
     const div = document.createElement('div')
     div.className = 'block'
     div.id = 'b1'
+    div.setAttribute('data-block-type', 'text')
     div.appendChild(document.createTextNode('oops'))
     div.appendChild(document.createElement('p'))
     expect(() => blocksSerializer.parse([div])).toThrow()
@@ -161,6 +211,7 @@ describe('blocksSerializer.parse', () => {
     const div = document.createElement('div')
     div.className = 'block'
     div.id = 'b1'
+    div.setAttribute('data-block-type', 'text')
     div.appendChild(document.createElement('p'))
     div.appendChild(childrenDiv)
 
@@ -171,6 +222,7 @@ describe('blocksSerializer.parse', () => {
     const div = document.createElement('div')
     div.className = 'block'
     div.id = 'b1'
+    div.setAttribute('data-block-type', 'text')
     div.appendChild(document.createElement('p'))
     const childrenDiv = document.createElement('div')
     childrenDiv.className = 'children'
@@ -182,6 +234,7 @@ describe('blocksSerializer.parse', () => {
     const div = document.createElement('div')
     div.className = 'block'
     div.id = 'b1'
+    div.setAttribute('data-block-type', 'text')
     div.setAttribute('data-extra', 'value')
     const p = document.createElement('p')
     p.setAttribute('style', 'color:red')
@@ -201,38 +254,53 @@ describe('roundtrip: parse(render(blocks)) === blocks', () => {
     expect(JSON.stringify(parsed.blocks)).toBe(JSON.stringify(blocks.blocks))
   }
 
-  it('single plain block roundtrip', () => {
+  it('single plain TextBlock roundtrip', () => {
     roundtrip(Blocks.from([dto('b1', 'Hello')]))
   })
 
-  it('multiple root blocks roundtrip', () => {
+  it('multiple root TextBlocks roundtrip', () => {
     roundtrip(Blocks.from([dto('b1', 'Hello'), dto('b2', 'World')]))
   })
 
-  it('nested blocks roundtrip', () => {
+  it('nested TextBlocks roundtrip', () => {
     roundtrip(Blocks.from([dto('p1', 'Parent', [dto('c1', 'Child')])]))
   })
 
-  it('deeply nested blocks roundtrip', () => {
+  it('deeply nested TextBlocks roundtrip', () => {
     roundtrip(Blocks.from([dto('p1', 'Parent', [dto('c1', 'Child', [dto('gc1', 'Grandchild')])])]))
   })
 
   it('plan example roundtrip', () => {
     roundtrip(Blocks.from([
-      new Block('block-1', new Text('Hello World', []), [
-        new Block('block-2', new Text('This is a test', []), []),
+      new TextBlock('block-1', new Text('Hello World', []), [
+        new TextBlock('block-2', new Text('This is a test', []), []),
       ]),
-      new Block('block-3', new Text('This is another', []), []),
+      new TextBlock('block-3', new Text('This is another', []), []),
     ]))
   })
 
-  it('block with inline formatting roundtrip', () => {
+  it('TextBlock with inline formatting roundtrip', () => {
     roundtrip(Blocks.from([
-      new Block('b1', new Text('Hello World', [{ type: 'Bold', start: 0, end: 5 }]), []),
+      new TextBlock('b1', new Text('Hello World', [{ type: 'Bold', start: 0, end: 5 }]), []),
     ]))
   })
 
-  it('empty text block roundtrip', () => {
+  it('empty text TextBlock roundtrip', () => {
     roundtrip(Blocks.from([dto('b1', '')]))
+  })
+
+  it('OrderedListBlock roundtrip', () => {
+    roundtrip(Blocks.from([
+      new OrderedListBlock('ol1', new Text('Item 1', []), []),
+      new OrderedListBlock('ol2', new Text('Item 2', []), []),
+    ]))
+  })
+
+  it('mixed TextBlock and OrderedListBlock roundtrip', () => {
+    roundtrip(Blocks.from([
+      new TextBlock('t1', new Text('Heading', []), []),
+      new OrderedListBlock('ol1', new Text('Item 1', []), []),
+      new OrderedListBlock('ol2', new Text('Item 2', []), []),
+    ]))
   })
 })

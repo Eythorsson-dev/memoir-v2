@@ -1,13 +1,23 @@
 import { type Serializer } from '../serializer'
-import { Blocks, Block, type BlockId } from './blocks'
+import { Blocks, TextBlock, OrderedListBlock, type BlockId } from './blocks'
 import { textSerializer } from '../text/serializer'
 
 // ─── Render ───────────────────────────────────────────────────────────────────
 
-function renderBlock(block: Block): Element {
+function renderBlock(block: TextBlock | OrderedListBlock, depth = 0): Element {
   const div = document.createElement('div')
   div.className = 'block'
   div.id = block.id
+
+  if (block instanceof TextBlock) {
+    div.setAttribute('data-block-type', 'text')
+  } else if (block instanceof OrderedListBlock) {
+    div.setAttribute('data-block-type', 'ordered-list')
+    div.setAttribute('data-depth', String(depth))
+  } else {
+    const _exhaustive: never = block
+    throw new Error(`Unknown block type: ${JSON.stringify(_exhaustive)}`)
+  }
 
   const p = document.createElement('p')
   const text = block.data
@@ -21,7 +31,9 @@ function renderBlock(block: Block): Element {
   if (block.children.length > 0) {
     const childrenDiv = document.createElement('div')
     childrenDiv.className = 'children'
-    block.children.forEach((child) => childrenDiv.appendChild(renderBlock(child)))
+    ;(block.children as ReadonlyArray<TextBlock | OrderedListBlock>).forEach(
+      (child) => childrenDiv.appendChild(renderBlock(child, depth + 1))
+    )
     div.appendChild(childrenDiv)
   }
 
@@ -29,14 +41,17 @@ function renderBlock(block: Block): Element {
 }
 
 function render(blocks: Blocks): Node[] {
-  return blocks.blocks.map(renderBlock)
+  return blocks.blocks.map((b) => renderBlock(b))
 }
 
 // ─── Parse ────────────────────────────────────────────────────────────────────
 
-function parseBlock(el: Element): Block {
+function parseBlock(el: Element): TextBlock | OrderedListBlock {
   const id: BlockId | null = el.getAttribute('id')
   if (!id) throw new Error('Block element missing id attribute')
+
+  const blockType = el.getAttribute('data-block-type')
+  if (!blockType) throw new Error(`Block '${id}' is missing data-block-type attribute`)
 
   let pElement: Element | null = null
   let childrenElement: Element | null = null
@@ -64,7 +79,7 @@ function parseBlock(el: Element): Block {
 
   const data = textSerializer.parse(Array.from(pElement.childNodes))
 
-  const children: Block[] = []
+  const children: Array<TextBlock | OrderedListBlock> = []
   if (childrenElement) {
     for (const node of Array.from(childrenElement.childNodes)) {
       if (node.nodeType === Node.TEXT_NODE) {
@@ -81,11 +96,18 @@ function parseBlock(el: Element): Block {
     }
   }
 
-  return new Block(id, data, children)
+  switch (blockType) {
+    case 'text':
+      return new TextBlock(id, data, children)
+    case 'ordered-list':
+      return new OrderedListBlock(id, data, children)
+    default:
+      throw new Error(`Block '${id}' has unknown data-block-type: '${blockType}'`)
+  }
 }
 
 function parse(nodes: Node[]): Blocks {
-  const dtos: Block[] = []
+  const dtos: Array<TextBlock | OrderedListBlock> = []
   for (const node of nodes) {
     if (node.nodeType === Node.ELEMENT_NODE) {
       dtos.push(parseBlock(node as Element))

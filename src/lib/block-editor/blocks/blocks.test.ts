@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Blocks, Block, BlockOffset, BlockRange, BlockMoved, BlockRemoved, BlockAdded, BlockDataChanged } from './blocks'
+import { Blocks, Block, TextBlock, OrderedListBlock, BlockOffset, BlockRange, BlockMoved, BlockRemoved, BlockAdded, BlockDataChanged } from './blocks'
 import { Text } from '../text/text'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -8,9 +8,9 @@ const emptyText = new Text('', [])
 const helloText = new Text('Hello', [])
 const worldText = new Text('World', [])
 
-/** Build a Block (tree format) for use with Blocks.from */
-function dto(id: string, text = '', children: Block[] = []): Block {
-  return new Block(id, new Text(text, []), children)
+/** Build a TextBlock (tree format) for use with Blocks.from */
+function dto(id: string, text = '', children: TextBlock[] = []): TextBlock {
+  return new TextBlock(id, new Text(text, []), children)
 }
 
 /** Build a block arg for use with mutation methods (addBefore, addAfter, etc.) */
@@ -20,11 +20,11 @@ function block(id: string, data: Text = emptyText): { id: string; data: Text } {
 
 /** Pre-order traversal of block IDs */
 function preorder(blocks: Blocks): string[] {
-  function walk(bs: ReadonlyArray<Block>): string[] {
+  function walk(bs: ReadonlyArray<TextBlock | OrderedListBlock>): string[] {
     const result: string[] = []
     for (const b of bs) {
       result.push(b.id)
-      result.push(...walk(b.children))
+      result.push(...walk(b.children as ReadonlyArray<TextBlock | OrderedListBlock>))
     }
     return result
   }
@@ -32,11 +32,11 @@ function preorder(blocks: Blocks): string[] {
 }
 
 /** Find a Block anywhere in the tree */
-function find(blocks: Blocks, id: string): Block {
-  function search(bs: ReadonlyArray<Block>): Block | undefined {
+function find(blocks: Blocks, id: string): TextBlock | OrderedListBlock {
+  function search(bs: ReadonlyArray<TextBlock | OrderedListBlock>): TextBlock | OrderedListBlock | undefined {
     for (const b of bs) {
       if (b.id === id) return b
-      const found = search(b.children)
+      const found = search(b.children as ReadonlyArray<TextBlock | OrderedListBlock>)
       if (found) return found
     }
   }
@@ -61,7 +61,7 @@ describe('Blocks.from', () => {
     ])
     expect(b.blocks[0].children).toHaveLength(1)
     expect(b.blocks[0].children[0].id).toBe('child')
-    expect(b.blocks[0].children[0].data.text).toBe('Child')
+    expect((b.blocks[0].children[0] as TextBlock).data.text).toBe('Child')
   })
 
   it('preserves nested block structure with multiple root and child blocks', () => {
@@ -92,7 +92,14 @@ describe('Blocks.from', () => {
   })
 
   it('throws if block id is empty string', () => {
-    expect(() => Blocks.from([new Block('', new Text('', []), [])])).toThrow()
+    expect(() => Blocks.from([new TextBlock('', new Text('', []), [])])).toThrow()
+  })
+
+  it('accepts OrderedListBlock instances', () => {
+    const olBlock = new OrderedListBlock('ol1', new Text('Item 1', []), [])
+    const b = Blocks.from([olBlock])
+    expect(b.blocks[0].id).toBe('ol1')
+    expect(b.blocks[0]).toBeInstanceOf(OrderedListBlock)
   })
 })
 
@@ -237,7 +244,7 @@ describe('update', () => {
   it('updates the data of a nested block', () => {
     const b = Blocks.from([dto('parent', '', [dto('child', 'Hello')])])
     const result = b.update('child', worldText)
-    expect(result.blocks[0].children[0].data.text).toBe('World')
+    expect((result.blocks[0].children[0] as TextBlock).data.text).toBe('World')
   })
 
   it('does not mutate the original', () => {
@@ -576,43 +583,53 @@ describe('delete', () => {
   })
 })
 
-// ─── Block.getLength ──────────────────────────────────────────────────────────
+// ─── TextBlock.getLength ──────────────────────────────────────────────────────
 
-describe('Block.getLength', () => {
+describe('TextBlock.getLength', () => {
   it('returns the text length of the block data', () => {
-    const b = new Block('a', new Text('Hello', []), [])
+    const b = new TextBlock('a', new Text('Hello', []), [])
     expect(b.getLength()).toBe(5)
   })
 
   it('returns 0 for empty text', () => {
-    const b = new Block('a', new Text('', []), [])
+    const b = new TextBlock('a', new Text('', []), [])
     expect(b.getLength()).toBe(0)
   })
 })
 
-// ─── Blocks.createBlock ───────────────────────────────────────────────────────
+// ─── OrderedListBlock.getLength ───────────────────────────────────────────────
 
-describe('Blocks.createBlock', () => {
-  it('creates a block with a UUID id', () => {
-    const b = Blocks.createBlock()
+describe('OrderedListBlock.getLength', () => {
+  it('returns the text length of the block data', () => {
+    const b = new OrderedListBlock('a', new Text('Item', []), [])
+    expect(b.getLength()).toBe(4)
+  })
+})
+
+// ─── Blocks.createTextBlock ───────────────────────────────────────────────────
+
+describe('Blocks.createTextBlock', () => {
+  it('creates a TextBlock with a UUID id', () => {
+    const b = Blocks.createTextBlock()
     expect(b.id).toMatch(/^[0-9a-f-]{36}$/)
+    expect(b).toBeInstanceOf(TextBlock)
   })
 
   it('creates a block with empty data and children when no args given', () => {
-    const b = Blocks.createBlock()
+    const b = Blocks.createTextBlock()
     expect(b.data.text).toBe('')
     expect(b.data.inline).toHaveLength(0)
     expect(b.children).toHaveLength(0)
   })
 
   it('uses the provided data', () => {
-    const b = Blocks.createBlock(new Text('Hello', []))
+    const b = Blocks.createTextBlock(new Text('Hello', []))
     expect(b.data.text).toBe('Hello')
   })
 
   it('generates unique IDs each time', () => {
-    const a = Blocks.createBlock()
-    const b = Blocks.createBlock()
+    const a = Blocks.createTextBlock()
+    const b = Blocks.createTextBlock()
     expect(a.id).not.toBe(b.id)
   })
 })
@@ -635,6 +652,14 @@ describe('getBlock', () => {
     expect(result.id).toBe('child')
     expect(result.children).toHaveLength(1)
     expect(result.children[0].id).toBe('grandchild')
+  })
+
+  it('returns an OrderedListBlock when stored as one', () => {
+    const olBlock = new OrderedListBlock('ol1', new Text('Item', []), [])
+    const b = Blocks.from([olBlock])
+    const result = b.getBlock('ol1')
+    expect(result).toBeInstanceOf(OrderedListBlock)
+    expect(result.id).toBe('ol1')
   })
 
   it("throws 'Block not found: <id>' if id does not exist", () => {
@@ -1180,8 +1205,12 @@ describe('BlockOffset', () => {
 // ─── freeze ───────────────────────────────────────────────────────────────────
 
 describe('value objects are frozen', () => {
-  it('Block is frozen', () => {
-    const b = new Block('a', new Text('', []), [])
+  it('TextBlock is frozen', () => {
+    const b = new TextBlock('a', new Text('', []), [])
+    expect(() => { (b as any).id = 'z' }).toThrow(TypeError)
+  })
+  it('OrderedListBlock is frozen', () => {
+    const b = new OrderedListBlock('a', new Text('', []), [])
     expect(() => { (b as any).id = 'z' }).toThrow(TypeError)
   })
   it('BlockOffset is frozen', () => {
@@ -1206,7 +1235,7 @@ describe('Blocks.fromEvents', () => {
   it('BlockDataChanged updates block text', () => {
     const base = Blocks.from([dto('a', 'hello')])
     const result = Blocks.fromEvents(base, [
-      new BlockDataChanged('a', { text: 'world', inline: [] }),
+      new BlockDataChanged('a', new Text('world', [])),
     ])
     expect(result.getBlock('a').data.text).toBe('world')
   })
@@ -1214,7 +1243,7 @@ describe('Blocks.fromEvents', () => {
   it('BlockAdded with previousBlockId inserts after', () => {
     const base = Blocks.from([dto('a'), dto('b')])
     const result = Blocks.fromEvents(base, [
-      new BlockAdded('c', { text: '', inline: [] }, 'a', null),
+      new BlockAdded('c', new Text('', []), 'a', null),
     ])
     expect(preorder(result)).toEqual(['a', 'c', 'b'])
   })
@@ -1222,7 +1251,7 @@ describe('Blocks.fromEvents', () => {
   it('BlockAdded with parentBlockId prepends as first child', () => {
     const base = Blocks.from([dto('a', '', [dto('b')])])
     const result = Blocks.fromEvents(base, [
-      new BlockAdded('c', { text: '', inline: [] }, null, 'a'),
+      new BlockAdded('c', new Text('', []), null, 'a'),
     ])
     // prependChild: c becomes first child of a, before b
     expect(preorder(result)).toEqual(['a', 'c', 'b'])
@@ -1231,7 +1260,7 @@ describe('Blocks.fromEvents', () => {
   it('BlockAdded with both null adds before first block', () => {
     const base = Blocks.from([dto('a')])
     const result = Blocks.fromEvents(base, [
-      new BlockAdded('z', { text: '', inline: [] }, null, null),
+      new BlockAdded('z', new Text('', []), null, null),
     ])
     expect(preorder(result)[0]).toBe('z')
   })
@@ -1282,7 +1311,7 @@ describe('Blocks.fromEvents', () => {
   it('round-trip: add then remove returns base structure', () => {
     const base = Blocks.from([dto('a'), dto('b')])
     const changes = [
-      new BlockAdded('c', { text: 'c', inline: [] }, 'a', null),
+      new BlockAdded('c', new Text('c', []), 'a', null),
       new BlockRemoved('c'),
     ]
     const result = Blocks.fromEvents(base, changes)
@@ -1292,8 +1321,8 @@ describe('Blocks.fromEvents', () => {
   it('multiple BlockDataChanged on same block uses last value', () => {
     const base = Blocks.from([dto('a', 'initial')])
     const result = Blocks.fromEvents(base, [
-      new BlockDataChanged('a', { text: 'first', inline: [] }),
-      new BlockDataChanged('a', { text: 'second', inline: [] }),
+      new BlockDataChanged('a', new Text('first', [])),
+      new BlockDataChanged('a', new Text('second', [])),
     ])
     expect(result.getBlock('a').data.text).toBe('second')
   })

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { Blocks, Block, Text, BlockEditorWithToolbar, BLOCK_EDITOR_EVENT_NAMES } from "$lib/block-editor";
+    import { Blocks, TextBlock, Text, BlockEditorWithToolbar, BLOCK_EDITOR_EVENT_NAMES } from "$lib/block-editor";
     import type { BlockSelection, BlockEditorEventDtoMap } from "$lib/block-editor";
     import ResizableLayout from "../components/resizable-layout.svelte";
     import CollapsibleSection from "../components/collapsible-section.svelte";
@@ -24,10 +24,10 @@
     const initialBlocks =
         loadFromStorage() ??
         Blocks.from([
-            new Block(
+            new TextBlock(
                 "b1",
                 new Text("Hello world!", [{ type: "Bold", start: 0, end: 5 }]),
-                [new Block("b2", new Text("Nested block", []), [])],
+                [new TextBlock("b2", new Text("Nested block", []), [])],
             ),
         ]);
 

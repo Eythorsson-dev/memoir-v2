@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { BlockEditor } from './BlockEditor'
 import { BlockEditorWithToolbar } from './BlockEditorWithToolbar'
-import { Blocks, Block } from '../blocks/blocks'
+import { Blocks, TextBlock, type Block } from '../blocks/blocks'
 import { Text, type InlineTypes } from '../text/text'
 import { BLOCK_EDITOR_EVENT_NAMES } from './events'
 import type { BlockDataUpdatedEventDto } from './events'
@@ -19,8 +19,8 @@ function cleanup(editor: BlockEditor | BlockEditorWithToolbar, container: HTMLEl
   container.remove()
 }
 
-function dto(id: string, text = '', children: Block[] = []): Block {
-  return new Block(id, new Text(text, []), children)
+function dto(id: string, text = '', children: TextBlock[] = []): TextBlock {
+  return new TextBlock(id, new Text(text, []), children)
 }
 
 /** Get the block-editor-editable div from a container */
@@ -121,22 +121,22 @@ function keydown(
 
 /** Get all block IDs in pre-order */
 function preorder(blocks: Blocks): string[] {
-  function walk(bs: ReadonlyArray<Block>): string[] {
-    return bs.flatMap(b => [b.id, ...walk(b.children)])
+  function walk(bs: ReadonlyArray<TextBlock>): string[] {
+    return bs.flatMap(b => [b.id, ...walk(b.children as ReadonlyArray<TextBlock>)])
   }
-  return walk(blocks.blocks)
+  return walk(blocks.blocks as ReadonlyArray<TextBlock>)
 }
 
 /** Find a block by ID in the tree */
-function find(blocks: Blocks, id: string): Block {
-  function search(bs: ReadonlyArray<Block>): Block | undefined {
+function find(blocks: Blocks, id: string): TextBlock {
+  function search(bs: ReadonlyArray<TextBlock>): TextBlock | undefined {
     for (const b of bs) {
       if (b.id === id) return b
-      const found = search(b.children)
+      const found = search(b.children as ReadonlyArray<TextBlock>)
       if (found) return found
     }
   }
-  const result = search(blocks.blocks)
+  const result = search(blocks.blocks as ReadonlyArray<TextBlock>)
   if (!result) throw new Error(`Block '${id}' not found`)
   return result
 }
@@ -818,7 +818,7 @@ describe('Tab / Shift+Tab', () => {
     keydown(container, 'Tab')
     const blocks = editor.getValue()
     // b should now be indented under a
-    expect(find(blocks, 'a').children.map(x => x.id)).toContain('b')
+    expect(find(blocks, 'a').children.map((x: Block<unknown>) => x.id)).toContain('b')
     cleanup(editor, container)
   })
 
@@ -977,7 +977,7 @@ describe('isInlineActive', () => {
   it('returns true when format is active on selection', () => {
     const container = makeContainer()
     const initial = Blocks.from([
-      new Block('a', new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }]), []),
+      new TextBlock('a', new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }]), []),
     ])
     const editor = new BlockEditor(container, initial)
     getEditable(container).focus()
@@ -1070,7 +1070,7 @@ describe('BlockEditorWithToolbar', () => {
     const indentBtn = container.querySelector('[aria-label="Indent"]') as HTMLButtonElement
     indentBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
     const blocks = editor.getValue()
-    expect(find(blocks, 'a').children.map(x => x.id)).toContain('b')
+    expect(find(blocks, 'a').children.map((x: Block<unknown>) => x.id)).toContain('b')
     cleanup(editor, container)
   })
 
