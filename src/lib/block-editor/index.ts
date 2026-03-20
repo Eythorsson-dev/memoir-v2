@@ -1,4 +1,4 @@
-export { Block, TextBlock, OrderedListBlock, Blocks, BlockOffset, BlockRange, BlockMoved, BlockRemoved, BlockAdded, BlockDataChanged, type BlockId, type BlocksChange } from "./blocks/blocks"
+export { Block, TextBlock, OrderedListBlock, Blocks, BlockOffset, BlockRange, BlockMoved, BlockRemoved, BlockAdded, BlockDataChanged, type BlockId, type BlocksChange, type BlockTypeDtoMap, type BlockTypes } from "./blocks/blocks"
 export { BlockEditor } from "./editor/BlockEditor";
 export { BlockEditorWithToolbar } from "./editor/BlockEditorWithToolbar";
 export { BLOCK_EDITOR_EVENT_NAMES } from "./editor/events"

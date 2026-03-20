@@ -6,7 +6,7 @@ import { Text } from '../text/text'
 
 function makeEmitter(debounceMs = 1000, maxWaitMs = 10000): BlockEventEmitter {
   return new BlockEventEmitter(
-    (id) => ({ id, data: new Text('test', []) }),
+    (id) => ({ id, data: new Text('test', []), blockType: 'text' as const }),
     { debounceMs, maxWaitMs },
   )
 }

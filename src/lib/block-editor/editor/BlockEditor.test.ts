@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { BlockEditor } from './BlockEditor'
 import { BlockEditorWithToolbar } from './BlockEditorWithToolbar'
-import { Blocks, TextBlock, type Block } from '../blocks/blocks'
+import { Blocks, TextBlock, OrderedListBlock, type Block } from '../blocks/blocks'
 import { Text, type InlineTypes } from '../text/text'
 import { BLOCK_EDITOR_EVENT_NAMES } from './events'
 import type { BlockDataUpdatedEventDto } from './events'
@@ -1207,6 +1207,66 @@ describe('Record<InlineTypes, HTMLButtonElement> exhaustiveness', () => {
     for (const type of types) {
       expect(container.querySelector(`[data-inline-type="${type}"]`)).not.toBeNull()
     }
+    cleanup(editor, container)
+  })
+})
+
+// ─── isBlockTypeActive ────────────────────────────────────────────────────────
+
+describe('isBlockTypeActive', () => {
+  it('returns true when all selected blocks are text', () => {
+    const container = makeContainer()
+    const blocks = Blocks.from([dto('a', 'Hello'), dto('b', 'World')])
+    const editor = new BlockEditor(container, blocks)
+    setCursor(container, 'a', 0)
+    expect(editor.isBlockTypeActive('text')).toBe(true)
+    cleanup(editor, container)
+  })
+
+  it('returns false when selection includes an ordered-list block', () => {
+    const container = makeContainer()
+    const blocks = Blocks.from([
+      dto('a', 'Hello'),
+      new OrderedListBlock('b', new Text('Item', []), []),
+    ])
+    const editor = new BlockEditor(container, blocks)
+    setCursor(container, 'b', 0)
+    expect(editor.isBlockTypeActive('text')).toBe(false)
+    expect(editor.isBlockTypeActive('ordered-list')).toBe(true)
+    cleanup(editor, container)
+  })
+
+  it('returns false for no selection', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container)
+    expect(editor.isBlockTypeActive('text')).toBe(false)
+    cleanup(editor, container)
+  })
+})
+
+// ─── convertBlockType ────────────────────────────────────────────────────────
+
+describe('convertBlockType', () => {
+  it('converts a single block type', () => {
+    const container = makeContainer()
+    const blocks = Blocks.from([dto('a', 'Hello')])
+    const editor = new BlockEditor(container, blocks)
+    setCursor(container, 'a', 0)
+    editor.convertBlockType('ordered-list')
+    expect(editor.getValue().getBlock('a')).toBeInstanceOf(OrderedListBlock)
+    cleanup(editor, container)
+  })
+
+  it('reverts all blocks in selection back to text', () => {
+    const container = makeContainer()
+    const blocks = Blocks.from([
+      new OrderedListBlock('a', new Text('Item 1', []), []),
+      new OrderedListBlock('b', new Text('Item 2', []), []),
+    ])
+    const editor = new BlockEditor(container, blocks)
+    setCursor(container, 'a', 0)
+    editor.convertBlockType('text')
+    expect(editor.getValue().getBlock('a')).toBeInstanceOf(TextBlock)
     cleanup(editor, container)
   })
 })
