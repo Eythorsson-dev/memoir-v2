@@ -12,8 +12,9 @@ function renderBlock(block: TextBlock | OrderedListBlock, depth = 0): Element {
   if (block instanceof TextBlock) {
     div.setAttribute('data-block-type', 'text')
   } else if (block instanceof OrderedListBlock) {
+    const LIST_STYLES = ['decimal', 'lower-alpha', 'lower-roman'] as const
     div.setAttribute('data-block-type', 'ordered-list')
-    div.setAttribute('data-depth', String(depth))
+    div.setAttribute('data-list-style', LIST_STYLES[depth % 3])
   } else {
     const _exhaustive: never = block
     throw new Error(`Unknown block type: ${JSON.stringify(_exhaustive)}`)
