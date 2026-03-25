@@ -1421,3 +1421,52 @@ describe('Blocks.diff blockType changes', () => {
     expect(changes.filter(c => c instanceof BlockDataChanged)).toHaveLength(0)
   })
 })
+
+// ─── isBlockTypeActive ────────────────────────────────────────────────────────
+
+describe('isBlockTypeActive', () => {
+  it('returns true when all blocks in range are the given type', () => {
+    const b = Blocks.from([dto('a'), dto('b'), dto('c')])
+    expect(b.isBlockTypeActive('a', 'c', 'text')).toBe(true)
+  })
+
+  it('returns true for a single block converted to ordered-list', () => {
+    const b = Blocks.from([dto('a'), dto('b'), dto('c')]).convertType('a', 'a', 'ordered-list')
+    expect(b.isBlockTypeActive('a', 'a', 'ordered-list')).toBe(true)
+  })
+
+  it('returns false when any block in range is a different type', () => {
+    const b = Blocks.from([dto('a'), dto('b'), dto('c')]).convertType('b', 'b', 'ordered-list')
+    expect(b.isBlockTypeActive('a', 'c', 'text')).toBe(false)
+  })
+
+  it('returns false for a range entirely of another type', () => {
+    const b = Blocks.from([dto('a'), dto('b'), dto('c')]).convertType('b', 'b', 'ordered-list')
+    expect(b.isBlockTypeActive('a', 'c', 'ordered-list')).toBe(false)
+  })
+
+  it('returns false for a single block that does not match', () => {
+    const b = Blocks.from([dto('a'), dto('b')])
+    expect(b.isBlockTypeActive('a', 'a', 'ordered-list')).toBe(false)
+  })
+
+  it('returns true for a sub-range of matching blocks', () => {
+    const b = Blocks.from([dto('a'), dto('b'), dto('c')]).convertType('b', 'c', 'ordered-list')
+    expect(b.isBlockTypeActive('b', 'c', 'ordered-list')).toBe(true)
+  })
+
+  it('throws for unknown from id', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.isBlockTypeActive('missing', 'a', 'text')).toThrow()
+  })
+
+  it('throws for unknown to id', () => {
+    const b = Blocks.from([dto('a')])
+    expect(() => b.isBlockTypeActive('a', 'missing', 'text')).toThrow()
+  })
+
+  it('throws if to precedes from in document order', () => {
+    const b = Blocks.from([dto('a'), dto('b'), dto('c')])
+    expect(() => b.isBlockTypeActive('b', 'a', 'text')).toThrow()
+  })
+})

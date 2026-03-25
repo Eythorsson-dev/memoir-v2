@@ -231,15 +231,7 @@ export class BlockEditor {
     const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
     const toId   = sel instanceof BlockRange ? sel.end.blockId   : sel.blockId
     try {
-      let id: BlockId | null = fromId
-      while (id !== null) {
-        const block = this.#state.getBlock(id)
-        const actual: BlockTypes = block instanceof OrderedListBlock ? 'ordered-list' : 'text'
-        if (actual !== type) return false
-        if (id === toId) break
-        id = this.#state.nextBlockId(id)
-      }
-      return true
+      return this.#state.isBlockTypeActive(fromId, toId, type)
     } catch {
       return false
     }
