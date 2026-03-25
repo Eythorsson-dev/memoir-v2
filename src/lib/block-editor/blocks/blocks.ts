@@ -2,24 +2,11 @@ import { Text } from '../text/text'
 
 export type BlockId = string
 
-/**
- * Discriminated union map of all block types.
- * Adding a new key here propagates exhaustiveness errors to every
- * switch on `BlockTypes` throughout the codebase.
- */
-export type BlockTypeDtoMap = {
-  'text': never
-  'ordered-list': never
-}
-
-/** Union of all valid block type names. */
-export type BlockTypes = keyof BlockTypeDtoMap
-
 // ─── Public types ──────────────────────────────────────────────────────────────
 
 /**
  * Abstract base class for all block types.
- * Subclasses hold typed `data` and implement `getLength` and `getText`.
+ * Subclasses hold typed `data` and implement `getLength`, `getText`, and `blockType`.
  */
 export abstract class Block<TData> {
   constructor(
@@ -35,10 +22,15 @@ export abstract class Block<TData> {
 
   /** Returns the text representation of this block's content. */
   abstract getText(): Text
+
+  /** Identifies the block type. Used to derive `BlockTypes` and drive serialisation. */
+  abstract get blockType(): string
 }
 
 /** A plain text block — the default block type. */
 export class TextBlock extends Block<Text> {
+  get blockType() { return 'text' as const }
+
   constructor(
     id: BlockId,
     data: Text,
@@ -58,6 +50,8 @@ export class TextBlock extends Block<Text> {
 
 /** An ordered-list item block. */
 export class OrderedListBlock extends Block<Text> {
+  get blockType() { return 'ordered-list' as const }
+
   constructor(
     id: BlockId,
     data: Text,
@@ -74,6 +68,13 @@ export class OrderedListBlock extends Block<Text> {
     return this.data
   }
 }
+
+// Derived from the concrete block classes — add new classes to this union
+// and BlockTypes updates automatically.
+type AnyBlock = TextBlock | OrderedListBlock
+
+/** Union of all valid block type names, derived from concrete block class declarations. */
+export type BlockTypes = AnyBlock['blockType']
 
 export class BlockOffset {
   /**
@@ -200,19 +201,10 @@ function clampPass(blocks: FlatBlock[]): FlatBlock[] {
 
 // ─── Block (tree DTO) → FlatBlock conversion ──────────────────────────────────
 
-function dtoToFlat(dtos: ReadonlyArray<TextBlock | OrderedListBlock>, depth = 0, result: FlatBlock[] = []): FlatBlock[] {
+function dtoToFlat(dtos: ReadonlyArray<AnyBlock>, depth = 0, result: FlatBlock[] = []): FlatBlock[] {
   for (const dto of dtos) {
-    let blockType: BlockTypes
-    if (dto instanceof TextBlock) {
-      blockType = 'text'
-    } else if (dto instanceof OrderedListBlock) {
-      blockType = 'ordered-list'
-    } else {
-      const _exhaustive: never = dto
-      throw new Error(`Unknown block type: ${JSON.stringify(_exhaustive)}`)
-    }
-    result.push(new FlatBlock(dto.id, dto.data, depth, blockType))
-    dtoToFlat(dto.children as ReadonlyArray<TextBlock | OrderedListBlock>, depth + 1, result)
+    result.push(new FlatBlock(dto.id, dto.data, depth, dto.blockType))
+    dtoToFlat(dto.children as ReadonlyArray<AnyBlock>, depth + 1, result)
   }
   return result
 }
@@ -284,7 +276,7 @@ export class Blocks {
 
   /** Creates a `Blocks` instance from an array of tree-structured block DTOs. */
   static from(dtos: ReadonlyArray<Block<unknown>>): Blocks {
-    return new Blocks(dtoToFlat(dtos as ReadonlyArray<TextBlock | OrderedListBlock>))
+    return new Blocks(dtoToFlat(dtos as ReadonlyArray<AnyBlock>))
   }
 
   /**

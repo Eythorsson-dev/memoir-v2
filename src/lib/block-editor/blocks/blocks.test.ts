@@ -583,6 +583,20 @@ describe('delete', () => {
   })
 })
 
+// ─── blockType property ───────────────────────────────────────────────────────
+
+describe('blockType property', () => {
+  it('TextBlock returns "text"', () => {
+    const b = new TextBlock('id', new Text('hello', []), [])
+    expect(b.blockType).toBe('text')
+  })
+
+  it('OrderedListBlock returns "ordered-list"', () => {
+    const b = new OrderedListBlock('id', new Text('item', []), [])
+    expect(b.blockType).toBe('ordered-list')
+  })
+})
+
 // ─── TextBlock.getLength ──────────────────────────────────────────────────────
 
 describe('TextBlock.getLength', () => {
