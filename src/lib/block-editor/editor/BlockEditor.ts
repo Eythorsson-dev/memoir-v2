@@ -1,6 +1,6 @@
 import { Text, type InlineTypes } from '../text/text'
 import { textSerializer } from '../text/serializer'
-import { Blocks, type BlockId, type BlockTypes, type BlocksChange, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved, OrderedListBlock } from '../blocks/blocks'
+import { Blocks, type BlockId, type BlockTypes, type BlocksChange, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved } from '../blocks/blocks'
 import { blocksSerializer } from '../blocks/serializer'
 import type { BlockEditorEventDtoMap, BlockEditorOptions, BlockSelection } from './events'
 import { BlockEventEmitter } from './BlockEventEmitter'
@@ -121,8 +121,7 @@ export class BlockEditor {
       (id) => {
         try {
           const block = this.#state.getBlock(id)
-          const blockType: BlockTypes = block instanceof OrderedListBlock ? 'ordered-list' : 'text'
-          return { id, data: block.data, blockType }
+          return { id, data: block.data, blockType: block.blockType }
         } catch {
           return null  // block was removed; skip
         }
@@ -574,7 +573,7 @@ export class BlockEditor {
     const pEl = getBlockElementContent(blockEl)
     const newText = textSerializer.parse(Array.from(pEl.childNodes))
     this.#state = this.#state.update(blockId, newText)
-    const blockType: BlockTypes = this.#state.getBlock(blockId) instanceof OrderedListBlock ? 'ordered-list' : 'text'
+    const blockType = this.#state.getBlock(blockId).blockType
     this.#history.updateOrAdd(blockId, new BlockDataChanged(blockId, newText, blockType), this.#pendingSelectionBefore, sel)
     this.#pendingSelectionBefore = null
     this.#render(sel)
