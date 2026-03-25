@@ -8,28 +8,28 @@
 }
 
 .block-editor-editable {
-  counter-reset: ol-0 ol-1 ol-2;
+  counter-reset: ol-decimal ol-alpha ol-roman;
 }
-[data-block-type="ordered-list"][data-depth="0"] {
-  counter-increment: ol-0;
-  counter-reset: ol-1 ol-2;
+[data-list-style="decimal"] {
+  counter-increment: ol-decimal;
+  counter-reset: ol-alpha ol-roman;
 }
-[data-block-type="ordered-list"][data-depth="0"] > p::before {
-  content: counter(ol-0, decimal) ". ";
+[data-list-style="decimal"] > p::before {
+  content: counter(ol-decimal, decimal) ". ";
 }
-[data-block-type="ordered-list"][data-depth="1"] {
-  counter-increment: ol-1;
-  counter-reset: ol-2;
+[data-list-style="lower-alpha"] {
+  counter-increment: ol-alpha;
+  counter-reset: ol-roman;
 }
-[data-block-type="ordered-list"][data-depth="1"] > p::before {
-  content: counter(ol-1, lower-alpha) ". ";
+[data-list-style="lower-alpha"] > p::before {
+  content: counter(ol-alpha, lower-alpha) ". ";
 }
-[data-block-type="ordered-list"][data-depth="2"] {
-  counter-increment: ol-2;
+[data-list-style="lower-roman"] {
+  counter-increment: ol-roman;
 }
-[data-block-type="ordered-list"][data-depth="2"] > p::before {
-  content: counter(ol-2, lower-roman) ". ";
+[data-list-style="lower-roman"] > p::before {
+  content: counter(ol-roman, lower-roman) ". ";
 }
 .block:not([data-block-type="ordered-list"]) {
-  counter-reset: ol-0 ol-1 ol-2;
+  counter-reset: ol-decimal ol-alpha ol-roman;
 }

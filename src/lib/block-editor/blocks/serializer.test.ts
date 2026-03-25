@@ -77,22 +77,27 @@ describe('blocksSerializer.render', () => {
     expect(html).toBe('<div class="block" id="b1" data-block-type="text"><p><br></p></div>')
   })
 
-  it('renders an OrderedListBlock with data-block-type="ordered-list" and data-depth', () => {
+  it('renders an OrderedListBlock at depth 0 with data-list-style="decimal"', () => {
     const blocks = Blocks.from([new OrderedListBlock('ol1', new Text('Item 1', []), [])])
     const html = nodesToHtml(blocksSerializer.render(blocks))
-    expect(html).toBe('<div class="block" id="ol1" data-block-type="ordered-list" data-depth="0"><p>Item 1</p></div>')
+    expect(html).toBe('<div class="block" id="ol1" data-block-type="ordered-list" data-list-style="decimal"><p>Item 1</p></div>')
   })
 
-  it('renders nested OrderedListBlock with incremented data-depth', () => {
+  it('renders nested OrderedListBlock with data-list-style cycling decimal → lower-alpha → lower-roman', () => {
     const blocks = Blocks.from([
-      new OrderedListBlock('ol1', new Text('Item 1', []), [
-        new OrderedListBlock('ol2', new Text('Item 1.1', []), []),
+      new OrderedListBlock('ol1', new Text('1', []), [
+        new OrderedListBlock('ol2', new Text('1.1', []), [
+          new OrderedListBlock('ol3', new Text('1.1.1', []), [
+            new OrderedListBlock('ol4', new Text('1.1.1.1', []), []),
+          ]),
+        ]),
       ]),
     ])
     const html = nodesToHtml(blocksSerializer.render(blocks))
-    expect(html).toContain('data-depth="0"')
-    expect(html).toContain('data-depth="1"')
-    expect(html).toContain('"ol2"')
+    expect(html).toContain('id="ol1" data-block-type="ordered-list" data-list-style="decimal"')
+    expect(html).toContain('id="ol2" data-block-type="ordered-list" data-list-style="lower-alpha"')
+    expect(html).toContain('id="ol3" data-block-type="ordered-list" data-list-style="lower-roman"')
+    expect(html).toContain('id="ol4" data-block-type="ordered-list" data-list-style="decimal"')
   })
 })
 
