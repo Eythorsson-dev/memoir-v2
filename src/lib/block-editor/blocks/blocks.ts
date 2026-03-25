@@ -573,6 +573,18 @@ export class Blocks {
   }
 
   /**
+   * Returns true when every block in the pre-order range [`from`, `to`] is `type`.
+   * @throws {Error} if `from` or `to` are not found, or `to` precedes `from`.
+   */
+  isBlockTypeActive(from: BlockId, to: BlockId, type: BlockTypes): boolean {
+    const [fromIdx, toIdx] = getRange(this.#blocks, from, to)
+    for (let i = fromIdx; i <= toIdx; i++) {
+      if (this.#blocks[i].blockType !== type) return false
+    }
+    return true
+  }
+
+  /**
    * Returns a new `Blocks` with the block identified by `id` removed.
    * @throws if no block with `id` exists.
    * @throws if the block has descendants (delete them first).
