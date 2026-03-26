@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Blocks, Block, TextBlock, OrderedListBlock, BlockOffset, BlockRange, BlockMoved, BlockRemoved, BlockAdded, BlockDataChanged, type BlockTypes } from './blocks'
+import { Blocks, Block, TextBlock, OrderedListBlock, UnorderedListBlock, BlockOffset, BlockRange, BlockMoved, BlockRemoved, BlockAdded, BlockDataChanged, type BlockTypes } from './blocks'
 import { Text } from '../text/text'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -18,13 +18,15 @@ function block(id: string, data: Text = emptyText): { id: string; data: Text } {
   return { id, data }
 }
 
+type AnyConcreteBlock = TextBlock | OrderedListBlock | UnorderedListBlock
+
 /** Pre-order traversal of block IDs */
 function preorder(blocks: Blocks): string[] {
-  function walk(bs: ReadonlyArray<TextBlock | OrderedListBlock>): string[] {
+  function walk(bs: ReadonlyArray<AnyConcreteBlock>): string[] {
     const result: string[] = []
     for (const b of bs) {
       result.push(b.id)
-      result.push(...walk(b.children as ReadonlyArray<TextBlock | OrderedListBlock>))
+      result.push(...walk(b.children as ReadonlyArray<AnyConcreteBlock>))
     }
     return result
   }
@@ -32,11 +34,11 @@ function preorder(blocks: Blocks): string[] {
 }
 
 /** Find a Block anywhere in the tree */
-function find(blocks: Blocks, id: string): TextBlock | OrderedListBlock {
-  function search(bs: ReadonlyArray<TextBlock | OrderedListBlock>): TextBlock | OrderedListBlock | undefined {
+function find(blocks: Blocks, id: string): AnyConcreteBlock {
+  function search(bs: ReadonlyArray<AnyConcreteBlock>): AnyConcreteBlock | undefined {
     for (const b of bs) {
       if (b.id === id) return b
-      const found = search(b.children as ReadonlyArray<TextBlock | OrderedListBlock>)
+      const found = search(b.children as ReadonlyArray<AnyConcreteBlock>)
       if (found) return found
     }
   }
@@ -102,6 +104,13 @@ describe('Blocks.from', () => {
     expect(b.blocks[0]).toBeInstanceOf(OrderedListBlock)
   })
 
+  it('accepts UnorderedListBlock instances', () => {
+    const ulBlock = new UnorderedListBlock('ul1', new Text('Item 1', []), [])
+    const b = Blocks.from([ulBlock])
+    expect(b.blocks[0].id).toBe('ul1')
+    expect(b.blocks[0]).toBeInstanceOf(UnorderedListBlock)
+  })
+
   it('round-trips through JSON serialization', () => {
     const original = Blocks.from([
       new TextBlock('a', new Text('hello', []), []),
@@ -112,6 +121,18 @@ describe('Blocks.from', () => {
     expect(restored.blocks[0]).toBeInstanceOf(TextBlock)
     expect(restored.blocks[0].id).toBe('a')
     expect(restored.blocks[1]).toBeInstanceOf(OrderedListBlock)
+    expect(restored.blocks[1].id).toBe('b')
+  })
+
+  it('round-trips UnorderedListBlock through JSON serialization', () => {
+    const original = Blocks.from([
+      new TextBlock('a', new Text('hello', []), []),
+      new UnorderedListBlock('b', new Text('item', []), []),
+    ])
+    const json = JSON.stringify(original.blocks)
+    const restored = Blocks.from(JSON.parse(json))
+    expect(restored.blocks[0]).toBeInstanceOf(TextBlock)
+    expect(restored.blocks[1]).toBeInstanceOf(UnorderedListBlock)
     expect(restored.blocks[1].id).toBe('b')
   })
 })
@@ -608,6 +629,11 @@ describe('blockType property', () => {
     const b = new OrderedListBlock('id', new Text('item', []), [])
     expect(b.blockType).toBe('ordered-list')
   })
+
+  it('UnorderedListBlock returns "unordered-list"', () => {
+    const b = new UnorderedListBlock('id', new Text('item', []), [])
+    expect(b.blockType).toBe('unordered-list')
+  })
 })
 
 // ─── TextBlock.getLength ──────────────────────────────────────────────────────
@@ -629,6 +655,15 @@ describe('TextBlock.getLength', () => {
 describe('OrderedListBlock.getLength', () => {
   it('returns the text length of the block data', () => {
     const b = new OrderedListBlock('a', new Text('Item', []), [])
+    expect(b.getLength()).toBe(4)
+  })
+})
+
+// ─── UnorderedListBlock.getLength ─────────────────────────────────────────────
+
+describe('UnorderedListBlock.getLength', () => {
+  it('returns the text length of the block data', () => {
+    const b = new UnorderedListBlock('a', new Text('Item', []), [])
     expect(b.getLength()).toBe(4)
   })
 })
@@ -1394,6 +1429,24 @@ describe('convertType', () => {
 
   it('converts ordered-list back to text', () => {
     const b = Blocks.from([new OrderedListBlock('a', new Text('Item', []), [])])
+    const result = b.convertType('a', 'a', 'text')
+    expect(result.getBlock('a')).toBeInstanceOf(TextBlock)
+  })
+
+  it('converts a single TextBlock to unordered-list', () => {
+    const b = Blocks.from([dto('a', 'Item')])
+    const result = b.convertType('a', 'a', 'unordered-list')
+    expect(result.getBlock('a')).toBeInstanceOf(UnorderedListBlock)
+  })
+
+  it('converts ordered-list directly to unordered-list', () => {
+    const b = Blocks.from([new OrderedListBlock('a', new Text('Item', []), [])])
+    const result = b.convertType('a', 'a', 'unordered-list')
+    expect(result.getBlock('a')).toBeInstanceOf(UnorderedListBlock)
+  })
+
+  it('converts unordered-list back to text', () => {
+    const b = Blocks.from([new UnorderedListBlock('a', new Text('Item', []), [])])
     const result = b.convertType('a', 'a', 'text')
     expect(result.getBlock('a')).toBeInstanceOf(TextBlock)
   })

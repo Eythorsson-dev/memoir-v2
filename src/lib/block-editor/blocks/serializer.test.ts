@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { blocksSerializer } from './serializer'
-import { Blocks, TextBlock, OrderedListBlock } from './blocks'
+import { Blocks, TextBlock, OrderedListBlock, UnorderedListBlock } from './blocks'
 import { Text } from '../text/text'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -83,6 +83,29 @@ describe('blocksSerializer.render', () => {
     expect(html).toBe('<div class="block" id="ol1" data-block-type="ordered-list" data-list-style="decimal"><p>Item 1</p></div>')
   })
 
+  it('renders an UnorderedListBlock at depth 0 with data-list-style="disc"', () => {
+    const blocks = Blocks.from([new UnorderedListBlock('ul1', new Text('Item 1', []), [])])
+    const html = nodesToHtml(blocksSerializer.render(blocks))
+    expect(html).toBe('<div class="block" id="ul1" data-block-type="unordered-list" data-list-style="disc"><p>Item 1</p></div>')
+  })
+
+  it('renders nested UnorderedListBlock with data-list-style cycling disc → circle → square', () => {
+    const blocks = Blocks.from([
+      new UnorderedListBlock('ul1', new Text('1', []), [
+        new UnorderedListBlock('ul2', new Text('1.1', []), [
+          new UnorderedListBlock('ul3', new Text('1.1.1', []), [
+            new UnorderedListBlock('ul4', new Text('1.1.1.1', []), []),
+          ]),
+        ]),
+      ]),
+    ])
+    const html = nodesToHtml(blocksSerializer.render(blocks))
+    expect(html).toContain('id="ul1" data-block-type="unordered-list" data-list-style="disc"')
+    expect(html).toContain('id="ul2" data-block-type="unordered-list" data-list-style="circle"')
+    expect(html).toContain('id="ul3" data-block-type="unordered-list" data-list-style="square"')
+    expect(html).toContain('id="ul4" data-block-type="unordered-list" data-list-style="disc"')
+  })
+
   it('renders nested OrderedListBlock with data-list-style cycling decimal → lower-alpha → lower-roman', () => {
     const blocks = Blocks.from([
       new OrderedListBlock('ol1', new Text('1', []), [
@@ -134,6 +157,13 @@ describe('blocksSerializer.parse', () => {
     const el = makeBlockEl('ol1', 'Item', [], 'ordered-list')
     const result = blocksSerializer.parse([el])
     expect(result.blocks[0]).toBeInstanceOf(OrderedListBlock)
+    expect(result.blocks[0].data.text).toBe('Item')
+  })
+
+  it('parses a single UnorderedListBlock element', () => {
+    const el = makeBlockEl('ul1', 'Item', [], 'unordered-list')
+    const result = blocksSerializer.parse([el])
+    expect(result.blocks[0]).toBeInstanceOf(UnorderedListBlock)
     expect(result.blocks[0].data.text).toBe('Item')
   })
 
@@ -306,6 +336,21 @@ describe('roundtrip: parse(render(blocks)) === blocks', () => {
       new TextBlock('t1', new Text('Heading', []), []),
       new OrderedListBlock('ol1', new Text('Item 1', []), []),
       new OrderedListBlock('ol2', new Text('Item 2', []), []),
+    ]))
+  })
+
+  it('UnorderedListBlock roundtrip', () => {
+    roundtrip(Blocks.from([
+      new UnorderedListBlock('ul1', new Text('Item 1', []), []),
+      new UnorderedListBlock('ul2', new Text('Item 2', []), []),
+    ]))
+  })
+
+  it('mixed TextBlock and UnorderedListBlock roundtrip', () => {
+    roundtrip(Blocks.from([
+      new TextBlock('t1', new Text('Heading', []), []),
+      new UnorderedListBlock('ul1', new Text('Item 1', []), []),
+      new UnorderedListBlock('ul2', new Text('Item 2', []), []),
     ]))
   })
 })
