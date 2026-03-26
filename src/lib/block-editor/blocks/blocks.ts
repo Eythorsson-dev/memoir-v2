@@ -25,6 +25,11 @@ export abstract class Block<TData> {
 
   /** Identifies the block type. Used to derive `BlockTypes` and drive serialisation. */
   abstract get blockType(): string
+
+  /** Ensures `blockType` is included when serialising with `JSON.stringify`. */
+  toJSON() {
+    return { id: this.id, data: this.data, children: this.children, blockType: this.blockType }
+  }
 }
 
 /** A plain text block — the default block type. */
@@ -46,10 +51,6 @@ export class TextBlock extends Block<Text> {
   getText(): Text {
     return this.data
   }
-
-  toJSON() {
-    return { id: this.id, data: this.data, children: this.children, blockType: this.blockType }
-  }
 }
 
 /** An ordered-list item block. */
@@ -70,10 +71,6 @@ export class OrderedListBlock extends Block<Text> {
 
   getText(): Text {
     return this.data
-  }
-
-  toJSON() {
-    return { id: this.id, data: this.data, children: this.children, blockType: this.blockType }
   }
 }
 
