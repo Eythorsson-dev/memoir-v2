@@ -1,4 +1,4 @@
-import { Text } from '../text/text'
+import { Text, type TextDto } from '../text/text'
 
 export type BlockId = string
 
@@ -46,6 +46,10 @@ export class TextBlock extends Block<Text> {
   getText(): Text {
     return this.data
   }
+
+  toJSON() {
+    return { id: this.id, data: this.data, children: this.children, blockType: this.blockType }
+  }
 }
 
 /** An ordered-list item block. */
@@ -66,6 +70,10 @@ export class OrderedListBlock extends Block<Text> {
 
   getText(): Text {
     return this.data
+  }
+
+  toJSON() {
+    return { id: this.id, data: this.data, children: this.children, blockType: this.blockType }
   }
 }
 
@@ -202,9 +210,15 @@ function clampPass(blocks: FlatBlock[]): FlatBlock[] {
 // ─── Block (tree DTO) → FlatBlock conversion ──────────────────────────────────
 
 function dtoToFlat(dtos: ReadonlyArray<AnyBlock>, depth = 0, result: FlatBlock[] = []): FlatBlock[] {
-  for (const dto of dtos) {
-    result.push(new FlatBlock(dto.id, dto.data, depth, dto.blockType))
-    dtoToFlat(dto.children as ReadonlyArray<AnyBlock>, depth + 1, result)
+  for (const raw of dtos as ReadonlyArray<unknown>) {
+    const dto = raw as Record<string, unknown>
+    // Accept both class instances and plain JSON objects (e.g. from localStorage).
+    const data: Text = dto['data'] instanceof Text
+      ? dto['data']
+      : new Text((dto['data'] as TextDto).text, [...(dto['data'] as TextDto).inline])
+    const blockType: BlockTypes = (dto['blockType'] as BlockTypes | undefined) ?? 'text'
+    result.push(new FlatBlock(dto['id'] as BlockId, data, depth, blockType))
+    dtoToFlat((dto['children'] ?? []) as ReadonlyArray<AnyBlock>, depth + 1, result)
   }
   return result
 }

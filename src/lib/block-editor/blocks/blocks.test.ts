@@ -101,6 +101,19 @@ describe('Blocks.from', () => {
     expect(b.blocks[0].id).toBe('ol1')
     expect(b.blocks[0]).toBeInstanceOf(OrderedListBlock)
   })
+
+  it('round-trips through JSON serialization', () => {
+    const original = Blocks.from([
+      new TextBlock('a', new Text('hello', []), []),
+      new OrderedListBlock('b', new Text('item', []), []),
+    ])
+    const json = JSON.stringify(original.blocks)
+    const restored = Blocks.from(JSON.parse(json))
+    expect(restored.blocks[0]).toBeInstanceOf(TextBlock)
+    expect(restored.blocks[0].id).toBe('a')
+    expect(restored.blocks[1]).toBeInstanceOf(OrderedListBlock)
+    expect(restored.blocks[1].id).toBe('b')
+  })
 })
 
 // ─── addBefore ────────────────────────────────────────────────────────────────
