@@ -74,9 +74,30 @@ export class OrderedListBlock extends Block<Text> {
   }
 }
 
+/** An unordered-list item block. */
+export class UnorderedListBlock extends Block<Text> {
+  get blockType() { return 'unordered-list' as const }
+
+  constructor(
+    id: BlockId,
+    data: Text,
+    children: ReadonlyArray<Block<unknown>>,
+  ) {
+    super(id, data, children)
+  }
+
+  getLength(): number {
+    return this.data.text.length
+  }
+
+  getText(): Text {
+    return this.data
+  }
+}
+
 // Derived from the concrete block classes — add new classes to this union
 // and BlockTypes updates automatically.
-type AnyBlock = TextBlock | OrderedListBlock
+type AnyBlock = TextBlock | OrderedListBlock | UnorderedListBlock
 
 /** Union of all valid block type names, derived from concrete block class declarations. */
 export type BlockTypes = AnyBlock['blockType']
@@ -146,7 +167,7 @@ export type BlocksChange = BlockMoved | BlockRemoved | BlockAdded | BlockDataCha
 /**
  * Internal flat representation used within blocks.ts.
  * Stores a block's id, parsed Text data, indent level, and block type.
- * Not exported — external code should use TextBlock / OrderedListBlock.
+ * Not exported — external code should use TextBlock / OrderedListBlock / UnorderedListBlock.
  */
 class FlatBlock {
   constructor(
@@ -222,7 +243,7 @@ function dtoToFlat(dtos: ReadonlyArray<AnyBlock>, depth = 0, result: FlatBlock[]
 
 // ─── FlatBlock → Block (tree DTO) conversion ──────────────────────────────────
 
-function flatToDto(blocks: ReadonlyArray<FlatBlock>): ReadonlyArray<TextBlock | OrderedListBlock> {
+function flatToDto(blocks: ReadonlyArray<FlatBlock>): ReadonlyArray<TextBlock | OrderedListBlock | UnorderedListBlock> {
   type MutableBlock = { id: BlockId; data: Text; blockType: BlockTypes; children: MutableBlock[] }
 
   const roots: MutableBlock[] = []
@@ -246,13 +267,15 @@ function flatToDto(blocks: ReadonlyArray<FlatBlock>): ReadonlyArray<TextBlock | 
     stack.push({ node, indent: block.indent })
   }
 
-  function buildBlock(node: MutableBlock): TextBlock | OrderedListBlock {
+  function buildBlock(node: MutableBlock): TextBlock | OrderedListBlock | UnorderedListBlock {
     const children = node.children.map(buildBlock)
     switch (node.blockType) {
       case 'text':
         return new TextBlock(node.id, node.data, children)
       case 'ordered-list':
         return new OrderedListBlock(node.id, node.data, children)
+      case 'unordered-list':
+        return new UnorderedListBlock(node.id, node.data, children)
       default: {
         const _exhaustive: never = node.blockType
         throw new Error(`Unknown blockType: ${_exhaustive}`)
@@ -303,7 +326,7 @@ export class Blocks {
     )
 }
 
-  get blocks(): ReadonlyArray<TextBlock | OrderedListBlock> {
+  get blocks(): ReadonlyArray<TextBlock | OrderedListBlock | UnorderedListBlock> {
     return flatToDto(this.#blocks)
   }
 
@@ -313,11 +336,12 @@ export class Blocks {
    * Returns the Block DTO (with full subtree) for the given id.
    * @throws {Error} if no block with `id` exists.
    */
-  getBlock(id: BlockId): TextBlock | OrderedListBlock {
-    function search(blocks: ReadonlyArray<TextBlock | OrderedListBlock>): TextBlock | OrderedListBlock | undefined {
+  getBlock(id: BlockId): TextBlock | OrderedListBlock | UnorderedListBlock {
+    type AnyConcreteBlock = TextBlock | OrderedListBlock | UnorderedListBlock
+    function search(blocks: ReadonlyArray<AnyConcreteBlock>): AnyConcreteBlock | undefined {
       for (const b of blocks) {
         if (b.id === id) return b
-        const found = search(b.children as ReadonlyArray<TextBlock | OrderedListBlock>)
+        const found = search(b.children as ReadonlyArray<AnyConcreteBlock>)
         if (found) return found
       }
     }
