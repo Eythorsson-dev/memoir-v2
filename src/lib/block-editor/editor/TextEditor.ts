@@ -1,4 +1,7 @@
-import { Text, type InlineTypes } from '../text/text'
+import { Text, type InlineDtoMap, type InlineTypes } from '../text/text'
+
+/** Inline types that carry no extra payload (Bold, Italic, Underline). */
+type NeverPayloadTypes = { [K in InlineTypes]: InlineDtoMap[K] extends never ? K : never }[InlineTypes]
 import { textSerializer } from '../text/serializer'
 import { createElement, Bold, Italic, Underline } from 'lucide'
 import './text-editor.css'
@@ -65,7 +68,7 @@ export class TextEditor {
   #listeners: Set<(t: Text) => void> = new Set()
   #composing = false
 
-  #buttons: Map<InlineTypes, HTMLButtonElement> = new Map()
+  #buttons: Map<NeverPayloadTypes, HTMLButtonElement> = new Map()
 
   constructor(container: HTMLElement, initial?: Text) {
     this.#state = initial ?? new Text('', [])
@@ -74,7 +77,7 @@ export class TextEditor {
     this.#toolbar = document.createElement('div')
     this.#toolbar.className = 'text-editor-toolbar'
 
-    const buttonDefs: { type: InlineTypes; icon: Parameters<typeof createElement>[0] }[] = [
+    const buttonDefs: { type: NeverPayloadTypes; icon: Parameters<typeof createElement>[0] }[] = [
       { type: 'Bold', icon: Bold },
       { type: 'Italic', icon: Italic },
       { type: 'Underline', icon: Underline },
@@ -214,7 +217,7 @@ export class TextEditor {
     }
   }
 
-  #applyOrRemoveInline(type: InlineTypes): void {
+  #applyOrRemoveInline(type: NeverPayloadTypes): void {
     const offsets = this.#getSelectionOffsets()
     if (!offsets) return
 
@@ -227,10 +230,10 @@ export class TextEditor {
     const textLen = this.#state.text.length
     if (start < 0 || end > textLen || start >= end) return
 
-    const toggled = this.#state.isToggled(type, start, end)
+    const toggled = this.#state.isToggled({ type, start, end })
     this.#state = toggled
       ? this.#state.removeInline(type, start, end)
-      : this.#state.addInline(type, start, end)
+      : this.#state.addInline({ type, start, end })
 
     this.#render(start, end)
     this.#updateToolbarState()
@@ -264,7 +267,7 @@ export class TextEditor {
         const end = Math.min(textLen, offsets.end)
         if (start < end) {
           try {
-            active = this.#state.isToggled(type, start, end)
+            active = this.#state.isToggled({ type, start, end })
           } catch {
             active = false
           }

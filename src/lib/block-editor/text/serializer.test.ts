@@ -82,6 +82,21 @@ describe('textSerializer.render', () => {
     const html = nodesToHtml(textSerializer.render(t))
     expect(html).toBe('<strong>hello world!!</strong>')
   })
+
+  it('renders a Highlight inline as <mark> with data-color and data-shade', () => {
+    const t = new Text('hello', [{ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' }])
+    const html = nodesToHtml(textSerializer.render(t))
+    expect(html).toBe('<mark data-color="amber" data-shade="medium">hello</mark>')
+  })
+
+  it('renders two adjacent Highlights with different colors as separate marks', () => {
+    const t = new Text('hello world', [
+      { type: 'Highlight', start: 0, end: 5, color: 'red', shade: 'light' },
+      { type: 'Highlight', start: 5, end: 11, color: 'blue', shade: 'dark' },
+    ])
+    const html = nodesToHtml(textSerializer.render(t))
+    expect(html).toBe('<mark data-color="red" data-shade="light">hello</mark><mark data-color="blue" data-shade="dark"> world</mark>')
+  })
 })
 
 // ─── parse ───────────────────────────────────────────────────────────────────
@@ -116,6 +131,24 @@ describe('textSerializer.parse', () => {
     const t = textSerializer.parse([u])
     expect(t.text).toBe('world')
     expect(t.inline).toEqual([{ type: 'Underline', start: 0, end: 5 }])
+  })
+
+  it('parses a <mark> element with data-color and data-shade to Highlight inline', () => {
+    const mark = document.createElement('mark')
+    mark.dataset.color = 'amber'
+    mark.dataset.shade = 'medium'
+    mark.textContent = 'hello'
+    const t = textSerializer.parse([mark])
+    expect(t.text).toBe('hello')
+    expect(t.inline).toEqual([{ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' }])
+  })
+
+  it('ignores a <mark> element without data-color/data-shade', () => {
+    const mark = document.createElement('mark')
+    mark.textContent = 'hello'
+    const t = textSerializer.parse([mark])
+    expect(t.text).toBe('hello')
+    expect(t.inline).toHaveLength(0)
   })
 })
 
@@ -162,6 +195,21 @@ describe('roundtrip: parse(render(text)) === text', () => {
     const t = new Text('hello world', [
       { type: 'Bold', start: 0, end: 5 },
       { type: 'Italic', start: 0, end: 10 },
+    ])
+    const result = textSerializer.parse(textSerializer.render(t))
+    expect(JSON.stringify(result)).toBe(JSON.stringify(t))
+  })
+
+  it('Highlight inline roundtrip', () => {
+    const t = new Text('hello world', [{ type: 'Highlight', start: 0, end: 5, color: 'blue', shade: 'dark' }])
+    const result = textSerializer.parse(textSerializer.render(t))
+    expect(JSON.stringify(result)).toBe(JSON.stringify(t))
+  })
+
+  it('two adjacent Highlights with different colors roundtrip', () => {
+    const t = new Text('hello world', [
+      { type: 'Highlight', start: 0, end: 5, color: 'red', shade: 'light' },
+      { type: 'Highlight', start: 5, end: 11, color: 'green', shade: 'medium' },
     ])
     const result = textSerializer.parse(textSerializer.render(t))
     expect(JSON.stringify(result)).toBe(JSON.stringify(t))

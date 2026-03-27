@@ -12,4 +12,4 @@ export type {
   BlockSelection,
 } from "./editor/events"
 export { Text } from "./text/text"
-export type { TextDto } from "./text/text"
+export type { TextDto, InlineDto, InlineDtoMap, InlineTypes, HighlightColor, Shade } from "./text/text"
