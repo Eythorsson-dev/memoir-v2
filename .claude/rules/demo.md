@@ -5,7 +5,7 @@
 - `src/routes/+page.svelte` — main demo page
 - `src/routes/+layout.svelte` — root layout; imports `layout.css`
 - `src/routes/layout.css` — global CSS and CSS custom properties (uses Tailwind via `@import 'tailwindcss'`)
-- `src/components/` — shared Svelte components (e.g. `resizable-layout.svelte`, `collapsible-section.svelte`, `json-panel.svelte`)
+- `src/components/` — shared Svelte components
 
 ## Boundary Rule
 
@@ -41,21 +41,7 @@ Always import from the `$lib/block-editor` alias — never use relative paths in
 
 ## Mounting the Editor
 
-Use `{@attach}` to hand a DOM node to the vanilla JS editor — the idiomatic Svelte 5 pattern for integrating class-based libraries:
-
-```svelte
-<script lang="ts">
-  import { BlockEditorWithToolbar } from '$lib/block-editor'
-
-  function mountEditor(node: HTMLElement) {
-    const editor = new BlockEditorWithToolbar(node, initialBlocks)
-    editor.onChange((b) => { /* ... */ })
-    return () => editor.destroy()
-  }
-</script>
-
-<div {@attach mountEditor}></div>
-```
+Use `{@attach}` to hand a DOM node to the vanilla JS editor — the idiomatic Svelte 5 pattern for integrating class-based libraries.
 
 ## Svelte MCP Server
 

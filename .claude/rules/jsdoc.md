@@ -56,7 +56,6 @@ Rules:
 - Omit `@param` and `@returns` when the prose adds nothing beyond the TypeScript type.
 - `@example` blocks must be valid, runnable code — treat them as executable specifications.
 - Do **not** include `@param {Type}` — TypeScript already has the type; repeating it is noise.
-- Do **not** add `@author` or `@version` — version control is the record of authorship.
 
 ## `@example` Discipline
 

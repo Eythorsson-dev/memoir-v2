@@ -14,28 +14,6 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/) with the sev
 [optional footer(s)]
 ```
 
-### Subject Line Rules
-
-1. **Imperative mood** — "Fix bug", not "Fixed bug" or "Fixing bug". Test: *"If applied, this commit will ___"*
-2. **Capitalize** the first word
-3. **No trailing period**
-4. **≤50 characters** (hard cap 72 — GitHub truncates beyond that)
-5. **Separate from body** with a blank line
-6. **Do not describe how** — the diff shows that; the message explains why
-7. **One concern per commit** — if you need "and", split the commit
-
-### Types
-
-| Type | Meaning |
-|---|---|
-| `feat` | New feature |
-| `fix` | Bug fix |
-| `docs` | Documentation only |
-| `refactor` | Code change that neither fixes a bug nor adds a feature |
-| `test` | Adding or correcting tests |
-| `chore` | Maintenance (build, deps, config) |
-| `perf` | Performance improvement |
-
 Append `!` for breaking changes: `feat!: remove deprecated endpoint`
 
 ### Body
