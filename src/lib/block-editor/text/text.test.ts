@@ -117,42 +117,57 @@ describe('Text JSON serialization', () => {
 describe('isToggled', () => {
   it('returns true when a single inline covers the exact range', () => {
     const t = new Text('hello', [{ type: 'Bold', start: 0, end: 5 }])
-    expect(t.isToggled('Bold', 0, 5)).toBe(true)
+    expect(t.isToggled({ type: 'Bold', start: 0, end: 5 })).toBe(true)
   })
 
   it('returns true when the inline covers more than the queried range', () => {
     const t = new Text('hello world', [{ type: 'Bold', start: 0, end: 11 }])
-    expect(t.isToggled('Bold', 2, 8)).toBe(true)
+    expect(t.isToggled({ type: 'Bold', start: 2, end: 8 })).toBe(true)
   })
 
   it('returns false when no inline of that type exists', () => {
     const t = new Text('hello', [])
-    expect(t.isToggled('Bold', 0, 5)).toBe(false)
+    expect(t.isToggled({ type: 'Bold', start: 0, end: 5 })).toBe(false)
   })
 
   it('returns false when the inline only partially covers the range', () => {
     const t = new Text('hello world', [{ type: 'Bold', start: 0, end: 5 }])
-    expect(t.isToggled('Bold', 0, 11)).toBe(false)
+    expect(t.isToggled({ type: 'Bold', start: 0, end: 11 })).toBe(false)
   })
 
   it('returns false when a different type covers the range', () => {
     const t = new Text('hello', [{ type: 'Italic', start: 0, end: 5 }])
-    expect(t.isToggled('Bold', 0, 5)).toBe(false)
+    expect(t.isToggled({ type: 'Bold', start: 0, end: 5 })).toBe(false)
   })
 
   it('throws if start < 0', () => {
     const t = new Text('hello', [])
-    expect(() => t.isToggled('Bold', -1, 3)).toThrow()
+    expect(() => t.isToggled({ type: 'Bold', start: -1, end: 3 })).toThrow()
   })
 
   it('throws if end <= start', () => {
     const t = new Text('hello', [])
-    expect(() => t.isToggled('Bold', 2, 2)).toThrow()
+    expect(() => t.isToggled({ type: 'Bold', start: 2, end: 2 })).toThrow()
   })
 
   it('throws if end > text.length', () => {
     const t = new Text('hello', [])
-    expect(() => t.isToggled('Bold', 0, 6)).toThrow()
+    expect(() => t.isToggled({ type: 'Bold', start: 0, end: 6 })).toThrow()
+  })
+
+  it('returns true when Highlight with matching color+shade covers the range', () => {
+    const t = new Text('hello', [{ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' }])
+    expect(t.isToggled({ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' })).toBe(true)
+  })
+
+  it('returns false when Highlight color matches but shade differs', () => {
+    const t = new Text('hello', [{ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' }])
+    expect(t.isToggled({ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'dark' })).toBe(false)
+  })
+
+  it('returns false when Highlight shade matches but color differs', () => {
+    const t = new Text('hello', [{ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' }])
+    expect(t.isToggled({ type: 'Highlight', start: 0, end: 5, color: 'blue', shade: 'medium' })).toBe(false)
   })
 })
 
@@ -161,26 +176,26 @@ describe('isToggled', () => {
 describe('addInline', () => {
   it('adds a new inline to empty text', () => {
     const t = new Text('hello', [])
-    const t2 = t.addInline('Bold', 0, 5)
+    const t2 = t.addInline({ type: 'Bold', start: 0, end: 5 })
     expect(t2.inline).toEqual([{ type: 'Bold', start: 0, end: 5 }])
   })
 
   it('returns a new Text instance (immutable)', () => {
     const t = new Text('hello', [])
-    const t2 = t.addInline('Bold', 0, 5)
+    const t2 = t.addInline({ type: 'Bold', start: 0, end: 5 })
     expect(t2).not.toBe(t)
     expect(t.inline).toHaveLength(0)
   })
 
   it('merges overlapping same-type inline', () => {
     const t = new Text('hello world', [{ type: 'Bold', start: 0, end: 6 }])
-    const t2 = t.addInline('Bold', 4, 11)
+    const t2 = t.addInline({ type: 'Bold', start: 4, end: 11 })
     expect(t2.inline).toEqual([{ type: 'Bold', start: 0, end: 11 }])
   })
 
   it('merges touching same-type inline', () => {
     const t = new Text('hello world', [{ type: 'Bold', start: 0, end: 5 }])
-    const t2 = t.addInline('Bold', 5, 11)
+    const t2 = t.addInline({ type: 'Bold', start: 5, end: 11 })
     expect(t2.inline).toEqual([{ type: 'Bold', start: 0, end: 11 }])
   })
 
@@ -190,13 +205,13 @@ describe('addInline', () => {
       { type: 'Bold', start: 5, end: 15 },
       { type: 'Bold', start: 20, end: 30 },
     ])
-    const t2 = t.addInline('Bold', 15, 35)
+    const t2 = t.addInline({ type: 'Bold', start: 15, end: 35 })
     expect(t2.inline).toEqual([{ type: 'Bold', start: 5, end: 35 }])
   })
 
   it('does not merge non-adjacent same-type inlines', () => {
     const t = new Text('hello world!', [{ type: 'Bold', start: 0, end: 3 }])
-    const t2 = t.addInline('Bold', 7, 12)
+    const t2 = t.addInline({ type: 'Bold', start: 7, end: 12 })
     expect(t2.inline).toHaveLength(2)
     expect(t2.inline[0]).toMatchObject({ type: 'Bold', start: 0, end: 3 })
     expect(t2.inline[1]).toMatchObject({ type: 'Bold', start: 7, end: 12 })
@@ -204,23 +219,82 @@ describe('addInline', () => {
 
   it('does not merge different-type inlines', () => {
     const t = new Text('hello world', [{ type: 'Italic', start: 0, end: 11 }])
-    const t2 = t.addInline('Bold', 0, 11)
+    const t2 = t.addInline({ type: 'Bold', start: 0, end: 11 })
     expect(t2.inline).toHaveLength(2)
   })
 
   it('throws if start < 0', () => {
     const t = new Text('hello', [])
-    expect(() => t.addInline('Bold', -1, 5)).toThrow()
+    expect(() => t.addInline({ type: 'Bold', start: -1, end: 5 })).toThrow()
   })
 
   it('throws if end <= start', () => {
     const t = new Text('hello', [])
-    expect(() => t.addInline('Bold', 3, 3)).toThrow()
+    expect(() => t.addInline({ type: 'Bold', start: 3, end: 3 })).toThrow()
   })
 
   it('throws if end > text.length', () => {
     const t = new Text('hello', [])
-    expect(() => t.addInline('Bold', 0, 6)).toThrow()
+    expect(() => t.addInline({ type: 'Bold', start: 0, end: 6 })).toThrow()
+  })
+
+  it('merges adjacent Highlight inlines with the same color+shade', () => {
+    const t = new Text('hello world', [{ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' }])
+    const t2 = t.addInline({ type: 'Highlight', start: 5, end: 11, color: 'amber', shade: 'medium' })
+    expect(t2.inline).toEqual([{ type: 'Highlight', start: 0, end: 11, color: 'amber', shade: 'medium' }])
+  })
+
+  it('does NOT merge adjacent Highlight inlines with different colors', () => {
+    const t = new Text('hello world', [{ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' }])
+    const t2 = t.addInline({ type: 'Highlight', start: 5, end: 11, color: 'blue', shade: 'medium' })
+    expect(t2.inline).toHaveLength(2)
+    expect(t2.inline[0]).toMatchObject({ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' })
+    expect(t2.inline[1]).toMatchObject({ type: 'Highlight', start: 5, end: 11, color: 'blue', shade: 'medium' })
+  })
+
+  it('does NOT merge adjacent Highlight inlines with different shades', () => {
+    const t = new Text('hello world', [{ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'light' }])
+    const t2 = t.addInline({ type: 'Highlight', start: 5, end: 11, color: 'amber', shade: 'dark' })
+    expect(t2.inline).toHaveLength(2)
+  })
+})
+
+// ─── isCoveredByType ─────────────────────────────────────────────────────────
+
+describe('isCoveredByType', () => {
+  it('returns true when any Highlight of any color covers the range', () => {
+    const t = new Text('hello', [{ type: 'Highlight', start: 0, end: 5, color: 'red', shade: 'light' }])
+    expect(t.isCoveredByType('Highlight', 0, 5)).toBe(true)
+  })
+
+  it('returns true regardless of payload', () => {
+    const t = new Text('hello', [{ type: 'Highlight', start: 0, end: 5, color: 'blue', shade: 'dark' }])
+    expect(t.isCoveredByType('Highlight', 1, 4)).toBe(true)
+  })
+
+  it('returns false when no inline of that type covers the range', () => {
+    const t = new Text('hello', [{ type: 'Bold', start: 0, end: 5 }])
+    expect(t.isCoveredByType('Highlight', 0, 5)).toBe(false)
+  })
+
+  it('returns false when inline only partially covers the range', () => {
+    const t = new Text('hello world', [{ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' }])
+    expect(t.isCoveredByType('Highlight', 0, 11)).toBe(false)
+  })
+
+  it('returns true for Bold type (no payload)', () => {
+    const t = new Text('hello', [{ type: 'Bold', start: 0, end: 5 }])
+    expect(t.isCoveredByType('Bold', 0, 5)).toBe(true)
+  })
+
+  it('throws if start < 0', () => {
+    const t = new Text('hello', [])
+    expect(() => t.isCoveredByType('Bold', -1, 3)).toThrow()
+  })
+
+  it('throws if end > text.length', () => {
+    const t = new Text('hello', [])
+    expect(() => t.isCoveredByType('Bold', 0, 6)).toThrow()
   })
 })
 

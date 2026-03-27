@@ -20,6 +20,12 @@ export interface BlockEditorOptions {
   dataUpdateDebounceMs?: number  // default 1000
   /** Maximum time to defer the event — fires even during continuous rapid typing once this limit is reached. Default 10000. */
   dataUpdateMaxWaitMs?:  number  // default 10000
+  /**
+   * localStorage key used to persist the last-used highlight color and shade
+   * across sessions. Shared globally across all editors on the page.
+   * @default 'previous-highlight'
+   */
+  highlightStorageKey?: string
 }
 
 export const BLOCK_EDITOR_EVENT_NAMES = [
