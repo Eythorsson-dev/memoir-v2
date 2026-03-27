@@ -33,3 +33,13 @@
 .block:not([data-block-type="ordered-list"]) {
   counter-reset: ol-decimal ol-alpha ol-roman;
 }
+
+[data-list-style="disc"] > p::before {
+  content: "• ";
+}
+[data-list-style="circle"] > p::before {
+  content: "◦ ";
+}
+[data-list-style="square"] > p::before {
+  content: "▪ ";
+}
