@@ -15,7 +15,6 @@ Guidelines drawn from WCAG 2.2, WAI-ARIA APG, Material Design 3, Apple HIG, and 
 - Set `cursor: default` (not `cursor: not-allowed`) on disabled buttons. `not-allowed` implies the user is doing something forbidden; `default` simply signals the action is unavailable right now.
 - **Do not remove disabled buttons from the DOM** — their presence communicates that the feature exists. Hide them only if the feature is permanently unavailable in this context.
 - Disabled buttons should still show a tooltip explaining *why* they are disabled when feasible (e.g., "Nothing to undo"). For simple toolbar buttons where the reason is obvious, the tooltip can be omitted.
-- Disabled buttons must not be reachable via `Tab` — the browser enforces this automatically when `disabled` is set on a `<button>`.
 
 ## Active / Toggled State
 
