@@ -1005,6 +1005,111 @@ describe('isInlineActive', () => {
   })
 })
 
+// ─── cross-block inline operations ───────────────────────────────────────────
+
+describe('cross-block inline operations', () => {
+  it('toggleInline Bold across two blocks → applies Bold to both block segments', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello'), dto('b', 'World')]))
+    getEditable(container).focus()
+    setRange(container, 'a', 2, 'b', 3)
+    editor.toggleInline('Bold')
+    const blockA = find(editor.getValue(), 'a')
+    const blockB = find(editor.getValue(), 'b')
+    expect(blockA.data.inline).toContainEqual({ type: 'Bold', start: 2, end: 5 })
+    expect(blockB.data.inline).toContainEqual({ type: 'Bold', start: 0, end: 3 })
+    cleanup(editor, container)
+  })
+
+  it('toggleInline Bold across two blocks (all already Bold) → removes Bold from both', () => {
+    const container = makeContainer()
+    const initial = Blocks.from([
+      new TextBlock('a', new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }]), []),
+      new TextBlock('b', new Text('World', [{ type: 'Bold', start: 0, end: 5 }]), []),
+    ])
+    const editor = new BlockEditor(container, initial)
+    getEditable(container).focus()
+    setRange(container, 'a', 0, 'b', 5)
+    editor.toggleInline('Bold')
+    const blockA = find(editor.getValue(), 'a')
+    const blockB = find(editor.getValue(), 'b')
+    expect(blockA.data.inline).toHaveLength(0)
+    expect(blockB.data.inline).toHaveLength(0)
+    cleanup(editor, container)
+  })
+
+  it('toggleInline Bold across three blocks → applies Bold to all three segments', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'AAA'), dto('b', 'BBB'), dto('c', 'CCC')]))
+    getEditable(container).focus()
+    setRange(container, 'a', 1, 'c', 2)
+    editor.toggleInline('Bold')
+    const blockA = find(editor.getValue(), 'a')
+    const blockB = find(editor.getValue(), 'b')
+    const blockC = find(editor.getValue(), 'c')
+    expect(blockA.data.inline).toContainEqual({ type: 'Bold', start: 1, end: 3 })
+    expect(blockB.data.inline).toContainEqual({ type: 'Bold', start: 0, end: 3 })
+    expect(blockC.data.inline).toContainEqual({ type: 'Bold', start: 0, end: 2 })
+    cleanup(editor, container)
+  })
+
+  it('toggleInline Highlight across two blocks → applies highlight to both segments', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello'), dto('b', 'World')]))
+    getEditable(container).focus()
+    setRange(container, 'a', 1, 'b', 4)
+    editor.toggleInline('Highlight', { color: 'amber' })
+    const blockA = find(editor.getValue(), 'a')
+    const blockB = find(editor.getValue(), 'b')
+    expect(blockA.data.inline).toContainEqual({ type: 'Highlight', start: 1, end: 5, color: 'amber' })
+    expect(blockB.data.inline).toContainEqual({ type: 'Highlight', start: 0, end: 4, color: 'amber' })
+    cleanup(editor, container)
+  })
+
+  it('removeInlineFromSelection across blocks → removes inline from both segments', () => {
+    const container = makeContainer()
+    const initial = Blocks.from([
+      new TextBlock('a', new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }]), []),
+      new TextBlock('b', new Text('World', [{ type: 'Bold', start: 0, end: 5 }]), []),
+    ])
+    const editor = new BlockEditor(container, initial)
+    getEditable(container).focus()
+    setRange(container, 'a', 0, 'b', 5)
+    editor.removeInlineFromSelection('Bold')
+    const blockA = find(editor.getValue(), 'a')
+    const blockB = find(editor.getValue(), 'b')
+    expect(blockA.data.inline).toHaveLength(0)
+    expect(blockB.data.inline).toHaveLength(0)
+    cleanup(editor, container)
+  })
+
+  it('isInlineActive across blocks → true when all segments are covered', () => {
+    const container = makeContainer()
+    const initial = Blocks.from([
+      new TextBlock('a', new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }]), []),
+      new TextBlock('b', new Text('World', [{ type: 'Bold', start: 0, end: 5 }]), []),
+    ])
+    const editor = new BlockEditor(container, initial)
+    getEditable(container).focus()
+    setRange(container, 'a', 0, 'b', 5)
+    expect(editor.isInlineActive('Bold')).toBe(true)
+    cleanup(editor, container)
+  })
+
+  it('isInlineActive across blocks → false when not all segments are covered', () => {
+    const container = makeContainer()
+    const initial = Blocks.from([
+      new TextBlock('a', new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }]), []),
+      new TextBlock('b', new Text('World', []), []),
+    ])
+    const editor = new BlockEditor(container, initial)
+    getEditable(container).focus()
+    setRange(container, 'a', 0, 'b', 5)
+    expect(editor.isInlineActive('Bold')).toBe(false)
+    cleanup(editor, container)
+  })
+})
+
 // ─── BlockEditorWithToolbar ───────────────────────────────────────────────────
 
 describe('BlockEditorWithToolbar', () => {

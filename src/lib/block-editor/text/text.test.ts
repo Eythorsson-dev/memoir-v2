@@ -155,19 +155,14 @@ describe('isToggled', () => {
     expect(() => t.isToggled({ type: 'Bold', start: 0, end: 6 })).toThrow()
   })
 
-  it('returns true when Highlight with matching color+shade covers the range', () => {
-    const t = new Text('hello', [{ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' }])
-    expect(t.isToggled({ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' })).toBe(true)
+  it('returns true when Highlight with matching color covers the range', () => {
+    const t = new Text('hello', [{ type: 'Highlight', start: 0, end: 5, color: 'amber' }])
+    expect(t.isToggled({ type: 'Highlight', start: 0, end: 5, color: 'amber' })).toBe(true)
   })
 
-  it('returns false when Highlight color matches but shade differs', () => {
-    const t = new Text('hello', [{ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' }])
-    expect(t.isToggled({ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'dark' })).toBe(false)
-  })
-
-  it('returns false when Highlight shade matches but color differs', () => {
-    const t = new Text('hello', [{ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' }])
-    expect(t.isToggled({ type: 'Highlight', start: 0, end: 5, color: 'blue', shade: 'medium' })).toBe(false)
+  it('returns false when Highlight color differs', () => {
+    const t = new Text('hello', [{ type: 'Highlight', start: 0, end: 5, color: 'amber' }])
+    expect(t.isToggled({ type: 'Highlight', start: 0, end: 5, color: 'blue' })).toBe(false)
   })
 })
 
@@ -238,24 +233,18 @@ describe('addInline', () => {
     expect(() => t.addInline({ type: 'Bold', start: 0, end: 6 })).toThrow()
   })
 
-  it('merges adjacent Highlight inlines with the same color+shade', () => {
-    const t = new Text('hello world', [{ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' }])
-    const t2 = t.addInline({ type: 'Highlight', start: 5, end: 11, color: 'amber', shade: 'medium' })
-    expect(t2.inline).toEqual([{ type: 'Highlight', start: 0, end: 11, color: 'amber', shade: 'medium' }])
+  it('merges adjacent Highlight inlines with the same color', () => {
+    const t = new Text('hello world', [{ type: 'Highlight', start: 0, end: 5, color: 'amber' }])
+    const t2 = t.addInline({ type: 'Highlight', start: 5, end: 11, color: 'amber' })
+    expect(t2.inline).toEqual([{ type: 'Highlight', start: 0, end: 11, color: 'amber' }])
   })
 
   it('does NOT merge adjacent Highlight inlines with different colors', () => {
-    const t = new Text('hello world', [{ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' }])
-    const t2 = t.addInline({ type: 'Highlight', start: 5, end: 11, color: 'blue', shade: 'medium' })
+    const t = new Text('hello world', [{ type: 'Highlight', start: 0, end: 5, color: 'amber' }])
+    const t2 = t.addInline({ type: 'Highlight', start: 5, end: 11, color: 'blue' })
     expect(t2.inline).toHaveLength(2)
-    expect(t2.inline[0]).toMatchObject({ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' })
-    expect(t2.inline[1]).toMatchObject({ type: 'Highlight', start: 5, end: 11, color: 'blue', shade: 'medium' })
-  })
-
-  it('does NOT merge adjacent Highlight inlines with different shades', () => {
-    const t = new Text('hello world', [{ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'light' }])
-    const t2 = t.addInline({ type: 'Highlight', start: 5, end: 11, color: 'amber', shade: 'dark' })
-    expect(t2.inline).toHaveLength(2)
+    expect(t2.inline[0]).toMatchObject({ type: 'Highlight', start: 0, end: 5, color: 'amber' })
+    expect(t2.inline[1]).toMatchObject({ type: 'Highlight', start: 5, end: 11, color: 'blue' })
   })
 })
 
@@ -263,12 +252,12 @@ describe('addInline', () => {
 
 describe('isCoveredByType', () => {
   it('returns true when any Highlight of any color covers the range', () => {
-    const t = new Text('hello', [{ type: 'Highlight', start: 0, end: 5, color: 'red', shade: 'light' }])
+    const t = new Text('hello', [{ type: 'Highlight', start: 0, end: 5, color: 'red' }])
     expect(t.isCoveredByType('Highlight', 0, 5)).toBe(true)
   })
 
   it('returns true regardless of payload', () => {
-    const t = new Text('hello', [{ type: 'Highlight', start: 0, end: 5, color: 'blue', shade: 'dark' }])
+    const t = new Text('hello', [{ type: 'Highlight', start: 0, end: 5, color: 'blue' }])
     expect(t.isCoveredByType('Highlight', 1, 4)).toBe(true)
   })
 
@@ -278,7 +267,7 @@ describe('isCoveredByType', () => {
   })
 
   it('returns false when inline only partially covers the range', () => {
-    const t = new Text('hello world', [{ type: 'Highlight', start: 0, end: 5, color: 'amber', shade: 'medium' }])
+    const t = new Text('hello world', [{ type: 'Highlight', start: 0, end: 5, color: 'amber' }])
     expect(t.isCoveredByType('Highlight', 0, 11)).toBe(false)
   })
 

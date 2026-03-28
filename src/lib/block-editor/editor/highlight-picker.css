@@ -16,14 +16,16 @@
 
 .toolbar-highlight-split .highlight-main-btn {
   border-radius: 5px 0 0 5px;
-  padding: 0 4px;
-  width: 28px;
+  padding: 2px 4px 8px;
+  width: 30px;
 }
 
 .toolbar-highlight-split .highlight-chevron-btn {
   border-radius: 0 5px 5px 0;
   padding: 0 2px;
   width: 14px;
+  align-self: stretch;
+  height: auto;
 }
 
 .toolbar-highlight-split .highlight-chevron-btn svg {
@@ -31,36 +33,38 @@
   height: 10px;
 }
 
-/* Color swatch strip under the main button icon */
+/* Vivid colour bar under the highlighter icon */
 .toolbar-highlight-split .highlight-color-bar {
   display: block;
   position: absolute;
-  bottom: 4px;
+  bottom: 5px;
   left: 5px;
-  right: 22px;
+  right: 21px;
   height: 3px;
-  border-radius: 1px;
-  background-color: var(--hl-bar-color, #fcd34d);
+  border-radius: 2px;
   pointer-events: none;
+  /* background-color is set via inline style from JS */
 }
 
 /* ─── Highlight picker popover ──────────────────────────────────────────── */
 
 .highlight-picker {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   left: 0;
   z-index: 200;
-  background: var(--tooltip-bg, #1e1e1e);
-  color: var(--tooltip-color, #f0f0f0);
-  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
-  border-radius: 8px;
-  padding: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  background: #1e1e1e;
+  color: #f0f0f0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    0 8px 24px rgba(0, 0, 0, 0.45);
   display: none;
   flex-direction: column;
-  gap: 6px;
-  min-width: 180px;
+  gap: 8px;
+  min-width: 192px;
 }
 
 .highlight-picker.is-open {
@@ -69,84 +73,90 @@
 
 .highlight-picker-grid {
   display: grid;
-  /* 6 color columns */
-  grid-template-columns: repeat(6, 24px);
-  gap: 4px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
 }
 
-.highlight-picker-swatch {
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  border: 1px solid transparent;
+/* ─── Swatches ──────────────────────────────────────────────────────────── */
+/*
+ * These selectors must beat `.text-editor-toolbar button.is-active`
+ * (specificity 0,2,1) to prevent the toolbar active-background from
+ * painting over the swatch colour.
+ *
+ * `.text-editor-toolbar .highlight-picker-swatch`         → 0,2,0
+ * `.text-editor-toolbar .highlight-picker-swatch.is-active` → 0,3,0  ✓
+ */
+
+.text-editor-toolbar .highlight-picker-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1.5px solid rgba(0, 0, 0, 0.14);
   cursor: pointer;
   padding: 0;
   background-color: var(--swatch-bg);
   position: relative;
-  transition: transform 0.1s, box-shadow 0.1s;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  flex-shrink: 0;
 }
 
-.highlight-picker-swatch:hover:not(:disabled) {
-  transform: scale(1.15);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+.text-editor-toolbar .highlight-picker-swatch:hover:not(:disabled) {
+  background-color: var(--swatch-bg);
+  transform: scale(1.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
   z-index: 1;
 }
 
-.highlight-picker-swatch.is-active {
-  border-color: color-mix(in srgb, currentColor 60%, transparent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 25%, transparent);
+.text-editor-toolbar .highlight-picker-swatch.is-active {
+  background-color: var(--swatch-bg);
+  border-color: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 0 0 2px #1e1e1e, 0 0 0 4px rgba(255, 255, 255, 0.5);
 }
 
-/* Checkmark on active swatch */
-.highlight-picker-swatch.is-active::after {
+/* Checkmark: dark stroke for light swatches, white for dark ones */
+.text-editor-toolbar .highlight-picker-swatch.is-active::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6l3 3 5-5' stroke='%23000' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/10px no-repeat;
-  opacity: 0.6;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6l3 3 5-5' stroke='%23000000' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 10px;
+  opacity: 0.55;
 }
 
-/* Swatch colors — light mode. These mirror the mark element colors above. */
 
-/* Red */
-.highlight-picker-swatch[data-color="red"][data-shade="light"]      { --swatch-bg: #fee2e2 }
-.highlight-picker-swatch[data-color="red"][data-shade="medium"]     { --swatch-bg: #fca5a5 }
-.highlight-picker-swatch[data-color="red"][data-shade="dark"]       { --swatch-bg: #dc2626 }
-/* Amber */
-.highlight-picker-swatch[data-color="amber"][data-shade="light"]    { --swatch-bg: #fef3c7 }
-.highlight-picker-swatch[data-color="amber"][data-shade="medium"]   { --swatch-bg: #fcd34d }
-.highlight-picker-swatch[data-color="amber"][data-shade="dark"]     { --swatch-bg: #d97706 }
-/* Green */
-.highlight-picker-swatch[data-color="green"][data-shade="light"]    { --swatch-bg: #dcfce7 }
-.highlight-picker-swatch[data-color="green"][data-shade="medium"]   { --swatch-bg: #86efac }
-.highlight-picker-swatch[data-color="green"][data-shade="dark"]     { --swatch-bg: #16a34a }
-/* Blue */
-.highlight-picker-swatch[data-color="blue"][data-shade="light"]     { --swatch-bg: #dbeafe }
-.highlight-picker-swatch[data-color="blue"][data-shade="medium"]    { --swatch-bg: #93c5fd }
-.highlight-picker-swatch[data-color="blue"][data-shade="dark"]      { --swatch-bg: #2563eb }
-/* Violet */
-.highlight-picker-swatch[data-color="violet"][data-shade="light"]   { --swatch-bg: #ede9fe }
-.highlight-picker-swatch[data-color="violet"][data-shade="medium"]  { --swatch-bg: #c4b5fd }
-.highlight-picker-swatch[data-color="violet"][data-shade="dark"]    { --swatch-bg: #7c3aed }
-/* Fuchsia */
-.highlight-picker-swatch[data-color="fuchsia"][data-shade="light"]  { --swatch-bg: #fae8ff }
-.highlight-picker-swatch[data-color="fuchsia"][data-shade="medium"] { --swatch-bg: #f0abfc }
-.highlight-picker-swatch[data-color="fuchsia"][data-shade="dark"]   { --swatch-bg: #c026d3 }
+/* ─── Swatch colours — mirror the highlight mark colours exactly ─────────── */
 
-/* ─── Remove highlight button ─────────────────────────────────────────────── */
+.highlight-picker-swatch[data-color="red"]     { --swatch-bg: #fca5a5 }
+.highlight-picker-swatch[data-color="amber"]   { --swatch-bg: #fcd34d }
+.highlight-picker-swatch[data-color="green"]   { --swatch-bg: #86efac }
+.highlight-picker-swatch[data-color="blue"]    { --swatch-bg: #93c5fd }
+.highlight-picker-swatch[data-color="violet"]  { --swatch-bg: #c4b5fd }
+.highlight-picker-swatch[data-color="fuchsia"] { --swatch-bg: #f0abfc }
 
-.highlight-picker-remove {
+/* ─── Remove button ─────────────────────────────────────────────────────── */
+/*
+ * Must beat `.text-editor-toolbar button` (0,1,1) which sets width:28px,
+ * height:28px, and border:1px solid transparent on every button in the toolbar.
+ * Using `.text-editor-toolbar .highlight-picker-remove` gives specificity 0,2,0.
+ */
+
+.text-editor-toolbar .highlight-picker-remove {
   width: 100%;
+  height: auto;
   padding: 5px 8px;
-  border-radius: 5px;
-  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
   background: transparent;
-  color: inherit;
-  font-size: 11px;
+  color: #d1d5db;
+  font-size: 11.5px;
   cursor: pointer;
   text-align: center;
+  transition: background 0.1s, border-color 0.1s;
 }
 
-.highlight-picker-remove:hover:not(:disabled) {
-  background: var(--toolbar-btn-hover-bg);
+.text-editor-toolbar .highlight-picker-remove:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
 }
