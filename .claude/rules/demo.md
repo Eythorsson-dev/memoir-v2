@@ -28,6 +28,12 @@ Use **`@lucide/svelte`** for all icons in the demo. Never use emoji, Unicode sym
 - Global styles and CSS custom properties go in `src/routes/layout.css`.
 - Use Tailwind utility classes in component templates. Add a `<style>` block only when the styling cannot be expressed with Tailwind (e.g. targeting third-party library class names). Do not create separate `.css` files for Svelte components.
 
+## Dark Mode
+
+Dark mode is **always controlled via `[data-theme="dark"]`** on `<html>`. The inline script in `src/app.html` sets this attribute at startup from `localStorage` (or `prefers-color-scheme` as a fallback), so `[data-theme="dark"]` is always present.
+
+**Never use `@media (prefers-color-scheme: dark)` in editor or component CSS.** It is redundant and will not fire for users who have overridden the theme via the UI toggle.
+
 ## Importing the Editor Library
 
 Always import from the `$lib/block-editor` alias — never use relative paths into `src/lib/`:

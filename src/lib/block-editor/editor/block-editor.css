@@ -3,8 +3,7 @@
 .block-editor-editable mark[data-color] {
   background-color: var(--hl-bg);
   color: var(--hl-fg);
-  border-radius: 2px;
-  padding: 0 1px;
+  border-radius: 4px;
 }
 
 .block-editor-editable mark[data-color="red"]     { --hl-bg: #fca5a5; --hl-fg: #7f1d1d }
@@ -13,6 +12,13 @@
 .block-editor-editable mark[data-color="blue"]    { --hl-bg: #93c5fd; --hl-fg: #1e3a8a }
 .block-editor-editable mark[data-color="violet"]  { --hl-bg: #c4b5fd; --hl-fg: #4c1d95 }
 .block-editor-editable mark[data-color="fuchsia"] { --hl-bg: #f0abfc; --hl-fg: #701a75 }
+
+[data-theme="dark"] .block-editor-editable mark[data-color="red"]     { --hl-bg: rgb(248 113 113 / 0.8) }
+[data-theme="dark"] .block-editor-editable mark[data-color="amber"]   { --hl-bg: rgb(251 191 36 / 0.8) }
+[data-theme="dark"] .block-editor-editable mark[data-color="green"]   { --hl-bg: rgb(74 222 128 / 0.8) }
+[data-theme="dark"] .block-editor-editable mark[data-color="blue"]    { --hl-bg: rgb(96 165 250 / 0.8) }
+[data-theme="dark"] .block-editor-editable mark[data-color="violet"]  { --hl-bg: rgb(167 139 250 / 0.8) }
+[data-theme="dark"] .block-editor-editable mark[data-color="fuchsia"] { --hl-bg: rgb(232 121 249 / 0.8) }
 
 .block-editor-editable .block > p {
   margin: 0;
