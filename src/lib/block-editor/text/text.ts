@@ -1,9 +1,6 @@
 /** Valid hue names for highlight annotations. */
 export type HighlightColor = 'red' | 'amber' | 'green' | 'blue' | 'violet' | 'fuchsia'
 
-/** Intensity/brightness level for highlight annotations. */
-export type Shade = 'light' | 'medium' | 'dark'
-
 /**
  * Discriminated union map of all inline annotation types.
  * The value type `never` signals that an inline carries no extra payload
@@ -16,7 +13,7 @@ export type InlineDtoMap = {
   Italic: never
   Bold: never
   Underline: never
-  Highlight: { color: HighlightColor; shade: Shade }
+  Highlight: { color: HighlightColor }
 }
 
 /** Union of all valid inline type names. */

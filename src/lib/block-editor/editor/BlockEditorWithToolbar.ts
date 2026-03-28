@@ -1,4 +1,4 @@
-import { type InlineTypes, type InlineDtoMap, type HighlightColor, type Shade } from '../text/text'
+import { type InlineTypes, type InlineDtoMap, type HighlightColor } from '../text/text'
 import { Blocks } from '../blocks/blocks'
 import { BlockEditor } from './BlockEditor'
 import type { BlockEditorEventDtoMap, BlockEditorOptions } from './events'
@@ -9,9 +9,8 @@ import './highlight-picker.css'
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const HIGHLIGHT_COLORS: HighlightColor[] = ['red', 'amber', 'green', 'blue', 'violet', 'fuchsia']
-const HIGHLIGHT_SHADES: Shade[] = ['light', 'medium', 'dark']
 
-const DEFAULT_HIGHLIGHT: { color: HighlightColor; shade: Shade } = { color: 'amber', shade: 'medium' }
+const DEFAULT_HIGHLIGHT: { color: HighlightColor } = { color: 'amber' }
 const DEFAULT_STORAGE_KEY = 'previous-highlight'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -28,14 +27,14 @@ function addTooltip(btn: HTMLButtonElement, label: string, shortcut?: string): v
   btn.appendChild(tip)
 }
 
-/** Tailwind light-mode swatch background colours for the toolbar colour bar. */
-const COLOR_BAR_BG: Record<HighlightColor, Record<Shade, string>> = {
-  red:     { light: '#fee2e2', medium: '#fca5a5', dark: '#dc2626' },
-  amber:   { light: '#fef3c7', medium: '#fcd34d', dark: '#d97706' },
-  green:   { light: '#dcfce7', medium: '#86efac', dark: '#16a34a' },
-  blue:    { light: '#dbeafe', medium: '#93c5fd', dark: '#2563eb' },
-  violet:  { light: '#ede9fe', medium: '#c4b5fd', dark: '#7c3aed' },
-  fuchsia: { light: '#fae8ff', medium: '#f0abfc', dark: '#c026d3' },
+/** Swatch background colours — one per hue, matching the highlight mark colours. */
+const COLOR_BAR_BG: Record<HighlightColor, string> = {
+  red:     '#fca5a5',
+  amber:   '#fcd34d',
+  green:   '#86efac',
+  blue:    '#93c5fd',
+  violet:  '#c4b5fd',
+  fuchsia: '#f0abfc',
 }
 
 // ─── BlockEditorWithToolbar ───────────────────────────────────────────────────
@@ -61,7 +60,7 @@ export class BlockEditorWithToolbar {
   #highlightColorBar: HTMLSpanElement
   #highlightPicker: HTMLDivElement
   #highlightSwatches: Map<string, HTMLButtonElement> = new Map()
-  #lastUsed: { color: HighlightColor; shade: Shade }
+  #lastUsed: { color: HighlightColor }
   #storageKey: string
 
   #unsubscribeSelection: () => void
@@ -150,7 +149,7 @@ export class BlockEditorWithToolbar {
       if (this.#editor.isInlineActive('Highlight')) {
         this.#editor.removeInlineFromSelection('Highlight')
       } else {
-        this.#editor.toggleInline('Highlight', this.#lastUsed)
+        this.#editor.toggleInline('Highlight', { color: this.#lastUsed.color })
         this.#saveLastUsed(this.#lastUsed)
       }
     })
@@ -176,27 +175,23 @@ export class BlockEditorWithToolbar {
     const grid = document.createElement('div')
     grid.className = 'highlight-picker-grid'
 
-    // Grid: 3 rows (shades) × 6 columns (colors)
-    for (const shade of HIGHLIGHT_SHADES) {
-      for (const color of HIGHLIGHT_COLORS) {
-        const swatch = document.createElement('button')
-        swatch.className = 'highlight-picker-swatch'
-        swatch.dataset.color = color
-        swatch.dataset.shade = shade
-        const label = `${color} ${shade}`
-        swatch.setAttribute('aria-label', label)
-        swatch.title = label
+    // Single row — one swatch per colour
+    for (const color of HIGHLIGHT_COLORS) {
+      const swatch = document.createElement('button')
+      swatch.className = 'highlight-picker-swatch'
+      swatch.dataset.color = color
+      swatch.setAttribute('aria-label', color)
+      swatch.title = color
 
-        swatch.addEventListener('mousedown', (e) => {
-          e.preventDefault()
-          this.#closePicker()
-          this.#editor.toggleInline('Highlight', { color, shade })
-          this.#setLastUsed({ color, shade })
-        })
+      swatch.addEventListener('mousedown', (e) => {
+        e.preventDefault()
+        this.#closePicker()
+        this.#editor.toggleInline('Highlight', { color })
+        this.#setLastUsed({ color })
+      })
 
-        grid.appendChild(swatch)
-        this.#highlightSwatches.set(`${color}-${shade}`, swatch)
-      }
+      grid.appendChild(swatch)
+      this.#highlightSwatches.set(color, swatch)
     }
 
     const removeBtn = document.createElement('button')
@@ -286,7 +281,7 @@ export class BlockEditorWithToolbar {
         if (this.#editor.isInlineActive('Highlight')) {
           this.#editor.removeInlineFromSelection('Highlight')
         } else {
-          this.#editor.toggleInline('Highlight', this.#lastUsed)
+          this.#editor.toggleInline('Highlight', { color: this.#lastUsed.color })
           this.#saveLastUsed(this.#lastUsed)
         }
       }
@@ -305,10 +300,8 @@ export class BlockEditorWithToolbar {
 
       // Update picker swatch active states
       const activeHighlight = this.#editor.getActiveInline('Highlight')
-      for (const [key, swatch] of this.#highlightSwatches) {
-        const [color, shade] = key.split('-') as [HighlightColor, Shade]
-        const isActive = activeHighlight?.color === color && activeHighlight?.shade === shade
-        swatch.classList.toggle('is-active', isActive)
+      for (const [color, swatch] of this.#highlightSwatches) {
+        swatch.classList.toggle('is-active', activeHighlight?.color === color)
       }
 
       const olActive = this.#editor.isBlockTypeActive('ordered-list')
@@ -365,29 +358,29 @@ export class BlockEditorWithToolbar {
     }
   }
 
-  #setLastUsed(value: { color: HighlightColor; shade: Shade }): void {
+  #setLastUsed(value: { color: HighlightColor }): void {
     this.#lastUsed = value
     this.#updateColorBar()
     this.#saveLastUsed(value)
   }
 
   #updateColorBar(): void {
-    this.#highlightColorBar?.style.setProperty('background-color', COLOR_BAR_BG[this.#lastUsed.color][this.#lastUsed.shade])
+    this.#highlightColorBar?.style.setProperty('background-color', COLOR_BAR_BG[this.#lastUsed.color])
   }
 
-  #loadLastUsed(): { color: HighlightColor; shade: Shade } {
+  #loadLastUsed(): { color: HighlightColor } {
     try {
       const raw = localStorage.getItem(this.#storageKey)
       if (!raw) return DEFAULT_HIGHLIGHT
-      const parsed = JSON.parse(raw) as { color: HighlightColor; shade: Shade }
-      if (typeof parsed.color === 'string' && typeof parsed.shade === 'string') return parsed
+      const parsed = JSON.parse(raw) as { color: HighlightColor }
+      if (typeof parsed.color === 'string') return parsed
     } catch {
       // malformed — fall through to default
     }
     return DEFAULT_HIGHLIGHT
   }
 
-  #saveLastUsed(value: { color: HighlightColor; shade: Shade }): void {
+  #saveLastUsed(value: { color: HighlightColor }): void {
     try {
       localStorage.setItem(this.#storageKey, JSON.stringify(value))
     } catch {

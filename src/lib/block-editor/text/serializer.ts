@@ -1,4 +1,4 @@
-import { type InlineDtoMap, type InlineDto, type InlineTypes, type HighlightColor, type Shade, Text } from './text'
+import { type InlineDtoMap, type InlineDto, type InlineTypes, type HighlightColor, Text } from './text'
 import { type Serializer } from '../serializer'
 
 export type { Serializer } from '../serializer'
@@ -22,7 +22,6 @@ const inlineRenderMap = {
   Highlight: (dto: InlineDto<'Highlight'>) => {
     const el = document.createElement('mark')
     el.dataset.color = dto.color
-    el.dataset.shade = dto.shade
     return el
   },
 } as const satisfies { [K in keyof InlineDtoMap]: (dto: InlineDto<K>) => HTMLElement }
@@ -42,9 +41,8 @@ const inlineParseMap: Record<string, (el: HTMLElement) => { type: InlineTypes } 
   U:      () => ({ type: 'Underline' as const }),
   MARK:   (el) => {
     const color = el.dataset.color as HighlightColor | undefined
-    const shade = el.dataset.shade as Shade | undefined
-    if (!color || !shade) return null
-    return { type: 'Highlight' as const, color, shade }
+    if (!color) return null
+    return { type: 'Highlight' as const, color }
   },
 }
 
