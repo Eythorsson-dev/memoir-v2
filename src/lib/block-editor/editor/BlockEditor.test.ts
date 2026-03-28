@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { BlockEditor } from './BlockEditor'
 import { BlockEditorWithToolbar } from './BlockEditorWithToolbar'
-import { Blocks, TextBlock, OrderedListBlock, type Block } from '../blocks/blocks'
+import { Blocks, TextBlock, OrderedListBlock, UnorderedListBlock, type Block } from '../blocks/blocks'
 import { Text, type InlineTypes } from '../text/text'
 import { BLOCK_EDITOR_EVENT_NAMES } from './events'
 import type { BlockDataUpdatedEventDto } from './events'
@@ -1267,6 +1267,111 @@ describe('convertBlockType', () => {
     setCursor(container, 'a', 0)
     editor.convertBlockType('text')
     expect(editor.getValue().getBlock('a')).toBeInstanceOf(TextBlock)
+    cleanup(editor, container)
+  })
+})
+
+// ─── markdown input shortcuts ────────────────────────────────────────────────
+
+describe('markdown input shortcuts', () => {
+  /** Simulate typing a character by mutating the DOM text and firing input. */
+  function simulateType(container: HTMLElement, blockId: string, newFullText: string, cursorAt: number): void {
+    const editable = getEditable(container)
+    const blockEl = editable.querySelector(`[id="${blockId}"]`)!
+    const p = blockEl.querySelector('p')!
+    p.textContent = newFullText
+    setCursor(container, blockId, cursorAt)
+    editable.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+
+  it('typing "- " converts text block to unordered-list and strips marker', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', '')]))
+    getEditable(container).focus()
+    simulateType(container, 'a', '-', 1)
+    simulateType(container, 'a', '- ', 2)
+    const block = editor.getValue().getBlock('a')
+    expect(block.blockType).toBe('unordered-list')
+    expect(block.getText().text).toBe('')
+    cleanup(editor, container)
+  })
+
+  it('typing "* " converts text block to unordered-list and strips marker', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', '')]))
+    getEditable(container).focus()
+    simulateType(container, 'a', '*', 1)
+    simulateType(container, 'a', '* ', 2)
+    const block = editor.getValue().getBlock('a')
+    expect(block.blockType).toBe('unordered-list')
+    expect(block.getText().text).toBe('')
+    cleanup(editor, container)
+  })
+
+  it('typing "1. " converts text block to ordered-list and strips marker', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', '')]))
+    getEditable(container).focus()
+    simulateType(container, 'a', '1', 1)
+    simulateType(container, 'a', '1.', 2)
+    simulateType(container, 'a', '1. ', 3)
+    const block = editor.getValue().getBlock('a')
+    expect(block.blockType).toBe('ordered-list')
+    expect(block.getText().text).toBe('')
+    cleanup(editor, container)
+  })
+
+  it('preserves content after the marker', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
+    getEditable(container).focus()
+    // Cursor at offset 1 (after imagined '-' inserted at position 0); full text is "- Hello"
+    simulateType(container, 'a', '- Hello', 2)
+    const block = editor.getValue().getBlock('a')
+    expect(block.blockType).toBe('unordered-list')
+    expect(block.getText().text).toBe('Hello')
+    cleanup(editor, container)
+  })
+
+  it('does not convert when block is already the target type', () => {
+    const container = makeContainer()
+    const initial = Blocks.from([new UnorderedListBlock('a', new Text('', []), [])])
+    const editor = new BlockEditor(container, initial)
+    getEditable(container).focus()
+    simulateType(container, 'a', '-', 1)
+    simulateType(container, 'a', '- ', 2)
+    expect(editor.getValue().getBlock('a').blockType).toBe('unordered-list')
+    // Text should NOT be stripped — no conversion occurred
+    expect(editor.getValue().getBlock('a').getText().text).toBe('- ')
+    cleanup(editor, container)
+  })
+
+  it('converts ordered-list to unordered-list via "- " trigger', () => {
+    const container = makeContainer()
+    const initial = Blocks.from([new OrderedListBlock('a', new Text('', []), [])])
+    const editor = new BlockEditor(container, initial)
+    getEditable(container).focus()
+    simulateType(container, 'a', '-', 1)
+    simulateType(container, 'a', '- ', 2)
+    const block = editor.getValue().getBlock('a')
+    expect(block.blockType).toBe('unordered-list')
+    expect(block.getText().text).toBe('')
+    cleanup(editor, container)
+  })
+
+  it('undo after "- " conversion restores text block with marker and space', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', '')]))
+    getEditable(container).focus()
+    simulateType(container, 'a', '-', 1)
+    simulateType(container, 'a', '- ', 2)
+    expect(editor.getValue().getBlock('a').blockType).toBe('unordered-list')
+
+    editor.undo()
+
+    const block = editor.getValue().getBlock('a')
+    expect(block.blockType).toBe('text')
+    expect(block.getText().text).toBe('- ')
     cleanup(editor, container)
   })
 })

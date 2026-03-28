@@ -5,6 +5,7 @@ import { blocksSerializer } from '../blocks/serializer'
 import type { BlockEditorEventDtoMap, BlockEditorOptions, BlockSelection } from './events'
 import { BlockEventEmitter } from './BlockEventEmitter'
 import { BlockHistory } from './BlockHistory'
+import { InputRules } from './InputRules'
 import './block-editor.css'
 
 export { BlockOffset, BlockRange } from '../blocks/blocks'
@@ -572,9 +573,36 @@ export class BlockEditor {
 
     const pEl = getBlockElementContent(blockEl)
     const newText = textSerializer.parse(Array.from(pEl.childNodes))
+    const oldState = this.#state
     this.#state = this.#state.update(blockId, newText)
-    const blockType = this.#state.getBlock(blockId).blockType
-    this.#history.updateOrAdd(blockId, new BlockDataChanged(blockId, newText, blockType), this.#pendingSelectionBefore, sel)
+    const currentType = this.#state.getBlock(blockId).blockType
+
+    const match = InputRules.match(newText.text, sel.offset, currentType)
+    if (match) {
+      // Coalesce the space into the previous typing entry so that one undo
+      // restores a text block containing the full marker + space.
+      this.#history.updateOrAdd(
+        blockId,
+        new BlockDataChanged(blockId, newText, 'text'),
+        this.#pendingSelectionBefore,
+        sel,
+      )
+
+      // Strip the marker and convert block type.
+      const strippedText = newText.remove(0, match.stripLength)
+      this.#state = this.#state.update(blockId, strippedText)
+      this.#state = this.#state.convertType(blockId, blockId, match.targetType)
+
+      const cursorAfter = new BlockOffset(blockId, 0)
+      const changes = Blocks.diff(oldState, this.#state)
+      this.#history.add(changes, sel, cursorAfter)
+      this.#pendingSelectionBefore = null
+      this.#render(cursorAfter)
+      this.#emitter.scheduleDataUpdated(blockId)
+      return
+    }
+
+    this.#history.updateOrAdd(blockId, new BlockDataChanged(blockId, newText, currentType), this.#pendingSelectionBefore, sel)
     this.#pendingSelectionBefore = null
     this.#render(sel)
     this.#emitter.scheduleDataUpdated(blockId)
