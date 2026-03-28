@@ -1,3 +1,9 @@
+/** Valid hue names for highlight annotations. */
+export type HighlightColor = 'red' | 'amber' | 'green' | 'blue' | 'violet' | 'fuchsia'
+
+/** Intensity/brightness level for highlight annotations. */
+export type Shade = 'light' | 'medium' | 'dark'
+
 /**
  * Discriminated union map of all inline annotation types.
  * The value type `never` signals that an inline carries no extra payload
@@ -10,17 +16,20 @@ export type InlineDtoMap = {
   Italic: never
   Bold: never
   Underline: never
+  Highlight: { color: HighlightColor; shade: Shade }
 }
 
 /** Union of all valid inline type names. */
 export type InlineTypes = keyof InlineDtoMap
 
-/** A single inline annotation applied over the half-open interval [start, end). */
-export type InlineDto<Type extends InlineTypes = InlineTypes> = {
-  type: Type
-  start: number
-  end: number
-}
+/**
+ * A single inline annotation applied over the half-open interval [start, end).
+ * For types with payload (e.g. Highlight), the payload fields are spread
+ * directly onto the object alongside `type`, `start`, and `end`.
+ */
+export type InlineDto<Type extends InlineTypes = InlineTypes> = Type extends InlineTypes
+  ? { type: Type; start: number; end: number } & (InlineDtoMap[Type] extends never ? unknown : InlineDtoMap[Type])
+  : never
 
 /** Plain-data shape of a Text value object; safe for JSON serialization. */
 export type TextDto = {
@@ -50,8 +59,23 @@ function validateRange(start: number, end: number, textLength: number): void {
 }
 
 /**
+ * Compares the payload fields (all keys except type, start, end) of two
+ * InlineDto objects. Returns true if both carry the same payload.
+ * Never-payload inlines (Bold, Italic, Underline) always compare equal.
+ */
+function inlinePayloadEqual(a: InlineDto, b: InlineDto): boolean {
+  const { type: _at, start: _as, end: _ae, ...payloadA } = a as Record<string, unknown>
+  const { type: _bt, start: _bs, end: _be, ...payloadB } = b as Record<string, unknown>
+  const keysA = Object.keys(payloadA).sort()
+  const keysB = Object.keys(payloadB).sort()
+  if (keysA.length !== keysB.length) return false
+  return keysA.every((k) => payloadA[k] === payloadB[k])
+}
+
+/**
  * Validates all inlines in the array against the given text length.
- * Also checks that no two same-type inlines overlap or touch.
+ * Also checks that no two same-type inlines overlap; same-type inlines may
+ * touch (end === start) only when they carry different payloads.
  * @throws {RangeError} on any invariant violation.
  */
 function validateInlines(inlines: InlineDto[], textLength: number): void {
@@ -59,7 +83,6 @@ function validateInlines(inlines: InlineDto[], textLength: number): void {
     validateRange(inline.start, inline.end, textLength)
   }
 
-  // Group by type and check for overlap/touch within each group
   const byType = new Map<InlineTypes, InlineDto[]>()
   for (const inline of inlines) {
     const group = byType.get(inline.type)
@@ -75,10 +98,16 @@ function validateInlines(inlines: InlineDto[], textLength: number): void {
     for (let i = 1; i < sorted.length; i++) {
       const prev = sorted[i - 1]
       const curr = sorted[i]
-      // overlap: curr.start < prev.end; touch: curr.start === prev.end
-      if (curr.start <= prev.end) {
+      if (curr.start < prev.end) {
         throw new RangeError(
-          `Same-type inlines of type '${curr.type}' overlap or touch: [${prev.start},${prev.end}) and [${curr.start},${curr.end})`
+          `Same-type inlines of type '${curr.type}' overlap: [${prev.start},${prev.end}) and [${curr.start},${curr.end})`
+        )
+      }
+      // Touching (curr.start === prev.end) is only invalid when payloads are equal
+      // (two adjacent same-color Highlights should have been merged).
+      if (curr.start === prev.end && inlinePayloadEqual(prev, curr)) {
+        throw new RangeError(
+          `Same-type same-payload inlines of type '${curr.type}' touch: [${prev.start},${prev.end}) and [${curr.start},${curr.end})`
         )
       }
     }
@@ -92,8 +121,9 @@ function validateInlines(inlines: InlineDto[], textLength: number): void {
  *
  * Invariants (enforced by the constructor):
  * - Every inline must satisfy `start >= 0`, `end > start`, `end <= text.length`.
- * - No two same-type inlines may overlap or touch (`end` of one equals `start`
- *   of another counts as touching and is invalid).
+ * - No two same-type inlines may overlap.
+ * - No two same-type, same-payload inlines may touch (`end` of one equals
+ *   `start` of another counts as touching and is invalid — they should be merged).
  *
  * The `inline` array is always sorted by `start` ascending, then `end`
  * descending; the constructor auto-sorts the input.
@@ -117,7 +147,7 @@ export class Text implements TextDto {
 
   /**
    * Returns `true` if this `Text` instance is field-by-field equal to `other`.
-   * Comparison is index-by-index on the sorted `inline` array.
+   * Comparison is index-by-index on the sorted `inline` array, including payload.
    */
   equals(other: Text): boolean {
     if (this.text !== other.text) return false
@@ -125,6 +155,7 @@ export class Text implements TextDto {
     for (let i = 0; i < this.inline.length; i++) {
       const a = this.inline[i], b = other.inline[i]
       if (a.type !== b.type || a.start !== b.start || a.end !== b.end) return false
+      if (!inlinePayloadEqual(a, b)) return false
     }
     return true
   }
@@ -141,58 +172,72 @@ export class Text implements TextDto {
   }
 
   /**
-   * Returns `true` if a single inline of the given `type` covers the
-   * entire half-open interval `[start, end)`.
+   * Returns `true` if a single inline matching the given `dto`'s type **and**
+   * payload covers the entire half-open interval `[dto.start, dto.end)`.
    *
-   * @param type - The inline type to query.
-   * @param start - Inclusive start of the range (>= 0).
-   * @param end - Exclusive end of the range (> start, <= text.length).
-   * @returns `true` when exactly one inline of `type` satisfies
-   *   `inline.start <= start && inline.end >= end`; `false` otherwise.
-   * @throws {RangeError} if `start < 0`, `end <= start`, or `end > text.length`.
+   * @param dto - The inline descriptor to query; `start` and `end` define the range.
+   * @throws {RangeError} if `dto.start < 0`, `dto.end <= dto.start`, or `dto.end > text.length`.
    */
-  isToggled(type: InlineTypes, start: number, end: number): boolean {
+  isToggled(dto: InlineDto): boolean {
+    const { type, start, end } = dto
     validateRange(start, end, this.text.length)
-    return this.inline.some(
-      (inline) => inline.type === type && inline.start <= start && inline.end >= end
+    return (this.inline as InlineDto[]).some(
+      (i) => i.type === type && i.start <= start && i.end >= end && inlinePayloadEqual(i, dto)
     )
   }
 
   /**
-   * Returns a new `Text` with the given inline type applied to `[start, end)`.
+   * Returns `true` if any inline of the given `type` (regardless of payload)
+   * covers the entire half-open interval `[start, end)`.
    *
-   * All existing same-type inlines that overlap **or touch** the new range are
-   * merged into a single inline spanning `min(all starts)` to `max(all ends)`.
-   * Inlines of other types are left unchanged.
-   *
-   * @param type - The inline type to add.
-   * @param start - Inclusive start of the range (>= 0).
-   * @param end - Exclusive end of the range (> start, <= text.length).
-   * @returns A new `Text` instance; the original is not mutated.
    * @throws {RangeError} if `start < 0`, `end <= start`, or `end > text.length`.
    */
-  addInline(type: InlineTypes, start: number, end: number): Text {
+  isCoveredByType(type: InlineTypes, start: number, end: number): boolean {
+    validateRange(start, end, this.text.length)
+    return this.inline.some((i) => i.type === type && i.start <= start && i.end >= end)
+  }
+
+  /**
+   * Returns a new `Text` with the given inline applied to the range
+   * `[inline.start, inline.end)`.
+   *
+   * Existing same-type, same-payload inlines that overlap **or touch** the new
+   * range are merged into a single inline. Inlines of other types or different
+   * payloads are left unchanged.
+   *
+   * @param inline - Full inline descriptor including any payload fields.
+   * @returns A new `Text` instance; the original is not mutated.
+   * @throws {RangeError} if the range is invalid.
+   */
+  addInline(inline: InlineDto): Text {
+    const { type, start, end } = inline
     validateRange(start, end, this.text.length)
 
-    const touching = this.inline.filter(
-      (inline) => inline.type === type && inline.start <= end && inline.end >= start
+    const inlines = this.inline as InlineDto[]
+
+    // Merge only touching/overlapping inlines with the same payload
+    const touching = inlines.filter(
+      (existing) =>
+        existing.type === type &&
+        existing.start <= end &&
+        existing.end >= start &&
+        inlinePayloadEqual(existing, inline)
     )
 
-    const mergedStart = touching.reduce((min, inline) => Math.min(min, inline.start), start)
-    const mergedEnd = touching.reduce((max, inline) => Math.max(max, inline.end), end)
+    const mergedStart = touching.reduce((min, i) => Math.min(min, i.start), start)
+    const mergedEnd = touching.reduce((max, i) => Math.max(max, i.end), end)
 
-    const others = this.inline.filter((inline) => !touching.includes(inline))
-    const merged: InlineDto = { type, start: mergedStart, end: mergedEnd }
+    const others = inlines.filter((i) => !touching.includes(i))
+    // Normalize key order: type, start, end, then payload — so JSON.stringify is stable
+    const { type: _t, start: _s, end: _e, ...payload } = inline as Record<string, unknown>
+    const merged = { type, start: mergedStart, end: mergedEnd, ...payload } as InlineDto
 
-    return new Text(this.text, [...(others as InlineDto[]), merged])
+    return new Text(this.text, [...others, merged])
   }
 
   /**
    * Splits the Text at the given character offset into two new `Text` instances.
-   *
-   * - An inline entirely left of offset (`end <= offset`) goes to the left half unchanged.
-   * - An inline entirely right of offset (`start >= offset`) goes to the right half with offsets shifted by `-offset`.
-   * - An inline strictly spanning the boundary (`start < offset < end`) is split: left gets `[start, offset)`, right gets `[0, end - offset)`.
+   * Payload fields on split inlines are preserved.
    *
    * @throws {RangeError} if offset < 0 or offset > text.length.
    */
@@ -204,15 +249,15 @@ export class Text implements TextDto {
     const leftInlines: InlineDto[] = []
     const rightInlines: InlineDto[] = []
 
-    for (const inline of this.inline) {
+    for (const inline of this.inline as InlineDto[]) {
       if (inline.end <= offset) {
         leftInlines.push(inline)
       } else if (inline.start >= offset) {
-        rightInlines.push({ type: inline.type, start: inline.start - offset, end: inline.end - offset })
+        rightInlines.push({ ...inline, start: inline.start - offset, end: inline.end - offset } as InlineDto)
       } else {
         // start < offset < end — spans boundary
-        leftInlines.push({ type: inline.type, start: inline.start, end: offset })
-        rightInlines.push({ type: inline.type, start: 0, end: inline.end - offset })
+        leftInlines.push({ ...inline, start: inline.start, end: offset } as InlineDto)
+        rightInlines.push({ ...inline, start: 0, end: inline.end - offset } as InlineDto)
       }
     }
 
@@ -224,25 +269,24 @@ export class Text implements TextDto {
 
   /**
    * Concatenates two `Text` instances into one.
-   * Right inlines are shifted by `left.text.length`. Touching same-type inlines at the
-   * join boundary are merged automatically via `addInline`.
+   * Right inlines are shifted by `left.text.length`. Touching same-type
+   * same-payload inlines at the join boundary are merged automatically.
    */
   static merge(left: Text, right: Text): Text {
     let result = new Text(left.text + right.text, [])
-    for (const inline of left.inline) {
-      result = result.addInline(inline.type, inline.start, inline.end)
+    for (const inline of left.inline as InlineDto[]) {
+      result = result.addInline(inline)
     }
     const shift = left.text.length
-    for (const inline of right.inline) {
-      result = result.addInline(inline.type, inline.start + shift, inline.end + shift)
+    for (const inline of right.inline as InlineDto[]) {
+      result = result.addInline({ ...inline, start: inline.start + shift, end: inline.end + shift } as InlineDto)
     }
     return result
   }
 
   /**
    * Returns a new `Text` with `length` characters removed starting at `offset`.
-   * Inline annotations are adjusted according to their overlap with the removed range.
-   * Touching same-type inlines that result from the removal are merged automatically via `addInline`.
+   * Inline annotations are adjusted; payload fields are preserved.
    *
    * @throws {RangeError} if offset < 0, length <= 0, or offset + length > text.length.
    */
@@ -257,26 +301,21 @@ export class Text implements TextDto {
     const newText = this.text.substring(0, offset) + this.text.substring(offset + length)
     let result = new Text(newText, [])
 
-    for (const inline of this.inline) {
+    for (const inline of this.inline as InlineDto[]) {
       const end = offset + length
 
       if (inline.end <= offset) {
-        // Entirely before — unchanged
-        result = result.addInline(inline.type, inline.start, inline.end)
+        result = result.addInline(inline)
       } else if (inline.start >= end) {
-        // Entirely after — shift left
-        result = result.addInline(inline.type, inline.start - length, inline.end - length)
+        result = result.addInline({ ...inline, start: inline.start - length, end: inline.end - length } as InlineDto)
       } else if (inline.start >= offset && inline.end <= end) {
         // Entirely within removed range — drop
       } else if (inline.start < offset && inline.end > end) {
-        // Spans entire removed range — shorten
-        result = result.addInline(inline.type, inline.start, inline.end - length)
+        result = result.addInline({ ...inline, start: inline.start, end: inline.end - length } as InlineDto)
       } else if (inline.start < offset && inline.end <= end) {
-        // Overlaps left boundary only — trim right side
-        result = result.addInline(inline.type, inline.start, offset)
+        result = result.addInline({ ...inline, start: inline.start, end: offset } as InlineDto)
       } else {
-        // Overlaps right boundary only (inline.start >= offset && inline.end > end)
-        result = result.addInline(inline.type, offset, inline.end - length)
+        result = result.addInline({ ...inline, start: offset, end: inline.end - length } as InlineDto)
       }
     }
 
@@ -284,14 +323,8 @@ export class Text implements TextDto {
   }
 
   /**
-   * Returns a new `Text` with the given inline type removed from `[start, end)`.
-   *
-   * Only the `inline` array is affected — the `text` string is never modified.
-   * For each existing same-type inline that overlaps the remove range:
-   * - The portion **inside** the range is discarded.
-   * - The portion(s) **outside** the range are preserved as separate inlines.
-   * Inlines of other types, and non-overlapping inlines of the same type,
-   * are left unchanged.
+   * Returns a new `Text` with all inlines of the given `type` removed from
+   * `[start, end)`, regardless of payload.
    *
    * @param type - The inline type to remove.
    * @param start - Inclusive start of the remove range (>= 0).
@@ -304,27 +337,23 @@ export class Text implements TextDto {
 
     const newInlines: InlineDto[] = []
 
-    for (const inline of this.inline) {
+    for (const inline of this.inline as InlineDto[]) {
       if (inline.type !== type) {
-        // Different type — keep as-is.
         newInlines.push(inline)
         continue
       }
 
-      // No overlap with the remove range — keep as-is.
       if (inline.end <= start || inline.start >= end) {
         newInlines.push(inline)
         continue
       }
 
-      // Keep the part before the remove range.
       if (inline.start < start) {
-        newInlines.push({ type: inline.type, start: inline.start, end: start })
+        newInlines.push({ ...inline, start: inline.start, end: start } as InlineDto)
       }
 
-      // Keep the part after the remove range.
       if (inline.end > end) {
-        newInlines.push({ type: inline.type, start: end, end: inline.end })
+        newInlines.push({ ...inline, start: end, end: inline.end } as InlineDto)
       }
     }
 

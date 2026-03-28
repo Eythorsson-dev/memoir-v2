@@ -1,4 +1,4 @@
-import { Text, type InlineTypes } from '../text/text'
+import { Text, type InlineTypes, type InlineDtoMap, type InlineDto } from '../text/text'
 import { textSerializer } from '../text/serializer'
 import { Blocks, type BlockId, type BlockTypes, type BlocksChange, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved } from '../blocks/blocks'
 import { blocksSerializer } from '../blocks/serializer'
@@ -10,6 +10,25 @@ import './block-editor.css'
 
 export { BlockOffset, BlockRange } from '../blocks/blocks'
 export type { BlockSelection } from './events'
+
+// ─── Inline toggle helpers ────────────────────────────────────────────────────
+
+/**
+ * Inline types whose payload is `never` — no extra data beyond type/start/end.
+ */
+type NeverPayloadTypes = { [K in InlineTypes]: InlineDtoMap[K] extends never ? K : never }[InlineTypes]
+
+/**
+ * Inline types that carry a payload.
+ */
+type DataPayloadTypes = Exclude<InlineTypes, NeverPayloadTypes>
+
+/**
+ * Inline types that are mutually exclusive — at most one per character position.
+ * When toggling an exclusive type, any existing inline of that type in the
+ * range is removed before the new one is added.
+ */
+const EXCLUSIVE_INLINE_TYPES = new Set<InlineTypes>(['Highlight'])
 
 // ─── DOM helpers ─────────────────────────────────────────────────────────────
 
@@ -237,32 +256,43 @@ export class BlockEditor {
     }
   }
 
-  /** Toggle inline format on selection within focused block. */
-  toggleInline(type: InlineTypes): void {
+  /**
+   * Toggles an inline format on the current selection.
+   *
+   * For never-payload types (Bold, Italic, Underline): call with type only.
+   * For payload types (Highlight): call with type and payload.
+   *
+   * Toggle logic: if the entire selection is already covered by the exact
+   * type+payload, the inline is removed. Otherwise it is applied (exclusive
+   * types clear any existing same-type inlines first).
+   */
+  toggleInline(type: NeverPayloadTypes): void
+  toggleInline<K extends DataPayloadTypes>(type: K, payload: InlineDtoMap[K]): void
+  toggleInline(type: InlineTypes, payload?: InlineDtoMap[DataPayloadTypes]): void {
     const sel = this.#getSelection()
     if (!sel) return
 
-    let blockId: BlockId
-    let start: number
-    let end: number
+    if (!(sel instanceof BlockRange) || sel.start.blockId !== sel.end.blockId) return
 
-    if (sel instanceof BlockRange && sel.start.blockId === sel.end.blockId) {
-      blockId = sel.start.blockId
-      start = sel.start.offset
-      end = sel.end.offset
-    } else {
-      // Multi-block or collapsed — no-op
-      return
-    }
+    const blockId = sel.start.blockId
+    const start = sel.start.offset
+    const end = sel.end.offset
 
     const block = this.#state.getBlock(blockId)
     const text = block.getText()
     if (start >= end || end > text.text.length) return
 
-    const toggled = text.isToggled(type, start, end)
-    const newText = toggled
-      ? text.removeInline(type, start, end)
-      : text.addInline(type, start, end)
+    const dto = { type, start, end, ...payload } as InlineDto
+    const toggled = text.isToggled(dto)
+
+    let newText: Text
+    if (toggled) {
+      newText = text.removeInline(type, start, end)
+    } else if (EXCLUSIVE_INLINE_TYPES.has(type)) {
+      newText = text.removeInline(type, start, end).addInline(dto)
+    } else {
+      newText = text.addInline(dto)
+    }
 
     const oldState = this.#state
     this.#state = this.#state.update(blockId, newText)
@@ -270,7 +300,33 @@ export class BlockEditor {
     this.#emitEvents(oldState)
   }
 
-  /** Returns true if the inline is fully active on the current selection. */
+  /**
+   * Removes all inlines of the given type from the current selection,
+   * regardless of payload.
+   */
+  removeInlineFromSelection(type: InlineTypes): void {
+    const sel = this.#getSelection()
+    if (!(sel instanceof BlockRange) || sel.start.blockId !== sel.end.blockId) return
+
+    const blockId = sel.start.blockId
+    const start = sel.start.offset
+    const end = sel.end.offset
+
+    const block = this.#state.getBlock(blockId)
+    const text = block.getText()
+    if (start >= end || end > text.text.length) return
+
+    const newText = text.removeInline(type, start, end)
+    const oldState = this.#state
+    this.#state = this.#state.update(blockId, newText)
+    this.#render(sel)
+    this.#emitEvents(oldState)
+  }
+
+  /**
+   * Returns true if any inline of `type` (regardless of payload) fully covers
+   * the current selection. Used for toolbar active-state indicators.
+   */
   isInlineActive(type: InlineTypes): boolean {
     const sel = this.#getSelection()
     if (!(sel instanceof BlockRange)) return false
@@ -282,10 +338,36 @@ export class BlockEditor {
     if (start >= end || end > block.getText().text.length) return false
 
     try {
-      return block.getText().isToggled(type, start, end)
+      return block.getText().isCoveredByType(type, start, end)
     } catch {
       return false
     }
+  }
+
+  /**
+   * Returns the single inline of `type` that covers the entire current
+   * selection, or `null` if no such inline exists or if multiple different
+   * inlines partially cover the selection.
+   *
+   * Used by the highlight picker to show which swatch is currently active.
+   */
+  getActiveInline<K extends InlineTypes>(type: K): InlineDto<K> | null {
+    const sel = this.#getSelection()
+    if (!(sel instanceof BlockRange)) return null
+    if (sel.start.blockId !== sel.end.blockId) return null
+
+    const block = this.#state.getBlock(sel.start.blockId)
+    const start = sel.start.offset
+    const end = sel.end.offset
+    if (start >= end || end > block.getText().text.length) return null
+
+    const text = block.getText()
+    const covering = (text.inline as InlineDto<K>[]).filter(
+      (i) => i.type === type && i.start <= start && i.end >= end
+    )
+
+    if (covering.length !== 1) return null
+    return covering[0]
   }
 
   canUndo(): boolean { return this.#history.canUndo() }

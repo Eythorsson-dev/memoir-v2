@@ -1,3 +1,79 @@
+/* ─── Highlight inline (mark element) ─────────────────────────────────────── */
+
+.block-editor-editable mark[data-color] {
+  background-color: var(--hl-bg);
+  color: var(--hl-fg);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* Red */
+.block-editor-editable mark[data-color="red"][data-shade="light"]   { --hl-bg: #fee2e2; --hl-fg: #991b1b }
+.block-editor-editable mark[data-color="red"][data-shade="medium"]  { --hl-bg: #fca5a5; --hl-fg: #7f1d1d }
+.block-editor-editable mark[data-color="red"][data-shade="dark"]    { --hl-bg: #dc2626; --hl-fg: #ffffff }
+/* Amber */
+.block-editor-editable mark[data-color="amber"][data-shade="light"]  { --hl-bg: #fef3c7; --hl-fg: #92400e }
+.block-editor-editable mark[data-color="amber"][data-shade="medium"] { --hl-bg: #fcd34d; --hl-fg: #78350f }
+.block-editor-editable mark[data-color="amber"][data-shade="dark"]   { --hl-bg: #d97706; --hl-fg: #ffffff }
+/* Green */
+.block-editor-editable mark[data-color="green"][data-shade="light"]  { --hl-bg: #dcfce7; --hl-fg: #166534 }
+.block-editor-editable mark[data-color="green"][data-shade="medium"] { --hl-bg: #86efac; --hl-fg: #14532d }
+.block-editor-editable mark[data-color="green"][data-shade="dark"]   { --hl-bg: #16a34a; --hl-fg: #ffffff }
+/* Blue */
+.block-editor-editable mark[data-color="blue"][data-shade="light"]   { --hl-bg: #dbeafe; --hl-fg: #1e40af }
+.block-editor-editable mark[data-color="blue"][data-shade="medium"]  { --hl-bg: #93c5fd; --hl-fg: #1e3a8a }
+.block-editor-editable mark[data-color="blue"][data-shade="dark"]    { --hl-bg: #2563eb; --hl-fg: #ffffff }
+/* Violet */
+.block-editor-editable mark[data-color="violet"][data-shade="light"]  { --hl-bg: #ede9fe; --hl-fg: #5b21b6 }
+.block-editor-editable mark[data-color="violet"][data-shade="medium"] { --hl-bg: #c4b5fd; --hl-fg: #4c1d95 }
+.block-editor-editable mark[data-color="violet"][data-shade="dark"]   { --hl-bg: #7c3aed; --hl-fg: #ffffff }
+/* Fuchsia */
+.block-editor-editable mark[data-color="fuchsia"][data-shade="light"]  { --hl-bg: #fae8ff; --hl-fg: #86198f }
+.block-editor-editable mark[data-color="fuchsia"][data-shade="medium"] { --hl-bg: #f0abfc; --hl-fg: #701a75 }
+.block-editor-editable mark[data-color="fuchsia"][data-shade="dark"]   { --hl-bg: #c026d3; --hl-fg: #ffffff }
+
+/* Dark mode overrides — data-theme attribute */
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="red"][data-shade="light"]       { --hl-bg: #7f1d1d; --hl-fg: #fecaca }
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="red"][data-shade="medium"]      { --hl-bg: #b91c1c; --hl-fg: #fee2e2 }
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="red"][data-shade="dark"]        { --hl-bg: #ef4444; --hl-fg: #ffffff }
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="amber"][data-shade="light"]     { --hl-bg: #78350f; --hl-fg: #fde68a }
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="amber"][data-shade="medium"]    { --hl-bg: #b45309; --hl-fg: #fef3c7 }
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="amber"][data-shade="dark"]      { --hl-bg: #f59e0b; --hl-fg: #431407 }
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="green"][data-shade="light"]     { --hl-bg: #14532d; --hl-fg: #bbf7d0 }
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="green"][data-shade="medium"]    { --hl-bg: #15803d; --hl-fg: #dcfce7 }
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="green"][data-shade="dark"]      { --hl-bg: #22c55e; --hl-fg: #052e16 }
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="blue"][data-shade="light"]      { --hl-bg: #1e3a8a; --hl-fg: #bfdbfe }
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="blue"][data-shade="medium"]     { --hl-bg: #1d4ed8; --hl-fg: #dbeafe }
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="blue"][data-shade="dark"]       { --hl-bg: #3b82f6; --hl-fg: #eff6ff }
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="violet"][data-shade="light"]    { --hl-bg: #4c1d95; --hl-fg: #ddd6fe }
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="violet"][data-shade="medium"]   { --hl-bg: #6d28d9; --hl-fg: #ede9fe }
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="violet"][data-shade="dark"]     { --hl-bg: #8b5cf6; --hl-fg: #f5f3ff }
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="fuchsia"][data-shade="light"]   { --hl-bg: #701a75; --hl-fg: #f5d0fe }
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="fuchsia"][data-shade="medium"]  { --hl-bg: #a21caf; --hl-fg: #fae8ff }
+:where([data-theme="dark"], [data-theme="dark"] *) .block-editor-editable mark[data-color="fuchsia"][data-shade="dark"]    { --hl-bg: #d946ef; --hl-fg: #fdf4ff }
+
+/* Dark mode overrides — prefers-color-scheme */
+@media (prefers-color-scheme: dark) {
+  .block-editor-editable mark[data-color="red"][data-shade="light"]       { --hl-bg: #7f1d1d; --hl-fg: #fecaca }
+  .block-editor-editable mark[data-color="red"][data-shade="medium"]      { --hl-bg: #b91c1c; --hl-fg: #fee2e2 }
+  .block-editor-editable mark[data-color="red"][data-shade="dark"]        { --hl-bg: #ef4444; --hl-fg: #ffffff }
+  .block-editor-editable mark[data-color="amber"][data-shade="light"]     { --hl-bg: #78350f; --hl-fg: #fde68a }
+  .block-editor-editable mark[data-color="amber"][data-shade="medium"]    { --hl-bg: #b45309; --hl-fg: #fef3c7 }
+  .block-editor-editable mark[data-color="amber"][data-shade="dark"]      { --hl-bg: #f59e0b; --hl-fg: #431407 }
+  .block-editor-editable mark[data-color="green"][data-shade="light"]     { --hl-bg: #14532d; --hl-fg: #bbf7d0 }
+  .block-editor-editable mark[data-color="green"][data-shade="medium"]    { --hl-bg: #15803d; --hl-fg: #dcfce7 }
+  .block-editor-editable mark[data-color="green"][data-shade="dark"]      { --hl-bg: #22c55e; --hl-fg: #052e16 }
+  .block-editor-editable mark[data-color="blue"][data-shade="light"]      { --hl-bg: #1e3a8a; --hl-fg: #bfdbfe }
+  .block-editor-editable mark[data-color="blue"][data-shade="medium"]     { --hl-bg: #1d4ed8; --hl-fg: #dbeafe }
+  .block-editor-editable mark[data-color="blue"][data-shade="dark"]       { --hl-bg: #3b82f6; --hl-fg: #eff6ff }
+  .block-editor-editable mark[data-color="violet"][data-shade="light"]    { --hl-bg: #4c1d95; --hl-fg: #ddd6fe }
+  .block-editor-editable mark[data-color="violet"][data-shade="medium"]   { --hl-bg: #6d28d9; --hl-fg: #ede9fe }
+  .block-editor-editable mark[data-color="violet"][data-shade="dark"]     { --hl-bg: #8b5cf6; --hl-fg: #f5f3ff }
+  .block-editor-editable mark[data-color="fuchsia"][data-shade="light"]   { --hl-bg: #701a75; --hl-fg: #f5d0fe }
+  .block-editor-editable mark[data-color="fuchsia"][data-shade="medium"]  { --hl-bg: #a21caf; --hl-fg: #fae8ff }
+  .block-editor-editable mark[data-color="fuchsia"][data-shade="dark"]    { --hl-bg: #d946ef; --hl-fg: #fdf4ff }
+}
+
 .block-editor-editable .block > p {
   margin: 0;
   padding: 2px 4px;
