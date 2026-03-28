@@ -600,6 +600,15 @@ export class Blocks {
   }
 
   /**
+   * Returns the IDs of all blocks in the pre-order range [`from`, `to`], inclusive.
+   * @throws {Error} if `from` or `to` are not found, or `to` precedes `from`.
+   */
+  blockIdsInRange(from: BlockId, to: BlockId): BlockId[] {
+    const [fromIdx, toIdx] = getRange(this.#blocks, from, to)
+    return this.#blocks.slice(fromIdx, toIdx + 1).map(b => b.id)
+  }
+
+  /**
    * Returns true when every block in the pre-order range [`from`, `to`] is `type`.
    * @throws {Error} if `from` or `to` are not found, or `to` precedes `from`.
    */
