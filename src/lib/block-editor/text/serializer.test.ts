@@ -95,7 +95,58 @@ describe('textSerializer.render', () => {
       { type: 'Highlight', start: 5, end: 11, color: 'blue' },
     ])
     const html = nodesToHtml(textSerializer.render(t))
-    expect(html).toBe('<mark data-color="red">hello</mark><mark data-color="blue"> world</mark>')
+    expect(html).toBe('<mark data-color="red" class="mark-join-right">hello</mark><mark data-color="blue" class="mark-join-left"> world</mark>')
+  })
+
+  it('adds mark-join-right/left classes to touching adjacent marks', () => {
+    const t = new Text('hello world', [
+      { type: 'Highlight', start: 0, end: 5, color: 'red' },
+      { type: 'Highlight', start: 5, end: 11, color: 'blue' },
+    ])
+    const nodes = textSerializer.render(t)
+    const [a, b] = nodes as HTMLElement[]
+    expect(a.classList.contains('mark-join-right')).toBe(true)
+    expect(b.classList.contains('mark-join-left')).toBe(true)
+  })
+
+  it('does not add join classes to non-touching marks', () => {
+    const t = new Text('hello world', [
+      { type: 'Highlight', start: 0, end: 5, color: 'red' },
+      { type: 'Highlight', start: 6, end: 11, color: 'blue' },
+    ])
+    const nodes = textSerializer.render(t)
+    const marks = (nodes as HTMLElement[]).filter(n => n.tagName === 'MARK')
+    expect(marks[0].classList.contains('mark-join-right')).toBe(false)
+    expect(marks[1].classList.contains('mark-join-left')).toBe(false)
+  })
+
+  it('adds both join classes to a middle mark in three touching marks', () => {
+    const t = new Text('abcdef', [
+      { type: 'Highlight', start: 0, end: 2, color: 'red' },
+      { type: 'Highlight', start: 2, end: 4, color: 'blue' },
+      { type: 'Highlight', start: 4, end: 6, color: 'green' },
+    ])
+    const nodes = textSerializer.render(t) as HTMLElement[]
+    expect(nodes[0].classList.contains('mark-join-right')).toBe(true)
+    expect(nodes[1].classList.contains('mark-join-left')).toBe(true)
+    expect(nodes[1].classList.contains('mark-join-right')).toBe(true)
+    expect(nodes[2].classList.contains('mark-join-left')).toBe(true)
+  })
+
+  it('adds join classes when touching marks are nested in other inlines', () => {
+    // Underline[0,5] wraps Highlight[0,5]; Highlight[5,10] is sibling
+    // Renders: <u><mark>hello</mark></u><mark> world</mark>
+    const t = new Text('hello world', [
+      { type: 'Underline', start: 0, end: 5 },
+      { type: 'Highlight', start: 0, end: 5, color: 'red' },
+      { type: 'Highlight', start: 5, end: 11, color: 'blue' },
+    ])
+    const nodes = textSerializer.render(t)
+    const allMarks = (nodes as HTMLElement[]).flatMap(n =>
+      n.tagName === 'MARK' ? [n] : Array.from(n.querySelectorAll<HTMLElement>('mark'))
+    )
+    expect(allMarks[0].classList.contains('mark-join-right')).toBe(true)
+    expect(allMarks[1].classList.contains('mark-join-left')).toBe(true)
   })
 })
 

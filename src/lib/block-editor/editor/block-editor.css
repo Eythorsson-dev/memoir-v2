@@ -6,6 +6,10 @@
   border-radius: 4px;
 }
 
+/* Join classes are applied by the serializer when marks touch (a.end === b.start). */
+.block-editor-editable mark[data-color].mark-join-right { border-top-right-radius: 0; border-bottom-right-radius: 0 }
+.block-editor-editable mark[data-color].mark-join-left  { border-top-left-radius:  0; border-bottom-left-radius:  0 }
+
 .block-editor-editable mark[data-color="red"]     { --hl-bg: #fca5a5; --hl-fg: #7f1d1d }
 .block-editor-editable mark[data-color="amber"]   { --hl-bg: #fcd34d; --hl-fg: #78350f }
 .block-editor-editable mark[data-color="green"]   { --hl-bg: #86efac; --hl-fg: #14532d }

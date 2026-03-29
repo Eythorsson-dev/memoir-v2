@@ -87,10 +87,40 @@ function buildSegments(text: string, inlines: ReadonlyArray<InlineDto>): Segment
 }
 
 /**
+ * Pre-computes which Highlight DTOs should receive join classes based on
+ * whether they touch (end of one equals start of the next). Returns two
+ * Sets that are checked during rendering to add `mark-join-right` /
+ * `mark-join-left` classes without a post-render DOM walk.
+ */
+function computeMarkJoins(inlines: ReadonlyArray<InlineDto>): {
+  joinRight: Set<InlineDto>
+  joinLeft: Set<InlineDto>
+} {
+  const joinRight = new Set<InlineDto>()
+  const joinLeft = new Set<InlineDto>()
+  const highlights = (inlines as InlineDto[])
+    .filter((i): i is InlineDto<'Highlight'> => i.type === 'Highlight')
+    .sort((a, b) => a.start - b.start)
+  for (let i = 0; i < highlights.length - 1; i++) {
+    if (highlights[i].end === highlights[i + 1].start) {
+      joinRight.add(highlights[i])
+      joinLeft.add(highlights[i + 1])
+    }
+  }
+  return { joinRight, joinLeft }
+}
+
+/**
  * Recursively converts segments that share a common outer inline into a
  * DOM element, nesting inner segments as children.
  */
-function renderSegments(text: string, segments: Segment[], depth: number): Node[] {
+function renderSegments(
+  text: string,
+  segments: Segment[],
+  depth: number,
+  joinRight: Set<InlineDto>,
+  joinLeft: Set<InlineDto>
+): Node[] {
   const nodes: Node[] = []
   let i = 0
 
@@ -114,7 +144,9 @@ function renderSegments(text: string, segments: Segment[], depth: number): Node[
     const groupedSegments = segments.slice(i, j)
     // Cast through unknown because the renderMap entry is typed for the specific K
     const el = (inlineRenderMap[currentInline.type] as (dto: InlineDto) => HTMLElement)(currentInline)
-    renderSegments(text, groupedSegments, depth + 1).forEach((child) => el.appendChild(child))
+    renderSegments(text, groupedSegments, depth + 1, joinRight, joinLeft).forEach((child) => el.appendChild(child))
+    if (joinRight.has(currentInline)) el.classList.add('mark-join-right')
+    if (joinLeft.has(currentInline))  el.classList.add('mark-join-left')
     nodes.push(el)
     i = j
   }
@@ -131,7 +163,8 @@ function render(text: Text): Node[] {
   }
 
   const segments = buildSegments(text.text, text.inline)
-  return renderSegments(text.text, segments, 0)
+  const { joinRight, joinLeft } = computeMarkJoins(text.inline)
+  return renderSegments(text.text, segments, 0, joinRight, joinLeft)
 }
 
 // ─── Parse ────────────────────────────────────────────────────────────────────
