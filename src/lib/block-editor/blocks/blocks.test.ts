@@ -1550,3 +1550,153 @@ describe('isBlockTypeActive', () => {
     expect(() => b.isBlockTypeActive('b', 'a', 'text')).toThrow()
   })
 })
+
+// ─── toggleInline ─────────────────────────────────────────────────────────────
+
+describe('toggleInline', () => {
+  it('applies Bold to a single-block range', () => {
+    const b = Blocks.from([dto('a', 'Hello')])
+    const range = new BlockRange(new BlockOffset('a', 0), new BlockOffset('a', 5))
+    const result = b.toggleInline(range, 'Bold')
+    expect(result.getBlock('a').getText().inline).toContainEqual({ type: 'Bold', start: 0, end: 5 })
+  })
+
+  it('removes Bold from a single-block range when already fully toggled', () => {
+    const b = Blocks.from([new TextBlock('a', new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }]), [])])
+    const range = new BlockRange(new BlockOffset('a', 0), new BlockOffset('a', 5))
+    const result = b.toggleInline(range, 'Bold')
+    expect(result.getBlock('a').getText().inline).toHaveLength(0)
+  })
+
+  it('applies Bold across two blocks', () => {
+    const b = Blocks.from([dto('a', 'Hello'), dto('b', 'World')])
+    const range = new BlockRange(new BlockOffset('a', 2), new BlockOffset('b', 3))
+    const result = b.toggleInline(range, 'Bold')
+    expect(result.getBlock('a').getText().inline).toContainEqual({ type: 'Bold', start: 2, end: 5 })
+    expect(result.getBlock('b').getText().inline).toContainEqual({ type: 'Bold', start: 0, end: 3 })
+  })
+
+  it('removes Bold across two blocks when all segments already toggled', () => {
+    const b = Blocks.from([
+      new TextBlock('a', new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }]), []),
+      new TextBlock('b', new Text('World', [{ type: 'Bold', start: 0, end: 5 }]), []),
+    ])
+    const range = new BlockRange(new BlockOffset('a', 0), new BlockOffset('b', 5))
+    const result = b.toggleInline(range, 'Bold')
+    expect(result.getBlock('a').getText().inline).toHaveLength(0)
+    expect(result.getBlock('b').getText().inline).toHaveLength(0)
+  })
+
+  it('applies Highlight across two blocks', () => {
+    const b = Blocks.from([dto('a', 'Hello'), dto('b', 'World')])
+    const range = new BlockRange(new BlockOffset('a', 1), new BlockOffset('b', 4))
+    const result = b.toggleInline(range, 'Highlight', { color: 'amber' })
+    expect(result.getBlock('a').getText().inline).toContainEqual({ type: 'Highlight', start: 1, end: 5, color: 'amber' })
+    expect(result.getBlock('b').getText().inline).toContainEqual({ type: 'Highlight', start: 0, end: 4, color: 'amber' })
+  })
+
+  it('replaces existing Highlight when toggling a different colour', () => {
+    const b = Blocks.from([
+      new TextBlock('a', new Text('Hello', [{ type: 'Highlight', start: 0, end: 5, color: 'red' }]), []),
+    ])
+    const range = new BlockRange(new BlockOffset('a', 0), new BlockOffset('a', 5))
+    const result = b.toggleInline(range, 'Highlight', { color: 'blue' })
+    const inlines = result.getBlock('a').getText().inline
+    expect(inlines).not.toContainEqual(expect.objectContaining({ color: 'red' }))
+    expect(inlines).toContainEqual({ type: 'Highlight', start: 0, end: 5, color: 'blue' })
+  })
+})
+
+// ─── removeInlineFromRange ────────────────────────────────────────────────────
+
+describe('removeInlineFromRange', () => {
+  it('removes Bold from a single block', () => {
+    const b = Blocks.from([new TextBlock('a', new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }]), [])])
+    const range = new BlockRange(new BlockOffset('a', 0), new BlockOffset('a', 5))
+    const result = b.removeInlineFromRange(range, 'Bold')
+    expect(result.getBlock('a').getText().inline).toHaveLength(0)
+  })
+
+  it('removes Bold from both blocks in a two-block range', () => {
+    const b = Blocks.from([
+      new TextBlock('a', new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }]), []),
+      new TextBlock('b', new Text('World', [{ type: 'Bold', start: 0, end: 5 }]), []),
+    ])
+    const range = new BlockRange(new BlockOffset('a', 0), new BlockOffset('b', 5))
+    const result = b.removeInlineFromRange(range, 'Bold')
+    expect(result.getBlock('a').getText().inline).toHaveLength(0)
+    expect(result.getBlock('b').getText().inline).toHaveLength(0)
+  })
+})
+
+// ─── isInlineActive ───────────────────────────────────────────────────────────
+
+describe('isInlineActive', () => {
+  it('returns true when Bold covers the single-block range', () => {
+    const b = Blocks.from([new TextBlock('a', new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }]), [])])
+    const range = new BlockRange(new BlockOffset('a', 0), new BlockOffset('a', 5))
+    expect(b.isInlineActive(range, 'Bold')).toBe(true)
+  })
+
+  it('returns false when Bold does not cover the range', () => {
+    const b = Blocks.from([dto('a', 'Hello')])
+    const range = new BlockRange(new BlockOffset('a', 0), new BlockOffset('a', 5))
+    expect(b.isInlineActive(range, 'Bold')).toBe(false)
+  })
+
+  it('returns true when all segments across two blocks are covered', () => {
+    const b = Blocks.from([
+      new TextBlock('a', new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }]), []),
+      new TextBlock('b', new Text('World', [{ type: 'Bold', start: 0, end: 5 }]), []),
+    ])
+    const range = new BlockRange(new BlockOffset('a', 0), new BlockOffset('b', 5))
+    expect(b.isInlineActive(range, 'Bold')).toBe(true)
+  })
+
+  it('returns false when one segment is not covered', () => {
+    const b = Blocks.from([
+      new TextBlock('a', new Text('Hello', [{ type: 'Bold', start: 0, end: 5 }]), []),
+      dto('b', 'World'),
+    ])
+    const range = new BlockRange(new BlockOffset('a', 0), new BlockOffset('b', 5))
+    expect(b.isInlineActive(range, 'Bold')).toBe(false)
+  })
+})
+
+// ─── getActiveInline ──────────────────────────────────────────────────────────
+
+describe('getActiveInline', () => {
+  it('returns the inline when it covers the single-block range', () => {
+    const b = Blocks.from([
+      new TextBlock('a', new Text('Hello', [{ type: 'Highlight', start: 0, end: 5, color: 'red' }]), []),
+    ])
+    const range = new BlockRange(new BlockOffset('a', 0), new BlockOffset('a', 5))
+    expect(b.getActiveInline(range, 'Highlight')).toEqual({ type: 'Highlight', start: 0, end: 5, color: 'red' })
+  })
+
+  it('returns null when nothing covers the range', () => {
+    const b = Blocks.from([dto('a', 'Hello')])
+    const range = new BlockRange(new BlockOffset('a', 0), new BlockOffset('a', 5))
+    expect(b.getActiveInline(range, 'Highlight')).toBeNull()
+  })
+
+  it('returns the inline when all segments share the same payload across two blocks', () => {
+    const b = Blocks.from([
+      new TextBlock('a', new Text('Hello', [{ type: 'Highlight', start: 0, end: 5, color: 'blue' }]), []),
+      new TextBlock('b', new Text('World', [{ type: 'Highlight', start: 0, end: 5, color: 'blue' }]), []),
+    ])
+    const range = new BlockRange(new BlockOffset('a', 0), new BlockOffset('b', 5))
+    const result = b.getActiveInline(range, 'Highlight')
+    expect(result).not.toBeNull()
+    expect((result as { color: string }).color).toBe('blue')
+  })
+
+  it('returns null when segments have different payloads', () => {
+    const b = Blocks.from([
+      new TextBlock('a', new Text('Hello', [{ type: 'Highlight', start: 0, end: 5, color: 'red' }]), []),
+      new TextBlock('b', new Text('World', [{ type: 'Highlight', start: 0, end: 5, color: 'blue' }]), []),
+    ])
+    const range = new BlockRange(new BlockOffset('a', 0), new BlockOffset('b', 5))
+    expect(b.getActiveInline(range, 'Highlight')).toBeNull()
+  })
+})

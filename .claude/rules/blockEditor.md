@@ -49,7 +49,7 @@ All classes and types intended for consumers must be exported from `index.ts`.
 
 ## Blocks: Domain-Logic Boundary
 
-**Tree-traversal and change-detection belong in `Blocks`, not in `BlockEditor` or any component.** If you need to know a block's parent, siblings, or what changed between two states, use the `Blocks` methods — never re-implement traversal in the editor.
+**All business logic belongs in `Blocks`. `BlockEditor` is responsible only for rendering and wiring** — resolving selections, calling into `Blocks`, triggering re-renders, and emitting events. Never implement domain logic (traversal, state derivation, inline operations, change detection) inside `BlockEditor` or any component.
 
 ## Event Infrastructure
 
