@@ -1,6 +1,6 @@
 import { Text, type InlineTypes, type InlineDtoMap, type InlineDto } from '../text/text'
 import { textSerializer } from '../text/serializer'
-import { Blocks, Header, type BlockId, type BlockTypes, type BlocksChange, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved, type HeaderLevel } from '../blocks/blocks'
+import { Blocks, type BlockId, type BlockTypes, type BlocksChange, type HeaderLevel, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved } from '../blocks/blocks'
 import { blocksSerializer } from '../blocks/serializer'
 import type { BlockEditorEventDtoMap, BlockEditorOptions, BlockSelection } from './events'
 import { BlockEventEmitter } from './BlockEventEmitter'
@@ -137,7 +137,7 @@ export class BlockEditor {
       (id) => {
         try {
           const block = this.#state.getBlock(id)
-          return { id, data: block.getText(), blockType: block.blockType }
+          return { id, blockType: block.blockType, data: block.data }
         } catch {
           return null  // block was removed; skip
         }
@@ -399,8 +399,7 @@ export class BlockEditor {
     // Emit in a stable semantic order: dataChanged → added → removed → moved
     for (const change of changes) {
       if (change instanceof BlockDataChanged) {
-        const textData = change.data instanceof Header ? change.data.text : change.data
-        this.#emitter.emit('blockDataUpdated', { id: change.id, data: textData, blockType: change.blockType })
+        this.#emitter.emit('blockDataUpdated', { id: change.id, blockType: change.blockType, data: change.data })
       }
     }
     for (const change of changes) {
