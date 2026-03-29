@@ -85,14 +85,17 @@ function getBlockElement(node: Node): Element | null {
   return null
 }
 
-/** Returns the direct `<p>` child of a block element. */
+/** Returns the direct `<p>`, `<h1>`, `<h2>`, or `<h3>` child of a block element. */
 function getBlockElementContent(blockEl: Element): Element {
   for (const child of Array.from(blockEl.childNodes)) {
-    if (child.nodeType === Node.ELEMENT_NODE && (child as Element).tagName.toLowerCase() === 'p') {
-      return child as Element
+    if (child.nodeType === Node.ELEMENT_NODE) {
+      const tag = (child as Element).tagName.toLowerCase()
+      if (tag === 'p' || tag === 'h1' || tag === 'h2' || tag === 'h3') {
+        return child as Element
+      }
     }
   }
-  throw new Error(`Block element '${blockEl.id}' is missing its <p> child`)
+  throw new Error(`Block element '${blockEl.id}' is missing its content element`)
 }
 
 /** Inserts a single character into a Text at the given offset. */

@@ -359,23 +359,23 @@ import { HeaderBlock, Header } from './blocks'
 // ─── HeaderBlock serializer ───────────────────────────────────────────────────
 
 describe('blocksSerializer.render — HeaderBlock', () => {
-  it('renders an H2 with data-block-type="header" and data-header-level="2"', () => {
+  it('renders an H2 with data-block-type="header" using an <h2> element', () => {
     const blocks = Blocks.from([
       new HeaderBlock('h1', new Header(2, new Text('Section', [])), []),
     ])
     const html = nodesToHtml(blocksSerializer.render(blocks))
     expect(html).toBe(
-      '<div class="block" id="h1" data-block-type="header" data-header-level="2"><p>Section</p></div>'
+      '<div class="block" id="h1" data-block-type="header"><h2>Section</h2></div>'
     )
   })
 
-  it('renders each of H1, H2, H3 with the correct data-header-level', () => {
+  it('renders each of H1, H2, H3 with the correct heading element', () => {
     for (const level of [1, 2, 3] as const) {
       const blocks = Blocks.from([
         new HeaderBlock('h', new Header(level, new Text('Title', [])), []),
       ])
       const html = nodesToHtml(blocksSerializer.render(blocks))
-      expect(html).toContain(`data-header-level="${level}"`)
+      expect(html).toContain(`<h${level}>Title</h${level}>`)
     }
   })
 
@@ -394,10 +394,9 @@ describe('blocksSerializer.parse — HeaderBlock', () => {
     div.className = 'block'
     div.id = id
     div.setAttribute('data-block-type', 'header')
-    div.setAttribute('data-header-level', String(level))
-    const p = document.createElement('p')
-    p.textContent = content
-    div.appendChild(p)
+    const h = document.createElement(`h${level}`)
+    h.textContent = content
+    div.appendChild(h)
     return div
   }
 
@@ -410,13 +409,13 @@ describe('blocksSerializer.parse — HeaderBlock', () => {
     expect(block.data.text.text).toBe('My Heading')
   })
 
-  it('throws when data-header-level is missing on a header block', () => {
+  it('throws when header block uses a <p> instead of h1/h2/h3', () => {
     const div = document.createElement('div')
     div.className = 'block'
     div.id = 'h1'
     div.setAttribute('data-block-type', 'header')
     div.appendChild(document.createElement('p'))
-    expect(() => blocksSerializer.parse([div])).toThrow()
+    expect(() => blocksSerializer.parse([div])).toThrow(/h1, h2, or h3/)
   })
 })
 
