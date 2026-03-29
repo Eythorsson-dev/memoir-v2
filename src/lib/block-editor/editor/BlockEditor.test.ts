@@ -32,7 +32,7 @@ function getEditable(container: HTMLElement): HTMLElement {
 function setCursor(container: HTMLElement, blockId: string, offset: number): void {
   const editable = getEditable(container)
   const blockEl = editable.querySelector(`[id="${blockId}"]`)!
-  const p = blockEl.querySelector('p')!
+  const p = blockEl.querySelector('p, h1, h2, h3')!
 
   const range = document.createRange()
   const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT)
@@ -74,7 +74,7 @@ function setRange(
 
   function findPos(blockId: string, offset: number): { node: Node; offset: number } {
     const blockEl = editable.querySelector(`[id="${blockId}"]`)!
-    const p = blockEl.querySelector('p')!
+    const p = blockEl.querySelector('p, h1, h2, h3')!
     const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT)
     let accumulated = 0
     let node: Node | null = walker.nextNode()
@@ -205,7 +205,7 @@ describe('getValue / setValue', () => {
     getEditable(container).focus()
     const editable = getEditable(container)
     const blockEl = editable.querySelector('[id="a"]')!
-    const p = blockEl.querySelector('p')!
+    const p = blockEl.querySelector('p, h1, h2, h3')!
     p.textContent = 'Hello!'
     setCursor(container, 'a', 6)
     editable.dispatchEvent(new Event('input', { bubbles: true }))
@@ -230,7 +230,7 @@ describe('blockDataUpdated debouncing', () => {
   function simulateInput(container: HTMLElement, blockId: string, newText: string): void {
     const editable = getEditable(container)
     const blockEl = editable.querySelector(`[id="${blockId}"]`)!
-    const p = blockEl.querySelector('p')!
+    const p = blockEl.querySelector('p, h1, h2, h3')!
     p.textContent = newText
     // Re-set cursor after DOM mutation so _handleInput can read a valid selection
     setCursor(container, blockId, newText.length)
@@ -924,7 +924,7 @@ describe('IME', () => {
     editable.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
     // Simulate DOM mutation that would normally happen during IME
     const blockEl = editable.querySelector('[id="a"]')!
-    const p = blockEl.querySelector('p')!
+    const p = blockEl.querySelector('p, h1, h2, h3')!
     p.textContent = 'Hello世'
     editable.dispatchEvent(new Event('input', { bubbles: true }))
 
@@ -942,7 +942,7 @@ describe('IME', () => {
     editable.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
     // Set DOM state as it would be after IME completes
     const blockEl = editable.querySelector('[id="a"]')!
-    const p = blockEl.querySelector('p')!
+    const p = blockEl.querySelector('p, h1, h2, h3')!
     p.textContent = 'Hello世界'
 
     // Set cursor after the IME text
@@ -1383,7 +1383,7 @@ describe('markdown input shortcuts', () => {
   function simulateType(container: HTMLElement, blockId: string, newFullText: string, cursorAt: number): void {
     const editable = getEditable(container)
     const blockEl = editable.querySelector(`[id="${blockId}"]`)!
-    const p = blockEl.querySelector('p')!
+    const p = blockEl.querySelector('p, h1, h2, h3')!
     p.textContent = newFullText
     setCursor(container, blockId, cursorAt)
     editable.dispatchEvent(new Event('input', { bubbles: true }))
@@ -1489,7 +1489,7 @@ describe('BlockEditor — heading input rules', () => {
   function simulateType(container: HTMLElement, blockId: string, newFullText: string, cursorAt: number): void {
     const editable = getEditable(container)
     const blockEl = editable.querySelector(`[id="${blockId}"]`)!
-    const p = blockEl.querySelector('p')!
+    const p = blockEl.querySelector('p, h1, h2, h3')!
     p.textContent = newFullText
     setCursor(container, blockId, cursorAt)
     editable.dispatchEvent(new Event('input', { bubbles: true }))

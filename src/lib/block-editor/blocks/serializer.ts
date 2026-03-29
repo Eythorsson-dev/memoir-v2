@@ -21,13 +21,13 @@ function renderBlock(block: TextBlock | OrderedListBlock | UnorderedListBlock | 
     div.setAttribute('data-list-style', LIST_STYLES[depth % 3])
   } else if (block instanceof HeaderBlock) {
     div.setAttribute('data-block-type', 'header')
-    div.setAttribute('data-header-level', String(block.data.level))
   } else {
     const _exhaustive: never = block
     throw new Error(`Unknown block type: ${JSON.stringify(_exhaustive)}`)
   }
 
-  const p = document.createElement('p')
+  const tagName = block instanceof HeaderBlock ? `h${block.data.level}` : 'p'
+  const p = document.createElement(tagName)
   const text = block.getText()
   if (text.text.length === 0) {
     p.appendChild(document.createElement('br'))
@@ -71,13 +71,13 @@ function parseBlock(el: Element): TextBlock | OrderedListBlock | UnorderedListBl
     if (node.nodeType === Node.ELEMENT_NODE) {
       const child = node as Element
       const tag = child.tagName.toLowerCase()
-      if (tag === 'p') {
+      if (tag === 'p' || tag === 'h1' || tag === 'h2' || tag === 'h3') {
         pElement = child
       } else if (tag === 'div' && child.classList.contains('children')) {
         childrenElement = child
       } else {
         throw new Error(
-          `Unexpected element <${tag}> inside block '${id}'. Only <p> and <div class="children"> are allowed.`
+          `Unexpected element <${tag}> inside block '${id}'. Only <p>, <h1>–<h3>, and <div class="children"> are allowed.`
         )
       }
     }
@@ -112,9 +112,11 @@ function parseBlock(el: Element): TextBlock | OrderedListBlock | UnorderedListBl
     case 'unordered-list':
       return new UnorderedListBlock(id, data, children)
     case 'header': {
-      const levelAttr = el.getAttribute('data-header-level')
-      if (!levelAttr) throw new Error(`Header block '${id}' is missing data-header-level attribute`)
-      const level = Number(levelAttr) as 1 | 2 | 3
+      const tag = pElement!.tagName.toLowerCase()
+      if (tag !== 'h1' && tag !== 'h2' && tag !== 'h3') {
+        throw new Error(`Header block '${id}' must use an h1, h2, or h3 element — got <${tag}>`)
+      }
+      const level = Number(tag[1]) as 1 | 2 | 3
       return new HeaderBlock(id, new Header(level, data), children)
     }
     default:

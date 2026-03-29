@@ -26,7 +26,7 @@
 
 /* ─── Header blocks ─────────────────────────────────────────────────────────── */
 
-.block-editor-editable .block[data-block-type="header"][data-header-level="1"] > p {
+.block-editor-editable .block[data-block-type="header"] > h1 {
   margin: 0;
   padding: 2px 4px;
   font-size: 1.75em;
@@ -34,7 +34,7 @@
   line-height: 1.2;
 }
 
-.block-editor-editable .block[data-block-type="header"][data-header-level="2"] > p {
+.block-editor-editable .block[data-block-type="header"] > h2 {
   margin: 0;
   padding: 2px 4px;
   font-size: 1.35em;
@@ -42,7 +42,7 @@
   line-height: 1.25;
 }
 
-.block-editor-editable .block[data-block-type="header"][data-header-level="3"] > p {
+.block-editor-editable .block[data-block-type="header"] > h3 {
   margin: 0;
   padding: 2px 4px;
   font-size: 1.1em;
