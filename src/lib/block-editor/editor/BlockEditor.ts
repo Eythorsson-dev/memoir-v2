@@ -1,6 +1,6 @@
 import { Text, type InlineTypes, type InlineDtoMap, type InlineDto } from '../text/text'
 import { textSerializer } from '../text/serializer'
-import { Blocks, type BlockId, type BlockTypes, type BlocksChange, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved, type HeaderLevel } from '../blocks/blocks'
+import { Blocks, Header, type BlockId, type BlockTypes, type BlocksChange, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved, type HeaderLevel } from '../blocks/blocks'
 import { blocksSerializer } from '../blocks/serializer'
 import type { BlockEditorEventDtoMap, BlockEditorOptions, BlockSelection } from './events'
 import { BlockEventEmitter } from './BlockEventEmitter'
@@ -396,7 +396,8 @@ export class BlockEditor {
     // Emit in a stable semantic order: dataChanged → added → removed → moved
     for (const change of changes) {
       if (change instanceof BlockDataChanged) {
-        this.#emitter.emit('blockDataUpdated', { id: change.id, data: change.data, blockType: change.blockType })
+        const textData = change.data instanceof Header ? change.data.text : change.data
+        this.#emitter.emit('blockDataUpdated', { id: change.id, data: textData, blockType: change.blockType })
       }
     }
     for (const change of changes) {
@@ -650,7 +651,7 @@ export class BlockEditor {
       // restores a text block containing the full marker + space.
       this.#history.updateOrAdd(
         blockId,
-        new BlockDataChanged(blockId, newText, 'text'),
+        new BlockDataChanged(blockId, 'text', newText),
         this.#pendingSelectionBefore,
         sel,
       )
@@ -673,7 +674,7 @@ export class BlockEditor {
       return
     }
 
-    this.#history.updateOrAdd(blockId, new BlockDataChanged(blockId, newText, currentType), this.#pendingSelectionBefore, sel)
+    this.#history.updateOrAdd(blockId, new BlockDataChanged(blockId, currentType, newText), this.#pendingSelectionBefore, sel)
     this.#pendingSelectionBefore = null
     this.#render(sel)
     this.#emitter.scheduleDataUpdated(blockId)

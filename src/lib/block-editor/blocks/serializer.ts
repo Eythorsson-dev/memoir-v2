@@ -1,5 +1,5 @@
 import { type Serializer } from '../serializer'
-import { Blocks, TextBlock, OrderedListBlock, UnorderedListBlock, HeaderBlock, HeaderData, type BlockId } from './blocks'
+import { Blocks, TextBlock, OrderedListBlock, UnorderedListBlock, HeaderBlock, Header, type BlockId } from './blocks'
 import { textSerializer } from '../text/serializer'
 
 // ─── Render ───────────────────────────────────────────────────────────────────
@@ -115,7 +115,7 @@ function parseBlock(el: Element): TextBlock | OrderedListBlock | UnorderedListBl
       const levelAttr = el.getAttribute('data-header-level')
       if (!levelAttr) throw new Error(`Header block '${id}' is missing data-header-level attribute`)
       const level = Number(levelAttr) as 1 | 2 | 3
-      return new HeaderBlock(id, new HeaderData(level, data), children)
+      return new HeaderBlock(id, new Header(level, data), children)
     }
     default:
       throw new Error(`Block '${id}' has unknown data-block-type: '${blockType}'`)
