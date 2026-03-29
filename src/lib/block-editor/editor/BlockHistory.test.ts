@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { BlockHistory } from './BlockHistory'
-import { Blocks, TextBlock, BlockDataChanged, BlockAdded, BlockRemoved, BlockOffset } from '../blocks/blocks'
+import { Blocks, TextBlock, HeaderBlock, BlockDataChanged, BlockAdded, BlockRemoved, BlockOffset, Header } from '../blocks/blocks'
 import { Text } from '../text/text'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -210,6 +210,34 @@ describe('BlockHistory', () => {
       const c2 = new BlockDataChanged('a', 'text', new Text('different', []))
       h.add([c2], null, null)
       expect(h.events).toEqual([c2])
+    })
+  })
+
+  describe('BlockAdded with header type', () => {
+    it('redo restores a header block with the correct level', () => {
+      const base = makeBlocks('a')
+      const h = new BlockHistory(base)
+      h.add(
+        [new BlockAdded('b', 'header', new Header(2, new Text('Section', [])), 'a', null)],
+        null, null,
+      )
+      h.undo()
+      const { blocks } = h.redo()
+      const block = blocks.getBlock('b')
+      expect(block).toBeInstanceOf(HeaderBlock)
+      expect((block.data as Header).level).toBe(2)
+      expect((block.data as Header).text.text).toBe('Section')
+    })
+
+    it('undo removes a header block that was added', () => {
+      const base = makeBlocks('a')
+      const h = new BlockHistory(base)
+      h.add(
+        [new BlockAdded('b', 'header', new Header(1, new Text('Title', [])), 'a', null)],
+        null, null,
+      )
+      const { blocks } = h.undo()
+      expect(() => blocks.getBlock('b')).toThrow()
     })
   })
 

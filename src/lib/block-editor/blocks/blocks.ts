@@ -994,6 +994,11 @@ export class Blocks {
         } else {
           state = state.addBefore(state.#blocks[0].id, { id: change.id, data: text })
         }
+        if (change.blockType === 'header') {
+          state = state.convertToHeader(change.id, change.id, (change.data as Header).level)
+        } else if (change.blockType !== 'text') {
+          state = state.convertType(change.id, change.id, change.blockType)
+        }
       } else if (change instanceof BlockRemoved) {
         state = state.delete(change.id)
       } else if (change instanceof BlockMoved) {
