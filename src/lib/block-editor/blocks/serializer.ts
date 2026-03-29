@@ -1,10 +1,10 @@
 import { type Serializer } from '../serializer'
-import { Blocks, TextBlock, OrderedListBlock, UnorderedListBlock, type BlockId } from './blocks'
+import { Blocks, TextBlock, OrderedListBlock, UnorderedListBlock, HeaderBlock, HeaderData, type BlockId } from './blocks'
 import { textSerializer } from '../text/serializer'
 
 // ─── Render ───────────────────────────────────────────────────────────────────
 
-function renderBlock(block: TextBlock | OrderedListBlock | UnorderedListBlock, depth = 0): Element {
+function renderBlock(block: TextBlock | OrderedListBlock | UnorderedListBlock | HeaderBlock, depth = 0): Element {
   const div = document.createElement('div')
   div.className = 'block'
   div.id = block.id
@@ -19,13 +19,16 @@ function renderBlock(block: TextBlock | OrderedListBlock | UnorderedListBlock, d
     const LIST_STYLES = ['disc', 'circle', 'square'] as const
     div.setAttribute('data-block-type', 'unordered-list')
     div.setAttribute('data-list-style', LIST_STYLES[depth % 3])
+  } else if (block instanceof HeaderBlock) {
+    div.setAttribute('data-block-type', 'header')
+    div.setAttribute('data-header-level', String(block.data.level))
   } else {
     const _exhaustive: never = block
     throw new Error(`Unknown block type: ${JSON.stringify(_exhaustive)}`)
   }
 
   const p = document.createElement('p')
-  const text = block.data
+  const text = block.getText()
   if (text.text.length === 0) {
     p.appendChild(document.createElement('br'))
   } else {
@@ -36,7 +39,7 @@ function renderBlock(block: TextBlock | OrderedListBlock | UnorderedListBlock, d
   if (block.children.length > 0) {
     const childrenDiv = document.createElement('div')
     childrenDiv.className = 'children'
-    ;(block.children as ReadonlyArray<TextBlock | OrderedListBlock | UnorderedListBlock>).forEach(
+    ;(block.children as ReadonlyArray<TextBlock | OrderedListBlock | UnorderedListBlock | HeaderBlock>).forEach(
       (child) => childrenDiv.appendChild(renderBlock(child, depth + 1))
     )
     div.appendChild(childrenDiv)
@@ -51,7 +54,7 @@ function render(blocks: Blocks): Node[] {
 
 // ─── Parse ────────────────────────────────────────────────────────────────────
 
-function parseBlock(el: Element): TextBlock | OrderedListBlock | UnorderedListBlock {
+function parseBlock(el: Element): TextBlock | OrderedListBlock | UnorderedListBlock | HeaderBlock {
   const id: BlockId | null = el.getAttribute('id')
   if (!id) throw new Error('Block element missing id attribute')
 
@@ -84,7 +87,7 @@ function parseBlock(el: Element): TextBlock | OrderedListBlock | UnorderedListBl
 
   const data = textSerializer.parse(Array.from(pElement.childNodes))
 
-  const children: Array<TextBlock | OrderedListBlock | UnorderedListBlock> = []
+  const children: Array<TextBlock | OrderedListBlock | UnorderedListBlock | HeaderBlock> = []
   if (childrenElement) {
     for (const node of Array.from(childrenElement.childNodes)) {
       if (node.nodeType === Node.TEXT_NODE) {
@@ -108,13 +111,19 @@ function parseBlock(el: Element): TextBlock | OrderedListBlock | UnorderedListBl
       return new OrderedListBlock(id, data, children)
     case 'unordered-list':
       return new UnorderedListBlock(id, data, children)
+    case 'header': {
+      const levelAttr = el.getAttribute('data-header-level')
+      if (!levelAttr) throw new Error(`Header block '${id}' is missing data-header-level attribute`)
+      const level = Number(levelAttr) as 1 | 2 | 3
+      return new HeaderBlock(id, new HeaderData(level, data), children)
+    }
     default:
       throw new Error(`Block '${id}' has unknown data-block-type: '${blockType}'`)
   }
 }
 
 function parse(nodes: Node[]): Blocks {
-  const dtos: Array<TextBlock | OrderedListBlock | UnorderedListBlock> = []
+  const dtos: Array<TextBlock | OrderedListBlock | UnorderedListBlock | HeaderBlock> = []
   for (const node of nodes) {
     if (node.nodeType === Node.ELEMENT_NODE) {
       dtos.push(parseBlock(node as Element))

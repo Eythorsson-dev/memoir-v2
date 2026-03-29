@@ -1,8 +1,8 @@
 import { type InlineTypes, type InlineDtoMap, type HighlightColor } from '../text/text'
-import { Blocks } from '../blocks/blocks'
+import { Blocks, type HeaderLevel } from '../blocks/blocks'
 import { BlockEditor } from './BlockEditor'
 import type { BlockEditorEventDtoMap, BlockEditorOptions } from './events'
-import { createElement, Bold, Italic, Underline, IndentIncrease, IndentDecrease, Undo2, Redo2, ListOrdered, List, Highlighter, ChevronDown } from 'lucide'
+import { createElement, Bold, Italic, Underline, IndentIncrease, IndentDecrease, Undo2, Redo2, ListOrdered, List, Highlighter, ChevronDown, Heading } from 'lucide'
 import './block-editor-toolbar.css'
 import './highlight-picker.css'
 
@@ -44,6 +44,11 @@ export class BlockEditorWithToolbar {
   #redoBtn: HTMLButtonElement
   #orderedListBtn: HTMLButtonElement
   #unorderedListBtn: HTMLButtonElement
+
+  // Heading dropdown state
+  #headingBtn: HTMLButtonElement
+  #headingPicker: HTMLDivElement
+  #headingLevelBtns: Map<HeaderLevel, HTMLButtonElement> = new Map()
 
   // Highlight split-button state
   #highlightMainBtn: HTMLButtonElement
@@ -258,6 +263,55 @@ export class BlockEditorWithToolbar {
     })
     this.#toolbar.appendChild(this.#unorderedListBtn)
 
+    const sep4 = document.createElement('div')
+    sep4.className = 'toolbar-separator'
+    sep4.setAttribute('aria-hidden', 'true')
+    this.#toolbar.appendChild(sep4)
+
+    // ── Heading split button ────────────────────────────────────────────────
+
+    const headingWrapper = document.createElement('div')
+    headingWrapper.className = 'toolbar-heading-split'
+    headingWrapper.style.position = 'relative'
+
+    this.#headingBtn = document.createElement('button')
+    this.#headingBtn.className = 'heading-main-btn'
+    this.#headingBtn.setAttribute('aria-label', 'Heading')
+    this.#headingBtn.setAttribute('aria-pressed', 'false')
+    this.#headingBtn.setAttribute('aria-haspopup', 'true')
+    this.#headingBtn.setAttribute('aria-expanded', 'false')
+    this.#headingBtn.appendChild(createElement(Heading))
+    this.#headingBtn.appendChild(createElement(ChevronDown))
+    addTooltip(this.#headingBtn, 'Heading')
+    this.#headingBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      this.#toggleHeadingPicker()
+    })
+    headingWrapper.appendChild(this.#headingBtn)
+
+    this.#headingPicker = document.createElement('div')
+    this.#headingPicker.className = 'heading-picker'
+    this.#headingPicker.setAttribute('role', 'dialog')
+    this.#headingPicker.setAttribute('aria-label', 'Heading level')
+
+    for (const level of [1, 2, 3] as const) {
+      const btn = document.createElement('button')
+      btn.className = 'heading-picker-option'
+      btn.setAttribute('aria-label', `Heading ${level}`)
+      btn.setAttribute('aria-pressed', 'false')
+      btn.textContent = `H${level}`
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault()
+        this.#closeHeadingPicker()
+        this.#editor.convertToHeader(level)
+      })
+      this.#headingPicker.appendChild(btn)
+      this.#headingLevelBtns.set(level, btn)
+    }
+
+    headingWrapper.appendChild(this.#headingPicker)
+    this.#toolbar.appendChild(headingWrapper)
+
     container.appendChild(this.#toolbar)
 
     this.#editor = new BlockEditor(container, initial, opts)
@@ -300,6 +354,17 @@ export class BlockEditorWithToolbar {
       const ulActive = this.#editor.isBlockTypeActive('unordered-list')
       this.#unorderedListBtn.classList.toggle('is-active', ulActive)
       this.#unorderedListBtn.setAttribute('aria-pressed', String(ulActive))
+
+      const activeLevel = this.#editor.getActiveHeaderLevel()
+      const headingActive = activeLevel !== null
+      this.#headingBtn.classList.toggle('is-active', headingActive)
+      this.#headingBtn.setAttribute('aria-pressed', String(headingActive))
+      for (const [level, btn] of this.#headingLevelBtns) {
+        const isActive = activeLevel === level
+        btn.classList.toggle('is-active', isActive)
+        btn.setAttribute('aria-pressed', String(isActive))
+      }
+
       this.#updateUndoRedo()
     })
   }
@@ -341,11 +406,32 @@ export class BlockEditorWithToolbar {
   }
 
   #onDocumentMouseDown = (e: MouseEvent): void => {
-    if (!this.#highlightPicker.classList.contains('is-open')) return
     const target = e.target as Node
-    if (!this.#highlightPicker.contains(target) && !this.#toolbar.querySelector('.toolbar-highlight-split')?.contains(target)) {
-      this.#closePicker()
+    if (this.#highlightPicker.classList.contains('is-open')) {
+      if (!this.#highlightPicker.contains(target) && !this.#toolbar.querySelector('.toolbar-highlight-split')?.contains(target)) {
+        this.#closePicker()
+      }
     }
+    if (this.#headingPicker.classList.contains('is-open')) {
+      if (!this.#headingPicker.contains(target) && !this.#toolbar.querySelector('.toolbar-heading-split')?.contains(target)) {
+        this.#closeHeadingPicker()
+      }
+    }
+  }
+
+  #toggleHeadingPicker(): void {
+    const isOpen = this.#headingPicker.classList.contains('is-open')
+    if (isOpen) {
+      this.#closeHeadingPicker()
+    } else {
+      this.#headingPicker.classList.add('is-open')
+      this.#headingBtn.setAttribute('aria-expanded', 'true')
+    }
+  }
+
+  #closeHeadingPicker(): void {
+    this.#headingPicker.classList.remove('is-open')
+    this.#headingBtn.setAttribute('aria-expanded', 'false')
   }
 
   #setLastUsed(value: { color: HighlightColor }): void {

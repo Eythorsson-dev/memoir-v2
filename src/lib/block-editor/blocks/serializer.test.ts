@@ -354,3 +354,89 @@ describe('roundtrip: parse(render(blocks)) === blocks', () => {
     ]))
   })
 })
+import { HeaderBlock, HeaderData } from './blocks'
+
+// ─── HeaderBlock serializer ───────────────────────────────────────────────────
+
+describe('blocksSerializer.render — HeaderBlock', () => {
+  it('renders an H2 with data-block-type="header" and data-header-level="2"', () => {
+    const blocks = Blocks.from([
+      new HeaderBlock('h1', new HeaderData(2, new Text('Section', [])), []),
+    ])
+    const html = nodesToHtml(blocksSerializer.render(blocks))
+    expect(html).toBe(
+      '<div class="block" id="h1" data-block-type="header" data-header-level="2"><p>Section</p></div>'
+    )
+  })
+
+  it('renders each of H1, H2, H3 with the correct data-header-level', () => {
+    for (const level of [1, 2, 3] as const) {
+      const blocks = Blocks.from([
+        new HeaderBlock('h', new HeaderData(level, new Text('Title', [])), []),
+      ])
+      const html = nodesToHtml(blocksSerializer.render(blocks))
+      expect(html).toContain(`data-header-level="${level}"`)
+    }
+  })
+
+  it('renders an empty HeaderBlock with a <br> placeholder', () => {
+    const blocks = Blocks.from([
+      new HeaderBlock('h', new HeaderData(1, new Text('', [])), []),
+    ])
+    const html = nodesToHtml(blocksSerializer.render(blocks))
+    expect(html).toContain('<br>')
+  })
+})
+
+describe('blocksSerializer.parse — HeaderBlock', () => {
+  function makeHeaderEl(id: string, content: string, level: number): Element {
+    const div = document.createElement('div')
+    div.className = 'block'
+    div.id = id
+    div.setAttribute('data-block-type', 'header')
+    div.setAttribute('data-header-level', String(level))
+    const p = document.createElement('p')
+    p.textContent = content
+    div.appendChild(p)
+    return div
+  }
+
+  it('parses a header element into a HeaderBlock with correct level and text', () => {
+    const el = makeHeaderEl('h1', 'My Heading', 2)
+    const result = blocksSerializer.parse([el])
+    const block = result.blocks[0] as HeaderBlock
+    expect(block).toBeInstanceOf(HeaderBlock)
+    expect(block.data.level).toBe(2)
+    expect(block.data.text.text).toBe('My Heading')
+  })
+
+  it('throws when data-header-level is missing on a header block', () => {
+    const div = document.createElement('div')
+    div.className = 'block'
+    div.id = 'h1'
+    div.setAttribute('data-block-type', 'header')
+    div.appendChild(document.createElement('p'))
+    expect(() => blocksSerializer.parse([div])).toThrow()
+  })
+})
+
+describe('roundtrip — HeaderBlock', () => {
+  it('HeaderBlock roundtrip preserves level and text', () => {
+    const blocks = Blocks.from([
+      new HeaderBlock('h', new HeaderData(2, new Text('Hello', [])), []),
+    ])
+    const rendered = blocksSerializer.render(blocks)
+    const parsed = blocksSerializer.parse(rendered)
+    expect(JSON.stringify(parsed.blocks)).toBe(JSON.stringify(blocks.blocks))
+  })
+
+  it('mixed TextBlock + HeaderBlock roundtrip', () => {
+    const blocks = Blocks.from([
+      new HeaderBlock('h', new HeaderData(1, new Text('Title', [])), []),
+      new TextBlock('t', new Text('Body', []), []),
+    ])
+    const rendered = blocksSerializer.render(blocks)
+    const parsed = blocksSerializer.parse(rendered)
+    expect(JSON.stringify(parsed.blocks)).toBe(JSON.stringify(blocks.blocks))
+  })
+})

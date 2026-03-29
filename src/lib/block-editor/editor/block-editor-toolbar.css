@@ -78,3 +78,58 @@
   font-family: inherit;
   margin-left: 4px;
 }
+
+/* ─── Heading split button ───────────────────────────────────────────────────── */
+
+.toolbar-heading-split {
+  display: flex;
+  align-items: center;
+}
+
+.heading-main-btn {
+  width: auto !important;
+  padding: 0 6px !important;
+  gap: 2px;
+}
+
+.heading-main-btn svg {
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+
+.heading-picker {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--tooltip-bg, #1e1e1e);
+  color: var(--tooltip-color, #fff);
+  border-radius: 6px;
+  padding: 4px;
+  gap: 2px;
+  flex-direction: column;
+  z-index: 200;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  min-width: 56px;
+}
+
+.heading-picker.is-open {
+  display: flex;
+}
+
+.heading-picker-option {
+  width: 100% !important;
+  height: 28px !important;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 0 8px !important;
+  justify-content: center;
+}
+
+.heading-picker-option.is-active {
+  background: var(--toolbar-btn-active-bg);
+  border-color: var(--toolbar-btn-active-border);
+  color: var(--toolbar-btn-active-color);
+}
