@@ -146,7 +146,8 @@ export class Text implements TextDto {
    * Returns `true` if this `Text` instance is field-by-field equal to `other`.
    * Comparison is index-by-index on the sorted `inline` array, including payload.
    */
-  equals(other: Text): boolean {
+  equals(other: unknown): boolean {
+    if (!(other instanceof Text)) return false
     if (this.text !== other.text) return false
     if (this.inline.length !== other.inline.length) return false
     for (let i = 0; i < this.inline.length; i++) {
