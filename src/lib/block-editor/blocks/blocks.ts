@@ -108,7 +108,7 @@ export class Header {
     Object.freeze(this)
   }
 
-  equals(other: Header): boolean {
+  equals(other: unknown): boolean {
     return other instanceof Header && this.level === other.level && this.text.equals(other.text)
   }
 }
@@ -557,11 +557,7 @@ export class Blocks {
 
       const oldData = oldDataMap.get(b.id)!
       const oldType = oldTypeMap.get(b.id)!
-      const newData = b.data
-      const dataChanged =
-        oldData instanceof Header && newData instanceof Header ? !oldData.equals(newData) :
-        oldData instanceof Text  && newData instanceof Text  ? !oldData.equals(newData) :
-        true
+      const dataChanged = !oldData.equals(b.data)
 
       if (dataChanged || oldType !== b.blockType) {
         if (b.blockType === 'header') {

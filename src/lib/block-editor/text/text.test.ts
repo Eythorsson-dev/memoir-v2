@@ -597,6 +597,10 @@ describe('equals', () => {
     expect(new Text('hi', [{ type: 'Bold', start: 0, end: 1 }])
       .equals(new Text('hi', [{ type: 'Bold', start: 0, end: 2 }]))).toBe(false)
   })
+  it('returns false for non-Text values', () => {
+    expect(new Text('a', []).equals(null as unknown as Text)).toBe(false)
+    expect(new Text('a', []).equals(42 as unknown as Text)).toBe(false)
+  })
 })
 
 // ─── freeze ───────────────────────────────────────────────────────────────────
