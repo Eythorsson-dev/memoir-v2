@@ -604,11 +604,7 @@ export class Blocks {
     return new Blocks(updated)
   }
 
-  /**
-   * Returns the IDs of all blocks in the pre-order range [`from`, `to`], inclusive.
-   * @throws {Error} if `from` or `to` are not found, or `to` precedes `from`.
-   */
-  blockIdsInRange(from: BlockId, to: BlockId): BlockId[] {
+  #blockIdsInRange(from: BlockId, to: BlockId): BlockId[] {
     const [fromIdx, toIdx] = getRange(this.#blocks, from, to)
     return this.#blocks.slice(fromIdx, toIdx + 1).map(b => b.id)
   }
@@ -616,7 +612,7 @@ export class Blocks {
   toggleInline(range: BlockRange, type: NeverPayloadTypes): Blocks
   toggleInline<K extends DataPayloadTypes>(range: BlockRange, type: K, payload: InlineDtoMap[K]): Blocks
   toggleInline(range: BlockRange, type: InlineTypes, payload?: InlineDtoMap[DataPayloadTypes]): Blocks {
-    const blockIds = this.blockIdsInRange(range.start.blockId, range.end.blockId)
+    const blockIds = this.#blockIdsInRange(range.start.blockId, range.end.blockId)
     const allToggled = blockIds.every((blockId, idx) => {
       const text = this.getBlock(blockId).getText()
       const segStart = idx === 0 ? range.start.offset : 0
@@ -647,7 +643,7 @@ export class Blocks {
   }
 
   getActiveInline<K extends InlineTypes>(range: BlockRange, type: K): InlineDto<K> | null {
-    const blockIds = this.blockIdsInRange(range.start.blockId, range.end.blockId)
+    const blockIds = this.#blockIdsInRange(range.start.blockId, range.end.blockId)
     let active: InlineDto<K> | null = null
     for (let idx = 0; idx < blockIds.length; idx++) {
       const text = this.getBlock(blockIds[idx]).getText()
@@ -670,7 +666,7 @@ export class Blocks {
   }
 
   isInlineActive(range: BlockRange, type: InlineTypes): boolean {
-    const blockIds = this.blockIdsInRange(range.start.blockId, range.end.blockId)
+    const blockIds = this.#blockIdsInRange(range.start.blockId, range.end.blockId)
     for (let idx = 0; idx < blockIds.length; idx++) {
       const text = this.getBlock(blockIds[idx]).getText()
       const segStart = idx === 0 ? range.start.offset : 0
@@ -683,7 +679,7 @@ export class Blocks {
   }
 
   removeInlineFromRange(range: BlockRange, type: InlineTypes): Blocks {
-    const blockIds = this.blockIdsInRange(range.start.blockId, range.end.blockId)
+    const blockIds = this.#blockIdsInRange(range.start.blockId, range.end.blockId)
     let result: Blocks = this
     for (let idx = 0; idx < blockIds.length; idx++) {
       const blockId = blockIds[idx]
