@@ -241,18 +241,35 @@ export type BlocksChange = BlockMoved | BlockRemoved | BlockAdded | BlockDataCha
 
 /**
  * Internal flat representation used within blocks.ts.
- * Stores a block's id, parsed Text data, indent level, and block type.
- * Not exported — external code should use TextBlock / OrderedListBlock / UnorderedListBlock.
+ * Generic over `T` so `blockType` and `data` are correlated via `BlockTypeMap`.
+ * Not exported — external code uses the concrete block classes.
  */
-class FlatBlock {
+class FlatBlock<T extends BlockTypes = BlockTypes> {
   constructor(
     readonly id: BlockId,
-    readonly data: Text,
+    readonly blockType: T,
+    readonly data: BlockTypeMap[T],
     readonly indent: number,
-    readonly blockType: BlockTypes,
-    readonly headerLevel: HeaderLevel | null = null,
   ) {
     Object.freeze(this)
+  }
+
+  /** Returns the text content regardless of block type. */
+  getText(): Text {
+    return this.data instanceof Header ? this.data.text : this.data as Text
+  }
+
+  /** Returns a new FlatBlock with `text` as content, preserving the header level if applicable. */
+  withText(text: Text): FlatBlock<T> {
+    const newData: BlockTypeMap[T] = this.blockType === 'header'
+      ? new Header((this.data as Header).level, text) as BlockTypeMap[T]
+      : text as BlockTypeMap[T]
+    return new FlatBlock(this.id, this.blockType, newData, this.indent)
+  }
+
+  /** Returns a new FlatBlock with `indent` replaced. */
+  withIndent(indent: number): FlatBlock<T> {
+    return new FlatBlock(this.id, this.blockType, this.data, indent)
   }
 }
 
@@ -291,11 +308,9 @@ function clampPass(blocks: FlatBlock[]): FlatBlock[] {
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i]
     if (i === 0) {
-      clamped.push(new FlatBlock(block.id, block.data, 0, block.blockType, block.headerLevel))
+      clamped.push(block.withIndent(0))
     } else {
-      const maxAllowed = clamped[i - 1].indent + 1
-      const newIndent = Math.min(block.indent, maxAllowed)
-      clamped.push(new FlatBlock(block.id, block.data, newIndent, block.blockType, block.headerLevel))
+      clamped.push(block.withIndent(Math.min(block.indent, clamped[i - 1].indent + 1)))
     }
   }
   return clamped
@@ -306,9 +321,9 @@ function clampPass(blocks: FlatBlock[]): FlatBlock[] {
 function dtoToFlat(dtos: ReadonlyArray<AnyBlock>, depth = 0, result: FlatBlock[] = []): FlatBlock[] {
   for (const block of dtos) {
     if (block.blockType === 'header') {
-      result.push(new FlatBlock(block.id, block.data.text, depth, 'header', block.data.level))
+      result.push(new FlatBlock(block.id, 'header', block.data, depth))
     } else {
-      result.push(new FlatBlock(block.id, block.data, depth, block.blockType))
+      result.push(new FlatBlock(block.id, block.blockType, block.data, depth))
     }
     dtoToFlat(block.children as ReadonlyArray<AnyBlock>, depth + 1, result)
   }
@@ -318,19 +333,13 @@ function dtoToFlat(dtos: ReadonlyArray<AnyBlock>, depth = 0, result: FlatBlock[]
 // ─── FlatBlock → Block (tree DTO) conversion ──────────────────────────────────
 
 function flatToDto(blocks: ReadonlyArray<FlatBlock>): ReadonlyArray<AnyBlock> {
-  type MutableBlock = { id: BlockId; data: Text; blockType: BlockTypes; headerLevel: HeaderLevel | null; children: MutableBlock[] }
+  type MutableBlock = { id: BlockId; blockType: BlockTypes; data: BlockTypeMap[BlockTypes]; indent: number; children: MutableBlock[] }
 
   const roots: MutableBlock[] = []
   const stack: Array<{ node: MutableBlock; indent: number }> = []
 
   for (const block of blocks) {
-    const node: MutableBlock = {
-      id: block.id,
-      data: block.data,
-      blockType: block.blockType,
-      headerLevel: block.headerLevel,
-      children: [],
-    }
+    const node: MutableBlock = { id: block.id, blockType: block.blockType, data: block.data, indent: block.indent, children: [] }
     while (stack.length > 0 && stack[stack.length - 1].indent >= block.indent) {
       stack.pop()
     }
@@ -345,14 +354,10 @@ function flatToDto(blocks: ReadonlyArray<FlatBlock>): ReadonlyArray<AnyBlock> {
   function buildBlock(node: MutableBlock): AnyBlock {
     const children = node.children.map(buildBlock)
     switch (node.blockType) {
-      case 'text':
-        return new TextBlock(node.id, node.data, children)
-      case 'ordered-list':
-        return new OrderedListBlock(node.id, node.data, children)
-      case 'unordered-list':
-        return new UnorderedListBlock(node.id, node.data, children)
-      case 'header':
-        return new HeaderBlock(node.id, new Header(node.headerLevel!, node.data), children)
+      case 'text':        return new TextBlock(node.id, node.data as Text, children)
+      case 'ordered-list':   return new OrderedListBlock(node.id, node.data as Text, children)
+      case 'unordered-list': return new UnorderedListBlock(node.id, node.data as Text, children)
+      case 'header':         return new HeaderBlock(node.id, node.data as Header, children)
       default: {
         const _exhaustive: never = node.blockType
         throw new Error(`Unknown blockType: ${_exhaustive}`)
@@ -528,10 +533,7 @@ export class Blocks {
     const newIds = new Set(newBlocks.#blocks.map(b => b.id))
     const oldIds = new Set(oldBlocks.#blocks.map(b => b.id))
 
-    const toValue = (b: FlatBlock): Text | Header =>
-      b.blockType === 'header' ? new Header(b.headerLevel!, b.data) : b.data
-
-    const oldDataMap = new Map(oldBlocks.#blocks.map(b => [b.id, toValue(b)]))
+    const oldDataMap = new Map(oldBlocks.#blocks.map(b => [b.id, b.data]))
     const oldTypeMap = new Map(oldBlocks.#blocks.map(b => [b.id, b.blockType]))
 
     for (const b of oldBlocks.#blocks) {
@@ -545,7 +547,7 @@ export class Blocks {
         // New block — report as added
         const newPrev = newBlocks.prevSibling(b.id)
         const newParent = newBlocks.parent(b.id)
-        changes.push(new BlockAdded(b.id, b.data, newPrev, newParent))
+        changes.push(new BlockAdded(b.id, b.getText(), newPrev, newParent))
         continue
       }
 
@@ -559,7 +561,7 @@ export class Blocks {
 
       const oldData = oldDataMap.get(b.id)!
       const oldType = oldTypeMap.get(b.id)!
-      const newData = toValue(b)
+      const newData = b.data
       const dataChanged =
         oldData instanceof Header && newData instanceof Header ? !oldData.equals(newData) :
         oldData instanceof Text  && newData instanceof Text  ? !oldData.equals(newData) :
@@ -567,9 +569,9 @@ export class Blocks {
 
       if (dataChanged || oldType !== b.blockType) {
         if (b.blockType === 'header') {
-          changes.push(new BlockDataChanged(b.id, 'header', new Header(b.headerLevel!, b.data)))
+          changes.push(new BlockDataChanged(b.id, 'header', b.data as Header))
         } else {
-          changes.push(new BlockDataChanged(b.id, b.blockType, b.data))
+          changes.push(new BlockDataChanged(b.id, b.blockType, b.data as Text))
         }
       }
     }
@@ -589,7 +591,8 @@ export class Blocks {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`No block with id '${id}' found`)
     const target = this.#blocks[idx]
-    const newBlock = new FlatBlock(block.id, block.data, target.indent, target.blockType)
+    const newType: Exclude<BlockTypes, 'header'> = target.blockType === 'header' ? 'text' : target.blockType
+    const newBlock = new FlatBlock(block.id, newType, block.data, target.indent)
     return new Blocks([
       ...this.#blocks.slice(0, idx),
       newBlock,
@@ -607,7 +610,8 @@ export class Blocks {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`No block with id '${id}' found`)
     const target = this.#blocks[idx]
-    const newBlock = new FlatBlock(block.id, block.data, target.indent, target.blockType)
+    const newType: Exclude<BlockTypes, 'header'> = target.blockType === 'header' ? 'text' : target.blockType
+    const newBlock = new FlatBlock(block.id, newType, block.data, target.indent)
     return new Blocks([
       ...this.#blocks.slice(0, idx + 1),
       newBlock,
@@ -630,7 +634,8 @@ export class Blocks {
     while (insertAt < this.#blocks.length && this.#blocks[insertAt].indent > targetIndent) {
       insertAt++
     }
-    const newBlock = new FlatBlock(block.id, block.data, targetIndent + 1, target.blockType)
+    const newType: Exclude<BlockTypes, 'header'> = target.blockType === 'header' ? 'text' : target.blockType
+    const newBlock = new FlatBlock(block.id, newType, block.data, targetIndent + 1)
     return new Blocks([
       ...this.#blocks.slice(0, insertAt),
       newBlock,
@@ -648,7 +653,8 @@ export class Blocks {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`No block with id '${id}' found`)
     const target = this.#blocks[idx]
-    const newBlock = new FlatBlock(block.id, block.data, target.indent + 1, target.blockType)
+    const newType: Exclude<BlockTypes, 'header'> = target.blockType === 'header' ? 'text' : target.blockType
+    const newBlock = new FlatBlock(block.id, newType, block.data, target.indent + 1)
     return new Blocks([
       ...this.#blocks.slice(0, idx + 1),
       newBlock,
@@ -663,9 +669,8 @@ export class Blocks {
   update(id: BlockId, data: Text): Blocks {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`No block with id '${id}' found`)
-    const block = this.#blocks[idx]
     const updated = [...this.#blocks]
-    updated[idx] = new FlatBlock(id, data, block.indent, block.blockType, block.headerLevel)
+    updated[idx] = this.#blocks[idx].withText(data)
     return new Blocks(updated)
   }
 
@@ -679,7 +684,7 @@ export class Blocks {
     const rangeIds = new Set(this.#blocks.slice(fromIdx, toIdx + 1).map(b => b.id))
     const updated = this.#blocks.map(b =>
       rangeIds.has(b.id) && b.blockType !== newType
-        ? new FlatBlock(b.id, b.data, b.indent, newType, null)
+        ? new FlatBlock(b.id, newType, b.getText(), b.indent)
         : b
     )
     return new Blocks(updated)
@@ -695,7 +700,7 @@ export class Blocks {
     const rangeIds = new Set(this.#blocks.slice(fromIdx, toIdx + 1).map(b => b.id))
     const updated = this.#blocks.map(b =>
       rangeIds.has(b.id)
-        ? new FlatBlock(b.id, b.data, b.indent, 'header', level)
+        ? new FlatBlock(b.id, 'header', new Header(level, b.getText()), b.indent)
         : b
     )
     return new Blocks(updated)
@@ -708,7 +713,7 @@ export class Blocks {
   getHeaderLevel(id: BlockId): HeaderLevel | null {
     const block = this.#blocks.find(b => b.id === id)
     if (!block) throw new Error(`No block with id '${id}' found`)
-    return block.headerLevel
+    return block.blockType === 'header' ? (block.data as Header).level : null
   }
 
   #blockIdsInRange(from: BlockId, to: BlockId): BlockId[] {
@@ -845,7 +850,7 @@ export class Blocks {
       if (i === 0) continue  // no previous block — silently skip
       const prevIndent = updated[i - 1].indent  // evolving state
       if (updated[i].indent <= prevIndent) {
-        updated[i] = new FlatBlock(updated[i].id, updated[i].data, updated[i].indent + 1, updated[i].blockType, updated[i].headerLevel)
+        updated[i] = updated[i].withIndent(updated[i].indent + 1)
       }
     }
 
@@ -866,7 +871,7 @@ export class Blocks {
       indent: rangeIds.has(block.id) ? Math.max(0, block.indent - 1) : block.indent,
     }))
 
-    const preClamped = decremented.map(({ block, indent }) => new FlatBlock(block.id, block.data, indent, block.blockType, block.headerLevel))
+    const preClamped = decremented.map(({ block, indent }) => block.withIndent(indent))
     return new Blocks(clampPass(preClamped))
   }
 
@@ -880,14 +885,15 @@ export class Blocks {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`Block not found: ${id}`)
     const block = this.#blocks[idx]
-    if (offset < 0 || offset > block.data.text.length) {
+    const blockText = block.getText()
+    if (offset < 0 || offset > blockText.text.length) {
       throw new RangeError(`offset ${offset} out of bounds for block '${id}'`)
     }
-    const [leftText, rightText] = block.data.split(offset)
+    const [leftText, rightText] = blockText.split(offset)
     return new Blocks([
       ...this.#blocks.slice(0, idx),
-      new FlatBlock(id, leftText, block.indent, block.blockType, block.headerLevel),
-      new FlatBlock(newId, rightText, block.indent, block.blockType, block.headerLevel),
+      block.withText(leftText),
+      new FlatBlock(newId, block.blockType, block.withText(rightText).data, block.indent),
       ...this.#blocks.slice(idx + 1),
     ])
   }
@@ -909,10 +915,10 @@ export class Blocks {
     }
     const leftBlock = this.#blocks[leftIdx]
     const rightBlock = this.#blocks[rightIdx]
-    const mergedData = Text.merge(leftBlock.data, rightBlock.data)
+    const mergedText = Text.merge(leftBlock.getText(), rightBlock.getText())
     const updated = [
       ...this.#blocks.slice(0, leftIdx),
-      new FlatBlock(left, mergedData, leftBlock.indent, leftBlock.blockType, leftBlock.headerLevel),
+      leftBlock.withText(mergedText),
       ...this.#blocks.slice(rightIdx + 1),
     ]
     return new Blocks(clampPass(updated))
@@ -937,9 +943,8 @@ export class Blocks {
     if (start.blockId === end.blockId) {
       // Same block: remove text between offsets
       const length = end.offset - start.offset
-      const newText = startBlock.data.remove(start.offset, length)
       const updated = [...this.#blocks]
-      updated[startIdx] = new FlatBlock(start.blockId, newText, startBlock.indent, startBlock.blockType, startBlock.headerLevel)
+      updated[startIdx] = startBlock.withText(startBlock.getText().remove(start.offset, length))
       return new Blocks(updated)
     }
 
@@ -954,13 +959,13 @@ export class Blocks {
       endSubtreeEnd++
     }
 
-    const [leftText] = startBlock.data.split(start.offset)
-    const [, rightText] = endBlock.data.split(end.offset)
+    const [leftText] = startBlock.getText().split(start.offset)
+    const [, rightText] = endBlock.getText().split(end.offset)
     const mergedText = Text.merge(leftText, rightText)
 
     const newBlocks = [
       ...this.#blocks.slice(0, startIdx),
-      new FlatBlock(start.blockId, mergedText, startBlock.indent, startBlock.blockType, startBlock.headerLevel),
+      startBlock.withText(mergedText),
       ...this.#blocks.slice(endSubtreeEnd),
     ]
 
@@ -1009,7 +1014,7 @@ export class Blocks {
           targetIndent = parentFlat.indent + 1
         }
         const updated = [...state.#blocks]
-        updated[idx] = new FlatBlock(updated[idx].id, updated[idx].data, targetIndent, updated[idx].blockType, updated[idx].headerLevel)
+        updated[idx] = updated[idx].withIndent(targetIndent)
         state = new Blocks(clampPass(updated))
       } else {
         const _exhaustive: never = change
