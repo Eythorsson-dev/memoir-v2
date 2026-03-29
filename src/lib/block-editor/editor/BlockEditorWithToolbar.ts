@@ -27,17 +27,7 @@ function addTooltip(btn: HTMLButtonElement, label: string, shortcut?: string): v
   btn.appendChild(tip)
 }
 
-/** Swatch background colours — one per hue, matching the highlight mark colours. */
-const COLOR_BAR_BG: Record<HighlightColor, string> = {
-  red:     '#fca5a5',
-  amber:   '#fcd34d',
-  green:   '#86efac',
-  blue:    '#93c5fd',
-  violet:  '#c4b5fd',
-  fuchsia: '#f0abfc',
-}
-
-// ─── BlockEditorWithToolbar ───────────────────────────────────────────────────
+//─── BlockEditorWithToolbar ───────────────────────────────────────────────────
 
 export class BlockEditorWithToolbar {
   #editor: BlockEditor
@@ -365,7 +355,7 @@ export class BlockEditorWithToolbar {
   }
 
   #updateColorBar(): void {
-    this.#highlightColorBar?.style.setProperty('background-color', COLOR_BAR_BG[this.#lastUsed.color])
+    this.#highlightColorBar?.setAttribute('data-color', this.#lastUsed.color)
   }
 
   #loadLastUsed(): { color: HighlightColor } {

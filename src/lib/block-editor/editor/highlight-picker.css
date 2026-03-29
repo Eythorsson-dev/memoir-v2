@@ -43,7 +43,7 @@
   height: 3px;
   border-radius: 2px;
   pointer-events: none;
-  /* background-color is set via inline style from JS */
+  background-color: var(--swatch-bg);
 }
 
 /* ─── Highlight picker popover ──────────────────────────────────────────── */
@@ -128,19 +128,31 @@
 
 /* ─── Swatch colours ─────────────────────────────────────────────────────── */
 
-.highlight-picker-swatch[data-color="red"]     { --swatch-bg: #fca5a5 }
-.highlight-picker-swatch[data-color="amber"]   { --swatch-bg: #fcd34d }
-.highlight-picker-swatch[data-color="green"]   { --swatch-bg: #86efac }
-.highlight-picker-swatch[data-color="blue"]    { --swatch-bg: #93c5fd }
-.highlight-picker-swatch[data-color="violet"]  { --swatch-bg: #c4b5fd }
-.highlight-picker-swatch[data-color="fuchsia"] { --swatch-bg: #f0abfc }
+.highlight-picker-swatch[data-color="red"],
+.highlight-color-bar[data-color="red"]     { --swatch-bg: #fca5a5 }
+.highlight-picker-swatch[data-color="amber"],
+.highlight-color-bar[data-color="amber"]   { --swatch-bg: #fcd34d }
+.highlight-picker-swatch[data-color="green"],
+.highlight-color-bar[data-color="green"]   { --swatch-bg: #86efac }
+.highlight-picker-swatch[data-color="blue"],
+.highlight-color-bar[data-color="blue"]    { --swatch-bg: #93c5fd }
+.highlight-picker-swatch[data-color="violet"],
+.highlight-color-bar[data-color="violet"]  { --swatch-bg: #c4b5fd }
+.highlight-picker-swatch[data-color="fuchsia"],
+.highlight-color-bar[data-color="fuchsia"] { --swatch-bg: #f0abfc }
 
-[data-theme="dark"] .highlight-picker-swatch[data-color="red"]     { --swatch-bg: rgb(248 113 113 / 0.8) }
-[data-theme="dark"] .highlight-picker-swatch[data-color="amber"]   { --swatch-bg: rgb(251 191 36 / 0.8) }
-[data-theme="dark"] .highlight-picker-swatch[data-color="green"]   { --swatch-bg: rgb(74 222 128 / 0.8) }
-[data-theme="dark"] .highlight-picker-swatch[data-color="blue"]    { --swatch-bg: rgb(96 165 250 / 0.8) }
-[data-theme="dark"] .highlight-picker-swatch[data-color="violet"]  { --swatch-bg: rgb(167 139 250 / 0.8) }
-[data-theme="dark"] .highlight-picker-swatch[data-color="fuchsia"] { --swatch-bg: rgb(232 121 249 / 0.8) }
+[data-theme="dark"] .highlight-picker-swatch[data-color="red"],
+[data-theme="dark"] .highlight-color-bar[data-color="red"]     { --swatch-bg: rgb(248 113 113 / 0.8) }
+[data-theme="dark"] .highlight-picker-swatch[data-color="amber"],
+[data-theme="dark"] .highlight-color-bar[data-color="amber"]   { --swatch-bg: rgb(251 191 36 / 0.8) }
+[data-theme="dark"] .highlight-picker-swatch[data-color="green"],
+[data-theme="dark"] .highlight-color-bar[data-color="green"]   { --swatch-bg: rgb(74 222 128 / 0.8) }
+[data-theme="dark"] .highlight-picker-swatch[data-color="blue"],
+[data-theme="dark"] .highlight-color-bar[data-color="blue"]    { --swatch-bg: rgb(96 165 250 / 0.8) }
+[data-theme="dark"] .highlight-picker-swatch[data-color="violet"],
+[data-theme="dark"] .highlight-color-bar[data-color="violet"]  { --swatch-bg: rgb(167 139 250 / 0.8) }
+[data-theme="dark"] .highlight-picker-swatch[data-color="fuchsia"],
+[data-theme="dark"] .highlight-color-bar[data-color="fuchsia"] { --swatch-bg: rgb(232 121 249 / 0.8) }
 
 
 /* ─── Remove button ─────────────────────────────────────────────────────── */
