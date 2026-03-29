@@ -103,8 +103,9 @@
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  background: var(--tooltip-bg, #1e1e1e);
-  color: var(--tooltip-color, #fff);
+  background: var(--panel-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 4px;
   gap: 2px;
