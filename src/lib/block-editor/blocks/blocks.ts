@@ -320,11 +320,7 @@ function clampPass(blocks: FlatBlock[]): FlatBlock[] {
 
 function dtoToFlat(dtos: ReadonlyArray<AnyBlock>, depth = 0, result: FlatBlock[] = []): FlatBlock[] {
   for (const block of dtos) {
-    if (block.blockType === 'header') {
-      result.push(new FlatBlock(block.id, 'header', block.data, depth))
-    } else {
-      result.push(new FlatBlock(block.id, block.blockType, block.data, depth))
-    }
+    result.push(new FlatBlock(block.id, block.blockType, block.data, depth))
     dtoToFlat(block.children as ReadonlyArray<AnyBlock>, depth + 1, result)
   }
   return result
