@@ -87,40 +87,40 @@ function buildSegments(text: string, inlines: ReadonlyArray<InlineDto>): Segment
 }
 
 /**
- * Pre-computes which Highlight DTOs should receive join classes based on
- * whether they touch (end of one equals start of the next). Returns two
- * Sets that are checked during rendering to add `mark-join-right` /
- * `mark-join-left` classes without a post-render DOM walk.
+ * Follows `lastChild` recursively and returns the element if the subtree
+ * ends with a `<mark>` with no content after it. Returns `null` if the
+ * trailing node is a text node or a non-mark element.
  */
-function computeMarkJoins(inlines: ReadonlyArray<InlineDto>): {
-  joinRight: Set<InlineDto>
-  joinLeft: Set<InlineDto>
-} {
-  const joinRight = new Set<InlineDto>()
-  const joinLeft = new Set<InlineDto>()
-  const highlights = (inlines as InlineDto[])
-    .filter((i): i is InlineDto<'Highlight'> => i.type === 'Highlight')
-    .sort((a, b) => a.start - b.start)
-  for (let i = 0; i < highlights.length - 1; i++) {
-    if (highlights[i].end === highlights[i + 1].start) {
-      joinRight.add(highlights[i])
-      joinLeft.add(highlights[i + 1])
-    }
-  }
-  return { joinRight, joinLeft }
+function trailingMark(node: Node): HTMLElement | null {
+  if (!(node instanceof HTMLElement)) return null
+  if (node.tagName === 'MARK') return node
+  return node.lastChild ? trailingMark(node.lastChild) : null
+}
+
+/**
+ * Follows `firstChild` recursively and returns the element if the subtree
+ * starts with a `<mark>` with no content before it. Returns `null` if the
+ * leading node is a text node or a non-mark element.
+ */
+function leadingMark(node: Node): HTMLElement | null {
+  if (!(node instanceof HTMLElement)) return null
+  if (node.tagName === 'MARK') return node
+  return node.firstChild ? leadingMark(node.firstChild) : null
 }
 
 /**
  * Recursively converts segments that share a common outer inline into a
  * DOM element, nesting inner segments as children.
+ *
+ * @remarks
+ * Before each element is pushed, the trailing mark of the previous sibling
+ * and the leading mark of the new element are inspected. If both exist,
+ * `mark-join-right` / `mark-join-left` classes are applied so the CSS can
+ * remove the border-radius on the joining edge. This handles all adjacency
+ * cases including a single Highlight DTO split across nesting boundaries by
+ * an overlapping inline.
  */
-function renderSegments(
-  text: string,
-  segments: Segment[],
-  depth: number,
-  joinRight: Set<InlineDto>,
-  joinLeft: Set<InlineDto>
-): Node[] {
+function renderSegments(text: string, segments: Segment[], depth: number): Node[] {
   const nodes: Node[] = []
   let i = 0
 
@@ -144,9 +144,18 @@ function renderSegments(
     const groupedSegments = segments.slice(i, j)
     // Cast through unknown because the renderMap entry is typed for the specific K
     const el = (inlineRenderMap[currentInline.type] as (dto: InlineDto) => HTMLElement)(currentInline)
-    renderSegments(text, groupedSegments, depth + 1, joinRight, joinLeft).forEach((child) => el.appendChild(child))
-    if (joinRight.has(currentInline)) el.classList.add('mark-join-right')
-    if (joinLeft.has(currentInline))  el.classList.add('mark-join-left')
+    renderSegments(text, groupedSegments, depth + 1).forEach((child) => el.appendChild(child))
+
+    const prev = nodes[nodes.length - 1]
+    if (prev !== undefined) {
+      const a = trailingMark(prev)
+      const b = leadingMark(el)
+      if (a && b) {
+        a.classList.add('mark-join-right')
+        b.classList.add('mark-join-left')
+      }
+    }
+
     nodes.push(el)
     i = j
   }
@@ -163,8 +172,7 @@ function render(text: Text): Node[] {
   }
 
   const segments = buildSegments(text.text, text.inline)
-  const { joinRight, joinLeft } = computeMarkJoins(text.inline)
-  return renderSegments(text.text, segments, 0, joinRight, joinLeft)
+  return renderSegments(text.text, segments, 0)
 }
 
 // ─── Parse ────────────────────────────────────────────────────────────────────

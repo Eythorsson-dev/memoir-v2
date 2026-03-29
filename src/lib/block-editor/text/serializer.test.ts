@@ -148,6 +148,25 @@ describe('textSerializer.render', () => {
     expect(allMarks[0].classList.contains('mark-join-right')).toBe(true)
     expect(allMarks[1].classList.contains('mark-join-left')).toBe(true)
   })
+
+  it('adds join classes when a single highlight is split by an overlapping inline', () => {
+    // Underline[3,7] overlaps Highlight[5,9] — the highlight DTO produces two marks:
+    // one inside <u> for [5,7] and one outside for [7,9]. They must be joined.
+    // Renders: Hel<u>lo<mark> W</mark></u><mark>or</mark><u>l</u>d
+    const t = new Text('Hello World ', [
+      { type: 'Underline', start: 3, end: 7 },
+      { type: 'Highlight', start: 5, end: 9, color: 'fuchsia' },
+      { type: 'Underline', start: 9, end: 10 },
+    ])
+    const nodes = textSerializer.render(t)
+    const allMarks = nodes.flatMap(n => {
+      if (!(n instanceof HTMLElement)) return []
+      return n.tagName === 'MARK' ? [n] : Array.from(n.querySelectorAll<HTMLElement>('mark'))
+    })
+    expect(allMarks).toHaveLength(2)
+    expect(allMarks[0].classList.contains('mark-join-right')).toBe(true)
+    expect(allMarks[1].classList.contains('mark-join-left')).toBe(true)
+  })
 })
 
 // ─── parse ───────────────────────────────────────────────────────────────────
