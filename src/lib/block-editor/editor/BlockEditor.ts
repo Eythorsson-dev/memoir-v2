@@ -23,21 +23,6 @@ type NeverPayloadTypes = { [K in InlineTypes]: InlineDtoMap[K] extends never ? K
  */
 type DataPayloadTypes = Exclude<InlineTypes, NeverPayloadTypes>
 
-/**
- * Inline types that are mutually exclusive — at most one per character position.
- * When toggling an exclusive type, any existing inline of that type in the
- * range is removed before the new one is added.
- */
-const EXCLUSIVE_INLINE_TYPES = new Set<InlineTypes>(['Highlight'])
-
-/** Returns true if two InlineDtos carry identical payload (ignores type/start/end). */
-function samePayload(a: InlineDto, b: InlineDto): boolean {
-  const keys = Object.keys(a).filter(k => k !== 'type' && k !== 'start' && k !== 'end').sort()
-  const keysB = Object.keys(b).filter(k => k !== 'type' && k !== 'start' && k !== 'end').sort()
-  if (keys.length !== keysB.length) return false
-  return keys.every(k => (a as Record<string, unknown>)[k] === (b as Record<string, unknown>)[k])
-}
-
 // ─── DOM helpers ─────────────────────────────────────────────────────────────
 
 /**
@@ -279,65 +264,10 @@ export class BlockEditor {
   toggleInline(type: InlineTypes, payload?: InlineDtoMap[DataPayloadTypes]): void {
     const sel = this.#getSelection()
     if (!(sel instanceof BlockRange)) return
-
-    if (sel.start.blockId === sel.end.blockId) {
-      const blockId = sel.start.blockId
-      const start = sel.start.offset
-      const end = sel.end.offset
-      const block = this.#state.getBlock(blockId)
-      const text = block.getText()
-      if (start >= end || end > text.text.length) return
-      const dto = { type, start, end, ...payload } as InlineDto
-      const toggled = text.isToggled(dto)
-      let newText: Text
-      if (toggled) {
-        newText = text.removeInline(type, start, end)
-      } else if (EXCLUSIVE_INLINE_TYPES.has(type)) {
-        newText = text.removeInline(type, start, end).addInline(dto)
-      } else {
-        newText = text.addInline(dto)
-      }
-      const oldState = this.#state
-      this.#state = this.#state.update(blockId, newText)
-      this.#render(sel)
-      this.#emitEvents(oldState)
-      return
-    }
-
-    // Cross-block: apply inline to each block's sub-range
-    const blockIds = this.#state.blockIdsInRange(sel.start.blockId, sel.end.blockId)
-
-    // Determine whether every non-empty segment is already toggled with this type+payload
-    const allToggled = blockIds.every((blockId, idx) => {
-      const text = this.#state.getBlock(blockId).getText()
-      const segStart = idx === 0 ? sel.start.offset : 0
-      const segEnd = idx === blockIds.length - 1 ? sel.end.offset : text.text.length
-      if (segStart >= segEnd) return true
-      const dto = { type, start: segStart, end: segEnd, ...payload } as InlineDto
-      return text.isToggled(dto)
-    })
-
-    let newState = this.#state
-    for (let idx = 0; idx < blockIds.length; idx++) {
-      const blockId = blockIds[idx]
-      const text = newState.getBlock(blockId).getText()
-      const segStart = idx === 0 ? sel.start.offset : 0
-      const segEnd = idx === blockIds.length - 1 ? sel.end.offset : text.text.length
-      if (segStart >= segEnd) continue
-      const dto = { type, start: segStart, end: segEnd, ...payload } as InlineDto
-      let newText: Text
-      if (allToggled) {
-        newText = text.removeInline(type, segStart, segEnd)
-      } else if (EXCLUSIVE_INLINE_TYPES.has(type)) {
-        newText = text.removeInline(type, segStart, segEnd).addInline(dto)
-      } else {
-        newText = text.addInline(dto)
-      }
-      newState = newState.update(blockId, newText)
-    }
-
     const oldState = this.#state
-    this.#state = newState
+    this.#state = payload !== undefined
+      ? this.#state.toggleInline(sel, type as DataPayloadTypes, payload)
+      : this.#state.toggleInline(sel, type as NeverPayloadTypes)
     this.#render(sel)
     this.#emitEvents(oldState)
   }
@@ -349,35 +279,8 @@ export class BlockEditor {
   removeInlineFromSelection(type: InlineTypes): void {
     const sel = this.#getSelection()
     if (!(sel instanceof BlockRange)) return
-
-    if (sel.start.blockId === sel.end.blockId) {
-      const blockId = sel.start.blockId
-      const start = sel.start.offset
-      const end = sel.end.offset
-      const block = this.#state.getBlock(blockId)
-      const text = block.getText()
-      if (start >= end || end > text.text.length) return
-      const newText = text.removeInline(type, start, end)
-      const oldState = this.#state
-      this.#state = this.#state.update(blockId, newText)
-      this.#render(sel)
-      this.#emitEvents(oldState)
-      return
-    }
-
-    // Cross-block: remove inline from each block's sub-range
-    const blockIds = this.#state.blockIdsInRange(sel.start.blockId, sel.end.blockId)
-    let newState = this.#state
-    for (let idx = 0; idx < blockIds.length; idx++) {
-      const blockId = blockIds[idx]
-      const text = newState.getBlock(blockId).getText()
-      const segStart = idx === 0 ? sel.start.offset : 0
-      const segEnd = idx === blockIds.length - 1 ? sel.end.offset : text.text.length
-      if (segStart >= segEnd) continue
-      newState = newState.update(blockId, text.removeInline(type, segStart, segEnd))
-    }
     const oldState = this.#state
-    this.#state = newState
+    this.#state = this.#state.removeInlineFromRange(sel, type)
     this.#render(sel)
     this.#emitEvents(oldState)
   }
@@ -389,31 +292,8 @@ export class BlockEditor {
   isInlineActive(type: InlineTypes): boolean {
     const sel = this.#getSelection()
     if (!(sel instanceof BlockRange)) return false
-
-    if (sel.start.blockId === sel.end.blockId) {
-      const block = this.#state.getBlock(sel.start.blockId)
-      const start = sel.start.offset
-      const end = sel.end.offset
-      if (start >= end || end > block.getText().text.length) return false
-      try {
-        return block.getText().isCoveredByType(type, start, end)
-      } catch {
-        return false
-      }
-    }
-
-    // Cross-block: every non-empty segment must be covered
     try {
-      const blockIds = this.#state.blockIdsInRange(sel.start.blockId, sel.end.blockId)
-      for (let idx = 0; idx < blockIds.length; idx++) {
-        const text = this.#state.getBlock(blockIds[idx]).getText()
-        const segStart = idx === 0 ? sel.start.offset : 0
-        const segEnd = idx === blockIds.length - 1 ? sel.end.offset : text.text.length
-        if (segStart >= segEnd) continue
-        if (segEnd > text.text.length) return false
-        if (!text.isCoveredByType(type, segStart, segEnd)) return false
-      }
-      return true
+      return this.#state.isInlineActive(sel, type)
     } catch {
       return false
     }
@@ -429,42 +309,8 @@ export class BlockEditor {
   getActiveInline<K extends InlineTypes>(type: K): InlineDto<K> | null {
     const sel = this.#getSelection()
     if (!(sel instanceof BlockRange)) return null
-
-    if (sel.start.blockId === sel.end.blockId) {
-      const block = this.#state.getBlock(sel.start.blockId)
-      const start = sel.start.offset
-      const end = sel.end.offset
-      if (start >= end || end > block.getText().text.length) return null
-      const text = block.getText()
-      const covering = (text.inline as InlineDto<K>[]).filter(
-        (i) => i.type === type && i.start <= start && i.end >= end
-      )
-      if (covering.length !== 1) return null
-      return covering[0]
-    }
-
-    // Cross-block: all non-empty segments must be covered by the same payload
     try {
-      const blockIds = this.#state.blockIdsInRange(sel.start.blockId, sel.end.blockId)
-      let activeInline: InlineDto<K> | null = null
-      for (let idx = 0; idx < blockIds.length; idx++) {
-        const text = this.#state.getBlock(blockIds[idx]).getText()
-        const segStart = idx === 0 ? sel.start.offset : 0
-        const segEnd = idx === blockIds.length - 1 ? sel.end.offset : text.text.length
-        if (segStart >= segEnd) continue
-        if (segEnd > text.text.length) return null
-        const covering = (text.inline as InlineDto<K>[]).filter(
-          (i) => i.type === type && i.start <= segStart && i.end >= segEnd
-        )
-        if (covering.length !== 1) return null
-        const candidate = covering[0]
-        if (activeInline === null) {
-          activeInline = candidate
-        } else if (!samePayload(activeInline, candidate)) {
-          return null
-        }
-      }
-      return activeInline
+      return this.#state.getActiveInline(sel, type)
     } catch {
       return null
     }

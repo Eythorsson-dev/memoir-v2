@@ -1,4 +1,9 @@
-import { Text, type TextDto } from '../text/text'
+import { Text, type TextDto, type InlineTypes, type InlineDtoMap, type InlineDto, inlinePayloadEqual } from '../text/text'
+
+type NeverPayloadTypes = { [K in InlineTypes]: InlineDtoMap[K] extends never ? K : never }[InlineTypes]
+type DataPayloadTypes = Exclude<InlineTypes, NeverPayloadTypes>
+
+const EXCLUSIVE_INLINE_TYPES = new Set<InlineTypes>(['Highlight'])
 
 export type BlockId = string
 
@@ -606,6 +611,89 @@ export class Blocks {
   blockIdsInRange(from: BlockId, to: BlockId): BlockId[] {
     const [fromIdx, toIdx] = getRange(this.#blocks, from, to)
     return this.#blocks.slice(fromIdx, toIdx + 1).map(b => b.id)
+  }
+
+  toggleInline(range: BlockRange, type: NeverPayloadTypes): Blocks
+  toggleInline<K extends DataPayloadTypes>(range: BlockRange, type: K, payload: InlineDtoMap[K]): Blocks
+  toggleInline(range: BlockRange, type: InlineTypes, payload?: InlineDtoMap[DataPayloadTypes]): Blocks {
+    const blockIds = this.blockIdsInRange(range.start.blockId, range.end.blockId)
+    const allToggled = blockIds.every((blockId, idx) => {
+      const text = this.getBlock(blockId).getText()
+      const segStart = idx === 0 ? range.start.offset : 0
+      const segEnd = idx === blockIds.length - 1 ? range.end.offset : text.text.length
+      if (segStart >= segEnd) return true
+      const dto = { type, start: segStart, end: segEnd, ...payload } as InlineDto
+      return text.isToggled(dto)
+    })
+    let result: Blocks = this
+    for (let idx = 0; idx < blockIds.length; idx++) {
+      const blockId = blockIds[idx]
+      const text = result.getBlock(blockId).getText()
+      const segStart = idx === 0 ? range.start.offset : 0
+      const segEnd = idx === blockIds.length - 1 ? range.end.offset : text.text.length
+      if (segStart >= segEnd) continue
+      const dto = { type, start: segStart, end: segEnd, ...payload } as InlineDto
+      let newText: Text
+      if (allToggled) {
+        newText = text.removeInline(type, segStart, segEnd)
+      } else if (EXCLUSIVE_INLINE_TYPES.has(type)) {
+        newText = text.removeInline(type, segStart, segEnd).addInline(dto)
+      } else {
+        newText = text.addInline(dto)
+      }
+      result = result.update(blockId, newText)
+    }
+    return result
+  }
+
+  getActiveInline<K extends InlineTypes>(range: BlockRange, type: K): InlineDto<K> | null {
+    const blockIds = this.blockIdsInRange(range.start.blockId, range.end.blockId)
+    let active: InlineDto<K> | null = null
+    for (let idx = 0; idx < blockIds.length; idx++) {
+      const text = this.getBlock(blockIds[idx]).getText()
+      const segStart = idx === 0 ? range.start.offset : 0
+      const segEnd = idx === blockIds.length - 1 ? range.end.offset : text.text.length
+      if (segStart >= segEnd) continue
+      if (segEnd > text.text.length) return null
+      const covering = (text.inline as InlineDto<K>[]).filter(
+        (i) => i.type === type && i.start <= segStart && i.end >= segEnd
+      )
+      if (covering.length !== 1) return null
+      const candidate = covering[0]
+      if (active === null) {
+        active = candidate
+      } else if (!inlinePayloadEqual(active, candidate)) {
+        return null
+      }
+    }
+    return active
+  }
+
+  isInlineActive(range: BlockRange, type: InlineTypes): boolean {
+    const blockIds = this.blockIdsInRange(range.start.blockId, range.end.blockId)
+    for (let idx = 0; idx < blockIds.length; idx++) {
+      const text = this.getBlock(blockIds[idx]).getText()
+      const segStart = idx === 0 ? range.start.offset : 0
+      const segEnd = idx === blockIds.length - 1 ? range.end.offset : text.text.length
+      if (segStart >= segEnd) continue
+      if (segEnd > text.text.length) return false
+      if (!text.isCoveredByType(type, segStart, segEnd)) return false
+    }
+    return true
+  }
+
+  removeInlineFromRange(range: BlockRange, type: InlineTypes): Blocks {
+    const blockIds = this.blockIdsInRange(range.start.blockId, range.end.blockId)
+    let result: Blocks = this
+    for (let idx = 0; idx < blockIds.length; idx++) {
+      const blockId = blockIds[idx]
+      const text = result.getBlock(blockId).getText()
+      const segStart = idx === 0 ? range.start.offset : 0
+      const segEnd = idx === blockIds.length - 1 ? range.end.offset : text.text.length
+      if (segStart >= segEnd) continue
+      result = result.update(blockId, text.removeInline(type, segStart, segEnd))
+    }
+    return result
   }
 
   /**

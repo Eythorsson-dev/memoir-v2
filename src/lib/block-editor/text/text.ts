@@ -60,7 +60,7 @@ function validateRange(start: number, end: number, textLength: number): void {
  * InlineDto objects. Returns true if both carry the same payload.
  * Never-payload inlines (Bold, Italic, Underline) always compare equal.
  */
-function inlinePayloadEqual(a: InlineDto, b: InlineDto): boolean {
+export function inlinePayloadEqual(a: InlineDto, b: InlineDto): boolean {
   const { type: _at, start: _as, end: _ae, ...payloadA } = a as Record<string, unknown>
   const { type: _bt, start: _bs, end: _be, ...payloadB } = b as Record<string, unknown>
   const keysA = Object.keys(payloadA).sort()
