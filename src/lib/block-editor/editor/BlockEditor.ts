@@ -402,7 +402,7 @@ export class BlockEditor {
     }
     for (const change of changes) {
       if (change instanceof BlockAdded) {
-        this.#emitter.emit('blockCreated', { id: change.id, data: change.data, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
+        this.#emitter.emit('blockCreated', { id: change.id, blockType: change.blockType, data: change.data, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
       }
     }
     for (const change of changes) {

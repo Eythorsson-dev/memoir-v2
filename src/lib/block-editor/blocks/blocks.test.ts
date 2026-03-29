@@ -1192,7 +1192,7 @@ describe('Blocks.diff', () => {
     expect(addedChange).toBeDefined()
   })
 
-  it('added change includes correct data, previousBlockId, and parentBlockId', () => {
+  it('added change includes blockType and correct data, previousBlockId, and parentBlockId', () => {
     const b1 = Blocks.from([dto('a', 'hello'), dto('b')])
     const b2 = b1.splitAt('a', 3, 'new')  // flat: [a='hel', new='lo', b]
     const changes = Blocks.diff(b1, b2)
@@ -1200,6 +1200,7 @@ describe('Blocks.diff', () => {
     expect(addedChange).toBeInstanceOf(BlockAdded)
     expect(addedChange).toMatchObject({
       id: 'new',
+      blockType: 'text',
       data: { text: 'lo', inline: [] },
       previousBlockId: 'a',
       parentBlockId: null,
@@ -1305,7 +1306,7 @@ describe('Blocks.fromEvents', () => {
   it('BlockAdded with previousBlockId inserts after', () => {
     const base = Blocks.from([dto('a'), dto('b')])
     const result = Blocks.fromEvents(base, [
-      new BlockAdded('c', new Text('', []), 'a', null),
+      new BlockAdded('c', 'text', new Text('', []), 'a', null),
     ])
     expect(preorder(result)).toEqual(['a', 'c', 'b'])
   })
@@ -1313,7 +1314,7 @@ describe('Blocks.fromEvents', () => {
   it('BlockAdded with parentBlockId prepends as first child', () => {
     const base = Blocks.from([dto('a', '', [dto('b')])])
     const result = Blocks.fromEvents(base, [
-      new BlockAdded('c', new Text('', []), null, 'a'),
+      new BlockAdded('c', 'text', new Text('', []), null, 'a'),
     ])
     // prependChild: c becomes first child of a, before b
     expect(preorder(result)).toEqual(['a', 'c', 'b'])
@@ -1322,7 +1323,7 @@ describe('Blocks.fromEvents', () => {
   it('BlockAdded with both null adds before first block', () => {
     const base = Blocks.from([dto('a')])
     const result = Blocks.fromEvents(base, [
-      new BlockAdded('z', new Text('', []), null, null),
+      new BlockAdded('z', 'text', new Text('', []), null, null),
     ])
     expect(preorder(result)[0]).toBe('z')
   })
@@ -1373,7 +1374,7 @@ describe('Blocks.fromEvents', () => {
   it('round-trip: add then remove returns base structure', () => {
     const base = Blocks.from([dto('a'), dto('b')])
     const changes = [
-      new BlockAdded('c', new Text('c', []), 'a', null),
+      new BlockAdded('c', 'text', new Text('c', []), 'a', null),
       new BlockRemoved('c'),
     ]
     const result = Blocks.fromEvents(base, changes)

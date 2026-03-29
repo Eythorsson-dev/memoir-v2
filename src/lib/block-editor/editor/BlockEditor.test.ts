@@ -379,9 +379,9 @@ describe('blockCreated events', () => {
   it('Enter at end of block — only blockCreated', () => {
     const container = makeContainer()
     const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
-    const created: Array<{ id: string; data: { text: string; inline: readonly unknown[] } }> = []
+    const created: Array<{ id: string; data: Text }> = []
     const dataUpdated: string[] = []
-    editor.addEventListener('blockCreated', (e) => created.push(e))
+    editor.addEventListener('blockCreated', (e) => created.push({ ...e, data: e.data as Text }))
     editor.addEventListener('blockDataUpdated', (e) => dataUpdated.push(e.id))
 
     getEditable(container).focus()
@@ -398,8 +398,8 @@ describe('blockCreated events', () => {
     const container = makeContainer()
     const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
     const events: string[] = []
-    const createdData: Array<{ text: string; inline: readonly unknown[] }> = []
-    editor.addEventListener('blockCreated', (e) => { events.push(`created:${e.id}`); createdData.push(e.data) })
+    const createdData: Array<Text> = []
+    editor.addEventListener('blockCreated', (e) => { events.push(`created:${e.id}`); createdData.push(e.data as Text) })
     editor.addEventListener('blockDataUpdated', (e) => events.push(`data:${e.id}`))
 
     getEditable(container).focus()
