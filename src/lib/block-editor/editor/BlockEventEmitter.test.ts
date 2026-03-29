@@ -20,6 +20,7 @@ describe('addEventListener / unsubscribe', () => {
     emitter.addEventListener('blockCreated', (e) => events.push(e.id))
     emitter.emit('blockCreated', {
       id: 'a',
+      blockType: 'text',
       data: new Text('', []),
       previousBlockId: null,
       parentBlockId: null,
@@ -34,6 +35,7 @@ describe('addEventListener / unsubscribe', () => {
     unsub()
     emitter.emit('blockCreated', {
       id: 'a',
+      blockType: 'text',
       data: new Text('', []),
       previousBlockId: null,
       parentBlockId: null,

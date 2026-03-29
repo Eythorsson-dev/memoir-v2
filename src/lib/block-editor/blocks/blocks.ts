@@ -218,10 +218,11 @@ export class BlockRemoved {
   constructor(readonly id: BlockId) { Object.freeze(this) }
 }
 
-export class BlockAdded {
+export class BlockAdded<T extends BlockTypes = BlockTypes> {
   constructor(
     readonly id: BlockId,
-    readonly data: Text,
+    readonly blockType: T,
+    readonly data: BlockTypeMap[T],
     readonly previousBlockId: BlockId | null,
     readonly parentBlockId: BlockId | null,
   ) { Object.freeze(this) }
@@ -542,7 +543,7 @@ export class Blocks {
         // New block — report as added
         const newPrev = newBlocks.prevSibling(b.id)
         const newParent = newBlocks.parent(b.id)
-        changes.push(new BlockAdded(b.id, b.getText(), newPrev, newParent))
+        changes.push(new BlockAdded(b.id, b.blockType, b.data, newPrev, newParent))
         continue
       }
 
@@ -989,13 +990,13 @@ export class Blocks {
           state = state.convertType(change.id, change.id, change.blockType)
         }
       } else if (change instanceof BlockAdded) {
-        const data = change.data
+        const text = change.data instanceof Header ? change.data.text : change.data
         if (change.previousBlockId !== null) {
-          state = state.addAfter(change.previousBlockId, { id: change.id, data })
+          state = state.addAfter(change.previousBlockId, { id: change.id, data: text })
         } else if (change.parentBlockId !== null) {
-          state = state.prependChild(change.parentBlockId, { id: change.id, data })
+          state = state.prependChild(change.parentBlockId, { id: change.id, data: text })
         } else {
-          state = state.addBefore(state.#blocks[0].id, { id: change.id, data })
+          state = state.addBefore(state.#blocks[0].id, { id: change.id, data: text })
         }
       } else if (change instanceof BlockRemoved) {
         state = state.delete(change.id)
