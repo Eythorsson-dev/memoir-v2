@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Blocks, Block, TextBlock, OrderedListBlock, UnorderedListBlock, HeaderBlock, HeaderData, BlockOffset, BlockRange, BlockMoved, BlockRemoved, BlockAdded, BlockDataChanged, type BlockTypes } from './blocks'
+import { Blocks, Block, TextBlock, OrderedListBlock, UnorderedListBlock, HeaderBlock, Header, BlockOffset, BlockRange, BlockMoved, BlockRemoved, BlockAdded, BlockDataChanged, type BlockTypes } from './blocks'
 import { Text } from '../text/text'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -1297,7 +1297,7 @@ describe('Blocks.fromEvents', () => {
   it('BlockDataChanged updates block text', () => {
     const base = Blocks.from([dto('a', 'hello')])
     const result = Blocks.fromEvents(base, [
-      new BlockDataChanged('a', new Text('world', []), 'text'),
+      new BlockDataChanged('a', 'text', new Text('world', [])),
     ])
     expect(result.getBlock('a').data.text).toBe('world')
   })
@@ -1383,8 +1383,8 @@ describe('Blocks.fromEvents', () => {
   it('multiple BlockDataChanged on same block uses last value', () => {
     const base = Blocks.from([dto('a', 'initial')])
     const result = Blocks.fromEvents(base, [
-      new BlockDataChanged('a', new Text('first', []), 'text'),
-      new BlockDataChanged('a', new Text('second', []), 'text'),
+      new BlockDataChanged('a', 'text', new Text('first', [])),
+      new BlockDataChanged('a', 'text', new Text('second', [])),
     ])
     expect(result.getBlock('a').data.text).toBe('second')
   })
@@ -1397,7 +1397,7 @@ describe('Blocks.fromEvents', () => {
   it('BlockDataChanged with blockType round-trips the block type', () => {
     const base = Blocks.from([dto('a', 'hello')])
     const result = Blocks.fromEvents(base, [
-      new BlockDataChanged('a', new Text('hello', []), 'ordered-list'),
+      new BlockDataChanged('a', 'ordered-list', new Text('hello', [])),
     ])
     expect(result.getBlock('a')).toBeInstanceOf(OrderedListBlock)
   })
@@ -1701,18 +1701,18 @@ describe('getActiveInline', () => {
   })
 })
 
-// ─── HeaderData ───────────────────────────────────────────────────────────────
+// ─── Header ───────────────────────────────────────────────────────────────
 
-describe('HeaderData', () => {
+describe('Header', () => {
   it('stores level and text', () => {
-    const data = new HeaderData(2, new Text('Hello', []))
+    const data = new Header(2, new Text('Hello', []))
     expect(data.level).toBe(2)
     expect(data.text.text).toBe('Hello')
   })
 
   it('throws for level out of range', () => {
-    expect(() => new HeaderData(0 as 1, new Text('', []))).toThrow()
-    expect(() => new HeaderData(4 as 3, new Text('', []))).toThrow()
+    expect(() => new Header(0 as 1, new Text('', []))).toThrow()
+    expect(() => new Header(4 as 3, new Text('', []))).toThrow()
   })
 })
 
@@ -1720,18 +1720,18 @@ describe('HeaderData', () => {
 
 describe('HeaderBlock', () => {
   it('has blockType "header"', () => {
-    const block = new HeaderBlock('a', new HeaderData(1, new Text('Title', [])), [])
+    const block = new HeaderBlock('a', new Header(1, new Text('Title', [])), [])
     expect(block.blockType).toBe('header')
   })
 
   it('reports length from text', () => {
-    const block = new HeaderBlock('a', new HeaderData(2, new Text('Hello', [])), [])
+    const block = new HeaderBlock('a', new Header(2, new Text('Hello', [])), [])
     expect(block.getLength()).toBe(5)
   })
 
   it('getText() returns the inner Text', () => {
     const t = new Text('Hi', [])
-    const block = new HeaderBlock('a', new HeaderData(3, t), [])
+    const block = new HeaderBlock('a', new Header(3, t), [])
     expect(block.getText()).toBe(t)
   })
 })
@@ -1740,7 +1740,7 @@ describe('HeaderBlock', () => {
 
 describe('Blocks.from with HeaderBlock', () => {
   it('preserves a header block with its level and text', () => {
-    const h = new HeaderBlock('h', new HeaderData(2, new Text('Section', [])), [])
+    const h = new HeaderBlock('h', new Header(2, new Text('Section', [])), [])
     const b = Blocks.from([h])
     const result = b.blocks[0] as HeaderBlock
     expect(result.blockType).toBe('header')
@@ -1749,7 +1749,7 @@ describe('Blocks.from with HeaderBlock', () => {
   })
 
   it('preserves header level through nested children', () => {
-    const child = new HeaderBlock('c', new HeaderData(3, new Text('Sub', [])), [])
+    const child = new HeaderBlock('c', new Header(3, new Text('Sub', [])), [])
     const parent = new TextBlock('p', new Text('Parent', []), [child])
     const b = Blocks.from([parent])
     const nested = (b.blocks[0] as TextBlock).children[0] as HeaderBlock
@@ -1769,7 +1769,7 @@ describe('Blocks.convertToHeader', () => {
   })
 
   it('changes the level of an existing header', () => {
-    const h = new HeaderBlock('a', new HeaderData(1, new Text('Title', [])), [])
+    const h = new HeaderBlock('a', new Header(1, new Text('Title', [])), [])
     const b = Blocks.from([h])
     const result = b.convertToHeader('a', 'a', 3)
     const block = result.getBlock('a') as HeaderBlock
@@ -1787,7 +1787,7 @@ describe('Blocks.convertToHeader', () => {
 
 describe('Blocks.getHeaderLevel', () => {
   it('returns the level for a header block', () => {
-    const h = new HeaderBlock('a', new HeaderData(2, new Text('', [])), [])
+    const h = new HeaderBlock('a', new Header(2, new Text('', [])), [])
     const b = Blocks.from([h])
     expect(b.getHeaderLevel('a')).toBe(2)
   })
@@ -1805,7 +1805,7 @@ describe('Blocks.getHeaderLevel', () => {
 
 describe('Blocks.update on a header block', () => {
   it('updates text content without changing the header level', () => {
-    const h = new HeaderBlock('a', new HeaderData(2, new Text('Old', [])), [])
+    const h = new HeaderBlock('a', new Header(2, new Text('Old', [])), [])
     const b = Blocks.from([h])
     const result = b.update('a', new Text('New', []))
     const block = result.getBlock('a') as HeaderBlock
@@ -1816,7 +1816,7 @@ describe('Blocks.update on a header block', () => {
 
 describe('Blocks.splitAt on a header block', () => {
   it('produces two header blocks of the same level', () => {
-    const h = new HeaderBlock('a', new HeaderData(2, new Text('Hello', [])), [])
+    const h = new HeaderBlock('a', new Header(2, new Text('Hello', [])), [])
     const b = Blocks.from([h])
     const result = b.splitAt('a', 2, 'b')
     const left = result.getBlock('a') as HeaderBlock
@@ -1832,7 +1832,7 @@ describe('Blocks.splitAt on a header block', () => {
 
 describe('Blocks.diff for header level changes', () => {
   it('emits BlockDataChanged with the new headerLevel when level changes', () => {
-    const h = new HeaderBlock('a', new HeaderData(1, new Text('Title', [])), [])
+    const h = new HeaderBlock('a', new Header(1, new Text('Title', [])), [])
     const before = Blocks.from([h])
     const after = before.convertToHeader('a', 'a', 3)
     const changes = Blocks.diff(before, after)
@@ -1840,11 +1840,11 @@ describe('Blocks.diff for header level changes', () => {
     const change = changes[0] as BlockDataChanged
     expect(change).toBeInstanceOf(BlockDataChanged)
     expect(change.blockType).toBe('header')
-    expect(change.headerLevel).toBe(3)
+    expect((change.data as Header).level).toBe(3)
   })
 
   it('does not emit a change when level and text are unchanged', () => {
-    const h = new HeaderBlock('a', new HeaderData(2, new Text('Title', [])), [])
+    const h = new HeaderBlock('a', new Header(2, new Text('Title', [])), [])
     const b = Blocks.from([h])
     const changes = Blocks.diff(b, b)
     expect(changes).toHaveLength(0)

@@ -354,14 +354,14 @@ describe('roundtrip: parse(render(blocks)) === blocks', () => {
     ]))
   })
 })
-import { HeaderBlock, HeaderData } from './blocks'
+import { HeaderBlock, Header } from './blocks'
 
 // ─── HeaderBlock serializer ───────────────────────────────────────────────────
 
 describe('blocksSerializer.render — HeaderBlock', () => {
   it('renders an H2 with data-block-type="header" and data-header-level="2"', () => {
     const blocks = Blocks.from([
-      new HeaderBlock('h1', new HeaderData(2, new Text('Section', [])), []),
+      new HeaderBlock('h1', new Header(2, new Text('Section', [])), []),
     ])
     const html = nodesToHtml(blocksSerializer.render(blocks))
     expect(html).toBe(
@@ -372,7 +372,7 @@ describe('blocksSerializer.render — HeaderBlock', () => {
   it('renders each of H1, H2, H3 with the correct data-header-level', () => {
     for (const level of [1, 2, 3] as const) {
       const blocks = Blocks.from([
-        new HeaderBlock('h', new HeaderData(level, new Text('Title', [])), []),
+        new HeaderBlock('h', new Header(level, new Text('Title', [])), []),
       ])
       const html = nodesToHtml(blocksSerializer.render(blocks))
       expect(html).toContain(`data-header-level="${level}"`)
@@ -381,7 +381,7 @@ describe('blocksSerializer.render — HeaderBlock', () => {
 
   it('renders an empty HeaderBlock with a <br> placeholder', () => {
     const blocks = Blocks.from([
-      new HeaderBlock('h', new HeaderData(1, new Text('', [])), []),
+      new HeaderBlock('h', new Header(1, new Text('', [])), []),
     ])
     const html = nodesToHtml(blocksSerializer.render(blocks))
     expect(html).toContain('<br>')
@@ -423,7 +423,7 @@ describe('blocksSerializer.parse — HeaderBlock', () => {
 describe('roundtrip — HeaderBlock', () => {
   it('HeaderBlock roundtrip preserves level and text', () => {
     const blocks = Blocks.from([
-      new HeaderBlock('h', new HeaderData(2, new Text('Hello', [])), []),
+      new HeaderBlock('h', new Header(2, new Text('Hello', [])), []),
     ])
     const rendered = blocksSerializer.render(blocks)
     const parsed = blocksSerializer.parse(rendered)
@@ -432,7 +432,7 @@ describe('roundtrip — HeaderBlock', () => {
 
   it('mixed TextBlock + HeaderBlock roundtrip', () => {
     const blocks = Blocks.from([
-      new HeaderBlock('h', new HeaderData(1, new Text('Title', [])), []),
+      new HeaderBlock('h', new Header(1, new Text('Title', [])), []),
       new TextBlock('t', new Text('Body', []), []),
     ])
     const rendered = blocksSerializer.render(blocks)

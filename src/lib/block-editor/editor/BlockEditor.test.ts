@@ -1483,7 +1483,7 @@ describe('markdown input shortcuts', () => {
 
 // ─── Header block behaviour ────────────────────────────────────────────────────
 
-import { HeaderBlock, HeaderData } from '../blocks/blocks'
+import { HeaderBlock, Header } from '../blocks/blocks'
 
 describe('BlockEditor — heading input rules', () => {
   function simulateType(container: HTMLElement, blockId: string, newFullText: string, cursorAt: number): void {
@@ -1535,7 +1535,7 @@ describe('BlockEditor — heading input rules', () => {
 
   it('re-triggers on an existing header to change level', () => {
     const container = makeContainer()
-    const initial = Blocks.from([new HeaderBlock('a', new HeaderData(1, new Text('', [])), [])])
+    const initial = Blocks.from([new HeaderBlock('a', new Header(1, new Text('', [])), [])])
     const editor = new BlockEditor(container, initial)
     getEditable(container).focus()
     simulateType(container, 'a', '##', 2)
@@ -1549,7 +1549,7 @@ describe('BlockEditor — heading input rules', () => {
 describe('BlockEditor — Enter key on header', () => {
   it('Enter at end of header creates a new TextBlock', () => {
     const container = makeContainer()
-    const initial = Blocks.from([new HeaderBlock('a', new HeaderData(1, new Text('Title', [])), [])])
+    const initial = Blocks.from([new HeaderBlock('a', new Header(1, new Text('Title', [])), [])])
     const editor = new BlockEditor(container, initial)
     getEditable(container).focus()
     setCursor(container, 'a', 5) // end of "Title"
@@ -1564,7 +1564,7 @@ describe('BlockEditor — Enter key on header', () => {
 
   it('Enter mid-header splits into two headers of the same level', () => {
     const container = makeContainer()
-    const initial = Blocks.from([new HeaderBlock('a', new HeaderData(2, new Text('Hello', [])), [])])
+    const initial = Blocks.from([new HeaderBlock('a', new Header(2, new Text('Hello', [])), [])])
     const editor = new BlockEditor(container, initial)
     getEditable(container).focus()
     setCursor(container, 'a', 2) // after "He"

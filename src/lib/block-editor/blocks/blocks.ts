@@ -56,6 +56,10 @@ export class TextBlock extends Block<Text> {
   getText(): Text {
     return this.data
   }
+
+  equals(other: Block<unknown>): boolean {
+    return other instanceof TextBlock && this.data.equals(other.data)
+  }
 }
 
 /** An ordered-list item block. */
@@ -77,6 +81,10 @@ export class OrderedListBlock extends Block<Text> {
   getText(): Text {
     return this.data
   }
+
+  equals(other: Block<unknown>): boolean {
+    return other instanceof OrderedListBlock && this.data.equals(other.data)
+  }
 }
 
 /** The level of a heading — 1 (largest) to 3 (smallest). */
@@ -87,27 +95,31 @@ export type HeaderLevel = 1 | 2 | 3
  *
  * @throws {Error} if `level` is not 1, 2, or 3.
  */
-export class HeaderData {
+export class Header {
   readonly level: HeaderLevel
   readonly text: Text
 
   constructor(level: HeaderLevel, text: Text) {
     if (level !== 1 && level !== 2 && level !== 3) {
-      throw new Error(`HeaderData level must be 1, 2, or 3 — got ${level}`)
+      throw new Error(`Header level must be 1, 2, or 3 — got ${level}`)
     }
     this.level = level
     this.text = text
     Object.freeze(this)
   }
+
+  equals(other: Header): boolean {
+    return other instanceof Header && this.level === other.level && this.text.equals(other.text)
+  }
 }
 
 /** A heading block with a level (1–3). */
-export class HeaderBlock extends Block<HeaderData> {
+export class HeaderBlock extends Block<Header> {
   get blockType() { return 'header' as const }
 
   constructor(
     id: BlockId,
-    data: HeaderData,
+    data: Header,
     children: ReadonlyArray<Block<unknown>>,
   ) {
     super(id, data, children)
@@ -119,6 +131,10 @@ export class HeaderBlock extends Block<HeaderData> {
 
   getText(): Text {
     return this.data.text
+  }
+
+  equals(other: Block<unknown>): boolean {
+    return other instanceof HeaderBlock && this.data.equals(other.data)
   }
 }
 
@@ -141,14 +157,25 @@ export class UnorderedListBlock extends Block<Text> {
   getText(): Text {
     return this.data
   }
+
+  equals(other: Block<unknown>): boolean {
+    return other instanceof UnorderedListBlock && this.data.equals(other.data)
+  }
 }
 
 // Derived from the concrete block classes — add new classes to this union
 // and BlockTypes updates automatically.
-type AnyBlock = TextBlock | OrderedListBlock | UnorderedListBlock | HeaderBlock
+export type AnyBlock = TextBlock | OrderedListBlock | UnorderedListBlock | HeaderBlock
 
 /** Union of all valid block type names, derived from concrete block class declarations. */
 export type BlockTypes = AnyBlock['blockType']
+
+export interface BlockTypeMap {
+  'text': Text
+  'ordered-list': Text
+  'unordered-list': Text
+  'header': Header
+}
 
 export class BlockOffset {
   /**
@@ -200,12 +227,11 @@ export class BlockAdded {
   ) { Object.freeze(this) }
 }
 
-export class BlockDataChanged {
+export class BlockDataChanged<T extends BlockTypes = BlockTypes> {
   constructor(
     readonly id: BlockId,
-    readonly data: Text,
-    readonly blockType: BlockTypes,
-    readonly headerLevel: HeaderLevel | null = null,
+    readonly blockType: T,
+    readonly data: BlockTypeMap[T],
   ) { Object.freeze(this) }
 }
 
@@ -265,11 +291,11 @@ function clampPass(blocks: FlatBlock[]): FlatBlock[] {
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i]
     if (i === 0) {
-      clamped.push(new FlatBlock(block.id, block.data, 0, block.blockType))
+      clamped.push(new FlatBlock(block.id, block.data, 0, block.blockType, block.headerLevel))
     } else {
       const maxAllowed = clamped[i - 1].indent + 1
       const newIndent = Math.min(block.indent, maxAllowed)
-      clamped.push(new FlatBlock(block.id, block.data, newIndent, block.blockType))
+      clamped.push(new FlatBlock(block.id, block.data, newIndent, block.blockType, block.headerLevel))
     }
   }
   return clamped
@@ -278,25 +304,13 @@ function clampPass(blocks: FlatBlock[]): FlatBlock[] {
 // ─── Block (tree DTO) → FlatBlock conversion ──────────────────────────────────
 
 function dtoToFlat(dtos: ReadonlyArray<AnyBlock>, depth = 0, result: FlatBlock[] = []): FlatBlock[] {
-  for (const raw of dtos as ReadonlyArray<unknown>) {
-    const dto = raw as Record<string, unknown>
-    const blockType: BlockTypes = (dto['blockType'] as BlockTypes | undefined) ?? 'text'
-    // Accept both class instances and plain JSON objects (e.g. from localStorage).
-    if (blockType === 'header') {
-      const rawData = dto['data'] as Record<string, unknown>
-      const headerLevel = rawData['level'] as HeaderLevel
-      const rawText = rawData['text']
-      const text: Text = rawText instanceof Text
-        ? rawText
-        : new Text((rawText as TextDto).text, [...(rawText as TextDto).inline])
-      result.push(new FlatBlock(dto['id'] as BlockId, text, depth, 'header', headerLevel))
+  for (const block of dtos) {
+    if (block.blockType === 'header') {
+      result.push(new FlatBlock(block.id, block.data.text, depth, 'header', block.data.level))
     } else {
-      const data: Text = dto['data'] instanceof Text
-        ? dto['data']
-        : new Text((dto['data'] as TextDto).text, [...(dto['data'] as TextDto).inline])
-      result.push(new FlatBlock(dto['id'] as BlockId, data, depth, blockType))
+      result.push(new FlatBlock(block.id, block.data, depth, block.blockType))
     }
-    dtoToFlat((dto['children'] ?? []) as ReadonlyArray<AnyBlock>, depth + 1, result)
+    dtoToFlat(block.children as ReadonlyArray<AnyBlock>, depth + 1, result)
   }
   return result
 }
@@ -338,7 +352,7 @@ function flatToDto(blocks: ReadonlyArray<FlatBlock>): ReadonlyArray<AnyBlock> {
       case 'unordered-list':
         return new UnorderedListBlock(node.id, node.data, children)
       case 'header':
-        return new HeaderBlock(node.id, new HeaderData(node.headerLevel!, node.data), children)
+        return new HeaderBlock(node.id, new Header(node.headerLevel!, node.data), children)
       default: {
         const _exhaustive: never = node.blockType
         throw new Error(`Unknown blockType: ${_exhaustive}`)
@@ -389,7 +403,7 @@ export class Blocks {
     )
 }
 
-  get blocks(): ReadonlyArray<TextBlock | OrderedListBlock | UnorderedListBlock | HeaderBlock> {
+  get blocks(): ReadonlyArray<AnyBlock> {
     return flatToDto(this.#blocks)
   }
 
@@ -513,9 +527,12 @@ export class Blocks {
     const changes: BlocksChange[] = []
     const newIds = new Set(newBlocks.#blocks.map(b => b.id))
     const oldIds = new Set(oldBlocks.#blocks.map(b => b.id))
-    const oldDataMap = new Map(oldBlocks.#blocks.map(b => [b.id, b.data]))
+
+    const toValue = (b: FlatBlock): Text | Header =>
+      b.blockType === 'header' ? new Header(b.headerLevel!, b.data) : b.data
+
+    const oldDataMap = new Map(oldBlocks.#blocks.map(b => [b.id, toValue(b)]))
     const oldTypeMap = new Map(oldBlocks.#blocks.map(b => [b.id, b.blockType]))
-    const oldLevelMap = new Map(oldBlocks.#blocks.map(b => [b.id, b.headerLevel]))
 
     for (const b of oldBlocks.#blocks) {
       if (!newIds.has(b.id)) {
@@ -528,12 +545,7 @@ export class Blocks {
         // New block — report as added
         const newPrev = newBlocks.prevSibling(b.id)
         const newParent = newBlocks.parent(b.id)
-        changes.push(new BlockAdded(
-          b.id,
-          b.data,
-          newPrev,
-          newParent,
-        ))
+        changes.push(new BlockAdded(b.id, b.data, newPrev, newParent))
         continue
       }
 
@@ -547,9 +559,18 @@ export class Blocks {
 
       const oldData = oldDataMap.get(b.id)!
       const oldType = oldTypeMap.get(b.id)!
-      const oldLevel = oldLevelMap.get(b.id)!
-      if (!oldData.equals(b.data) || oldType !== b.blockType || oldLevel !== b.headerLevel) {
-        changes.push(new BlockDataChanged(b.id, b.data, b.blockType, b.headerLevel))
+      const newData = toValue(b)
+      const dataChanged =
+        oldData instanceof Header && newData instanceof Header ? !oldData.equals(newData) :
+        oldData instanceof Text  && newData instanceof Text  ? !oldData.equals(newData) :
+        true
+
+      if (dataChanged || oldType !== b.blockType) {
+        if (b.blockType === 'header') {
+          changes.push(new BlockDataChanged(b.id, 'header', new Header(b.headerLevel!, b.data)))
+        } else {
+          changes.push(new BlockDataChanged(b.id, b.blockType, b.data))
+        }
       }
     }
 
@@ -824,7 +845,7 @@ export class Blocks {
       if (i === 0) continue  // no previous block — silently skip
       const prevIndent = updated[i - 1].indent  // evolving state
       if (updated[i].indent <= prevIndent) {
-        updated[i] = new FlatBlock(updated[i].id, updated[i].data, updated[i].indent + 1, updated[i].blockType)
+        updated[i] = new FlatBlock(updated[i].id, updated[i].data, updated[i].indent + 1, updated[i].blockType, updated[i].headerLevel)
       }
     }
 
@@ -845,7 +866,7 @@ export class Blocks {
       indent: rangeIds.has(block.id) ? Math.max(0, block.indent - 1) : block.indent,
     }))
 
-    const preClamped = decremented.map(({ block, indent }) => new FlatBlock(block.id, block.data, indent, block.blockType))
+    const preClamped = decremented.map(({ block, indent }) => new FlatBlock(block.id, block.data, indent, block.blockType, block.headerLevel))
     return new Blocks(clampPass(preClamped))
   }
 
@@ -918,7 +939,7 @@ export class Blocks {
       const length = end.offset - start.offset
       const newText = startBlock.data.remove(start.offset, length)
       const updated = [...this.#blocks]
-      updated[startIdx] = new FlatBlock(start.blockId, newText, startBlock.indent, startBlock.blockType)
+      updated[startIdx] = new FlatBlock(start.blockId, newText, startBlock.indent, startBlock.blockType, startBlock.headerLevel)
       return new Blocks(updated)
     }
 
@@ -939,7 +960,7 @@ export class Blocks {
 
     const newBlocks = [
       ...this.#blocks.slice(0, startIdx),
-      new FlatBlock(start.blockId, mergedText, startBlock.indent, startBlock.blockType),
+      new FlatBlock(start.blockId, mergedText, startBlock.indent, startBlock.blockType, startBlock.headerLevel),
       ...this.#blocks.slice(endSubtreeEnd),
     ]
 
@@ -959,10 +980,12 @@ export class Blocks {
     let state = base
     for (const change of changes) {
       if (change instanceof BlockDataChanged) {
-        state = state.update(change.id, change.data)
-        if (change.blockType === 'header' && change.headerLevel !== null) {
-          state = state.convertToHeader(change.id, change.id, change.headerLevel)
-        } else if (change.blockType !== 'header') {
+        if (change.blockType === 'header') {
+          const data = change.data as Header
+          state = state.update(change.id, data.text)
+          state = state.convertToHeader(change.id, change.id, data.level)
+        } else {
+          state = state.update(change.id, change.data as Text)
           state = state.convertType(change.id, change.id, change.blockType)
         }
       } else if (change instanceof BlockAdded) {
@@ -986,7 +1009,7 @@ export class Blocks {
           targetIndent = parentFlat.indent + 1
         }
         const updated = [...state.#blocks]
-        updated[idx] = new FlatBlock(updated[idx].id, updated[idx].data, targetIndent, updated[idx].blockType)
+        updated[idx] = new FlatBlock(updated[idx].id, updated[idx].data, targetIndent, updated[idx].blockType, updated[idx].headerLevel)
         state = new Blocks(clampPass(updated))
       } else {
         const _exhaustive: never = change
