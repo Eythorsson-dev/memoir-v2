@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { InputRules } from './InputRules'
+import { InputRules, type HeaderInputRuleMatch } from './InputRules'
 
 describe('InputRules.match', () => {
   it('returns unordered-list match for "- " at cursor offset 2 on text block', () => {
@@ -40,5 +40,45 @@ describe('InputRules.match', () => {
 
   it('matches "- Hello" at cursor offset 2 — content after marker is irrelevant', () => {
     expect(InputRules.match('- Hello', 2, 'text')).toEqual({ targetType: 'unordered-list', stripLength: 2 })
+  })
+})
+
+describe('InputRules.match — heading shortcuts', () => {
+  it('matches "# " at offset 2 on text → header level 1, stripLength 2', () => {
+    const match = InputRules.match('# ', 2, 'text') as HeaderInputRuleMatch
+    expect(match).not.toBeNull()
+    expect(match.targetType).toBe('header')
+    expect(match.headerLevel).toBe(1)
+    expect(match.stripLength).toBe(2)
+  })
+
+  it('matches "## " at offset 3 → header level 2, stripLength 3', () => {
+    const match = InputRules.match('## ', 3, 'text') as HeaderInputRuleMatch
+    expect(match?.targetType).toBe('header')
+    expect(match?.headerLevel).toBe(2)
+    expect(match?.stripLength).toBe(3)
+  })
+
+  it('matches "### " at offset 4 → header level 3, stripLength 4', () => {
+    const match = InputRules.match('### ', 4, 'text') as HeaderInputRuleMatch
+    expect(match?.targetType).toBe('header')
+    expect(match?.headerLevel).toBe(3)
+    expect(match?.stripLength).toBe(4)
+  })
+
+  it('does not match "#### " — four hashes exceed max level', () => {
+    expect(InputRules.match('#### ', 5, 'text')).toBeNull()
+  })
+
+  it('re-triggers on an existing H1 block (unlike same-type list no-op)', () => {
+    const match = InputRules.match('# ', 2, 'header') as HeaderInputRuleMatch
+    expect(match).not.toBeNull()
+    expect(match.headerLevel).toBe(1)
+  })
+
+  it('re-triggers on an existing H1 to promote to H2', () => {
+    const match = InputRules.match('## ', 3, 'header') as HeaderInputRuleMatch
+    expect(match).not.toBeNull()
+    expect(match.headerLevel).toBe(2)
   })
 })

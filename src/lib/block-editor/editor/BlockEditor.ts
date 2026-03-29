@@ -1,6 +1,6 @@
 import { Text, type InlineTypes, type InlineDtoMap, type InlineDto } from '../text/text'
 import { textSerializer } from '../text/serializer'
-import { Blocks, type BlockId, type BlockTypes, type BlocksChange, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved } from '../blocks/blocks'
+import { Blocks, type BlockId, type BlockTypes, type BlocksChange, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved, type HeaderLevel } from '../blocks/blocks'
 import { blocksSerializer } from '../blocks/serializer'
 import type { BlockEditorEventDtoMap, BlockEditorOptions, BlockSelection } from './events'
 import { BlockEventEmitter } from './BlockEventEmitter'
@@ -134,7 +134,7 @@ export class BlockEditor {
       (id) => {
         try {
           const block = this.#state.getBlock(id)
-          return { id, data: block.data, blockType: block.blockType }
+          return { id, data: block.getText(), blockType: block.blockType }
         } catch {
           return null  // block was removed; skip
         }
@@ -221,7 +221,7 @@ export class BlockEditor {
   }
 
   /** Converts all blocks in the current selection to `newType`. */
-  convertBlockType(newType: BlockTypes): void {
+  convertBlockType(newType: Exclude<BlockTypes, 'header'>): void {
     const sel = this.#getSelection()
     if (!sel) return
     this.#pendingSelectionBefore = sel
@@ -231,6 +231,45 @@ export class BlockEditor {
     this.#state = this.#state.convertType(fromId, toId, newType)
     this.#render(sel)
     this.#emitEvents(oldState)
+  }
+
+  /**
+   * Converts all blocks in the current selection to a header at `level`.
+   * If every block in the selection is already a header at `level`, demotes
+   * them to plain text instead (toggle behaviour).
+   */
+  convertToHeader(level: HeaderLevel): void {
+    const sel = this.#getSelection()
+    if (!sel) return
+    this.#pendingSelectionBefore = sel
+    const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
+    const toId   = sel instanceof BlockRange ? sel.end.blockId   : sel.blockId
+    const oldState = this.#state
+    if (this.#state.isBlockTypeActive(fromId, toId, 'header') &&
+        this.#state.getHeaderLevel(fromId) === level) {
+      this.#state = this.#state.convertType(fromId, toId, 'text')
+    } else {
+      this.#state = this.#state.convertToHeader(fromId, toId, level)
+    }
+    this.#render(sel)
+    this.#emitEvents(oldState)
+  }
+
+  /**
+   * Returns the common header level of the current selection, or `null` if
+   * the selection is empty, not a header, or contains mixed levels.
+   */
+  getActiveHeaderLevel(): HeaderLevel | null {
+    const sel = this.#getSelection()
+    if (!sel) return null
+    const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
+    const toId   = sel instanceof BlockRange ? sel.end.blockId   : sel.blockId
+    try {
+      if (!this.#state.isBlockTypeActive(fromId, toId, 'header')) return null
+      return this.#state.getHeaderLevel(fromId)
+    } catch {
+      return null
+    }
   }
 
   /**
@@ -619,7 +658,11 @@ export class BlockEditor {
       // Strip the marker and convert block type.
       const strippedText = newText.remove(0, match.stripLength)
       this.#state = this.#state.update(blockId, strippedText)
-      this.#state = this.#state.convertType(blockId, blockId, match.targetType)
+      if (match.targetType === 'header') {
+        this.#state = this.#state.convertToHeader(blockId, blockId, (match as { headerLevel: HeaderLevel }).headerLevel)
+      } else {
+        this.#state = this.#state.convertType(blockId, blockId, match.targetType)
+      }
 
       const cursorAfter = new BlockOffset(blockId, 0)
       const changes = Blocks.diff(oldState, this.#state)
@@ -654,6 +697,12 @@ export class BlockEditor {
     const oldState = this.#state
     const newId = crypto.randomUUID()
     this.#state = this.#state.splitAt(blockId, offset, newId)
+
+    // Enter at the end of a header produces a plain text block, not another header.
+    if (block.blockType === 'header' && atEnd) {
+      this.#state = this.#state.convertType(newId, newId, 'text')
+    }
+
     this.#render(new BlockOffset(newId, 0))
     this.#emitEvents(oldState)
   }

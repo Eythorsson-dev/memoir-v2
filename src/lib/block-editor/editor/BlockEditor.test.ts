@@ -1147,7 +1147,7 @@ describe('BlockEditorWithToolbar', () => {
     setRange(container, 'a', 0, 'a', 5)
     const boldBtn = container.querySelector('[data-inline-type="Bold"]') as HTMLButtonElement
     boldBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
-    const block = editor.getValue().blocks[0]
+    const block = editor.getValue().blocks[0] as TextBlock
     expect(block.data.inline).toContainEqual({ type: 'Bold', start: 0, end: 5 })
     cleanup(editor, container)
   })
@@ -1161,7 +1161,7 @@ describe('BlockEditorWithToolbar', () => {
     const boldBtn = container.querySelector('[data-inline-type="Bold"]') as HTMLButtonElement
     boldBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
     boldBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
-    const block = editor.getValue().blocks[0]
+    const block = editor.getValue().blocks[0] as TextBlock
     expect(block.data.inline).toHaveLength(0)
     cleanup(editor, container)
   })
@@ -1477,6 +1477,106 @@ describe('markdown input shortcuts', () => {
     const block = editor.getValue().getBlock('a')
     expect(block.blockType).toBe('text')
     expect(block.getText().text).toBe('- ')
+    cleanup(editor, container)
+  })
+})
+
+// ─── Header block behaviour ────────────────────────────────────────────────────
+
+import { HeaderBlock, HeaderData } from '../blocks/blocks'
+
+describe('BlockEditor — heading input rules', () => {
+  function simulateType(container: HTMLElement, blockId: string, newFullText: string, cursorAt: number): void {
+    const editable = getEditable(container)
+    const blockEl = editable.querySelector(`[id="${blockId}"]`)!
+    const p = blockEl.querySelector('p')!
+    p.textContent = newFullText
+    setCursor(container, blockId, cursorAt)
+    editable.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+
+  it('typing "# " converts text block to H1 and strips marker', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', '')]))
+    getEditable(container).focus()
+    simulateType(container, 'a', '#', 1)
+    simulateType(container, 'a', '# ', 2)
+    const block = editor.getValue().getBlock('a') as HeaderBlock
+    expect(block.blockType).toBe('header')
+    expect(block.data.level).toBe(1)
+    expect(block.getText().text).toBe('')
+    cleanup(editor, container)
+  })
+
+  it('typing "## " converts text block to H2', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', '')]))
+    getEditable(container).focus()
+    simulateType(container, 'a', '#', 1)
+    simulateType(container, 'a', '##', 2)
+    simulateType(container, 'a', '## ', 3)
+    const block = editor.getValue().getBlock('a') as HeaderBlock
+    expect(block.blockType).toBe('header')
+    expect(block.data.level).toBe(2)
+    cleanup(editor, container)
+  })
+
+  it('typing "### " converts text block to H3', () => {
+    const container = makeContainer()
+    const editor = new BlockEditor(container, Blocks.from([dto('a', '')]))
+    getEditable(container).focus()
+    simulateType(container, 'a', '###', 3)
+    simulateType(container, 'a', '### ', 4)
+    const block = editor.getValue().getBlock('a') as HeaderBlock
+    expect(block.blockType).toBe('header')
+    expect(block.data.level).toBe(3)
+    cleanup(editor, container)
+  })
+
+  it('re-triggers on an existing header to change level', () => {
+    const container = makeContainer()
+    const initial = Blocks.from([new HeaderBlock('a', new HeaderData(1, new Text('', [])), [])])
+    const editor = new BlockEditor(container, initial)
+    getEditable(container).focus()
+    simulateType(container, 'a', '##', 2)
+    simulateType(container, 'a', '## ', 3)
+    const block = editor.getValue().getBlock('a') as HeaderBlock
+    expect(block.data.level).toBe(2)
+    cleanup(editor, container)
+  })
+})
+
+describe('BlockEditor — Enter key on header', () => {
+  it('Enter at end of header creates a new TextBlock', () => {
+    const container = makeContainer()
+    const initial = Blocks.from([new HeaderBlock('a', new HeaderData(1, new Text('Title', [])), [])])
+    const editor = new BlockEditor(container, initial)
+    getEditable(container).focus()
+    setCursor(container, 'a', 5) // end of "Title"
+    getEditable(container).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    const blocks = editor.getValue().blocks
+    expect(blocks).toHaveLength(2)
+    expect(blocks[0].blockType).toBe('header')
+    expect(blocks[1].blockType).toBe('text')
+    expect(blocks[1].getText().text).toBe('')
+    cleanup(editor, container)
+  })
+
+  it('Enter mid-header splits into two headers of the same level', () => {
+    const container = makeContainer()
+    const initial = Blocks.from([new HeaderBlock('a', new HeaderData(2, new Text('Hello', [])), [])])
+    const editor = new BlockEditor(container, initial)
+    getEditable(container).focus()
+    setCursor(container, 'a', 2) // after "He"
+    getEditable(container).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    const blocks = editor.getValue().blocks
+    expect(blocks).toHaveLength(2)
+    expect(blocks[0].blockType).toBe('header')
+    expect((blocks[0] as HeaderBlock).data.level).toBe(2)
+    expect(blocks[0].getText().text).toBe('He')
+    expect(blocks[1].blockType).toBe('header')
+    expect((blocks[1] as HeaderBlock).data.level).toBe(2)
+    expect(blocks[1].getText().text).toBe('llo')
     cleanup(editor, container)
   })
 })
