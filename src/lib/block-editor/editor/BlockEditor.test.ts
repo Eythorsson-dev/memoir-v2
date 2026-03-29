@@ -1580,3 +1580,35 @@ describe('BlockEditor — Enter key on header', () => {
     cleanup(editor, container)
   })
 })
+
+describe('BlockEditor — blockDataUpdated carries Header data', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  function typeInBlock(container: HTMLElement, blockId: string, newText: string): void {
+    const editable = getEditable(container)
+    const blockEl = editable.querySelector(`[id="${blockId}"]`)!
+    const p = blockEl.querySelector('p, h1, h2, h3')!
+    p.textContent = newText
+    setCursor(container, blockId, newText.length)
+    editable.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+
+  it('debounced blockDataUpdated for a header block carries a Header with level', () => {
+    const container = makeContainer()
+    const initial = Blocks.from([new HeaderBlock('a', new Header(2, new Text('Title', [])), [])])
+    const editor = new BlockEditor(container, initial, { dataUpdateDebounceMs: 500 })
+    const events: BlockDataUpdatedEventDto[] = []
+    editor.addEventListener('blockDataUpdated', (e) => events.push(e))
+
+    getEditable(container).focus()
+    typeInBlock(container, 'a', 'Titled')
+
+    vi.advanceTimersByTime(500)
+    expect(events).toHaveLength(1)
+    expect(events[0].blockType).toBe('header')
+    expect(events[0].data).toBeInstanceOf(Header)
+    expect((events[0].data as Header).level).toBe(2)
+    cleanup(editor, container)
+  })
+})
