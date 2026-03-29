@@ -333,13 +333,13 @@ function dtoToFlat(dtos: ReadonlyArray<AnyBlock>, depth = 0, result: FlatBlock[]
 // ─── FlatBlock → Block (tree DTO) conversion ──────────────────────────────────
 
 function flatToDto(blocks: ReadonlyArray<FlatBlock>): ReadonlyArray<AnyBlock> {
-  type MutableBlock = { id: BlockId; blockType: BlockTypes; data: BlockTypeMap[BlockTypes]; indent: number; children: MutableBlock[] }
+  type MutableBlock = { id: BlockId; blockType: BlockTypes; data: BlockTypeMap[BlockTypes]; children: MutableBlock[] }
 
   const roots: MutableBlock[] = []
   const stack: Array<{ node: MutableBlock; indent: number }> = []
 
   for (const block of blocks) {
-    const node: MutableBlock = { id: block.id, blockType: block.blockType, data: block.data, indent: block.indent, children: [] }
+    const node: MutableBlock = { id: block.id, blockType: block.blockType, data: block.data, children: [] }
     while (stack.length > 0 && stack[stack.length - 1].indent >= block.indent) {
       stack.pop()
     }
