@@ -414,12 +414,11 @@ export class Blocks {
    * Returns the Block DTO (with full subtree) for the given id.
    * @throws {Error} if no block with `id` exists.
    */
-  getBlock(id: BlockId): TextBlock | OrderedListBlock | UnorderedListBlock | HeaderBlock {
-    type AnyConcreteBlock = TextBlock | OrderedListBlock | UnorderedListBlock | HeaderBlock
-    function search(blocks: ReadonlyArray<AnyConcreteBlock>): AnyConcreteBlock | undefined {
+  getBlock(id: BlockId): AnyBlock {
+    function search(blocks: ReadonlyArray<AnyBlock>): AnyBlock | undefined {
       for (const b of blocks) {
         if (b.id === id) return b
-        const found = search(b.children as ReadonlyArray<AnyConcreteBlock>)
+        const found = search(b.children as ReadonlyArray<AnyBlock>)
         if (found) return found
       }
     }
