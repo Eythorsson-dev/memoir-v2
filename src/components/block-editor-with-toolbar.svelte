@@ -2,7 +2,7 @@
   import { untrack } from 'svelte'
   import { BlockEditor, BLOCK_EDITOR_EVENT_NAMES } from '$lib/block-editor'
   import type { Blocks, BlockEditorOptions, BlockEditorEventDtoMap, BlockSelection, HighlightColor, HeaderLevel, InlineTypes } from '$lib/block-editor'
-  import ToolbarButton from './toolbar-button.svelte'
+  import ToolbarButton from './button.svelte'
   import HeadingPicker from './heading-picker.svelte'
   import HighlightSplitButton from './highlight-split-button.svelte'
   import { Bold, Italic, Underline, Undo2, Redo2, ListIndentIncrease, ListIndentDecrease, ListOrdered, List } from '@lucide/svelte'
