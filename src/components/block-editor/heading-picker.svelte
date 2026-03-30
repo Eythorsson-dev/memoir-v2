@@ -43,6 +43,7 @@
       {#each LEVELS as level (level)}
         <ToggleButton
           label="Heading {level}"
+          showTooltip={false}
           pressed={activeLevel === level}
           class="w-full h-7 text-xs font-semibold px-2"
           onmousedown={(e) => {

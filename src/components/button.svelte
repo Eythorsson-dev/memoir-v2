@@ -9,6 +9,7 @@
     label,
     shortcut,
     disabled = false,
+    showTooltip = true,
     onclick,
     onmousedown,
     children,
@@ -20,6 +21,7 @@
     label: string
     shortcut?: Shortcut
     disabled?: boolean
+    showTooltip?: boolean
     onclick?: (e: MouseEvent) => void
     onmousedown?: (e: MouseEvent) => void
     children?: Snippet
@@ -50,7 +52,7 @@
   "
   {onclick}
   {onmousedown}
-  {@attach tooltip(label, shortcut)}
+  {@attach showTooltip ? tooltip(label, shortcut) : () => {}}
 >
   {@render children?.()}
 </button>
