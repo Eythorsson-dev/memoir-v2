@@ -1,6 +1,22 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
 
+  export type Shortcut = {
+    ctrl?: boolean
+    alt?: boolean
+    shift?: boolean
+    key: string
+  }
+
+  function formatShortcut(s: Shortcut): string {
+    let result = ''
+    if (s.ctrl) result += '⌘'
+    if (s.alt) result += '⌥'
+    if (s.shift) result += '⇧'
+    result += s.key
+    return result
+  }
+
   let {
     label,
     shortcut,
@@ -10,7 +26,7 @@
     children,
   }: {
     label: string
-    shortcut?: string
+    shortcut?: Shortcut
     pressed?: boolean
     disabled?: boolean
     onclick?: () => void
@@ -27,7 +43,7 @@
 >
   {@render children?.()}
   <span class="tooltip">
-    {label}{#if shortcut}<kbd>{shortcut}</kbd>{/if}
+    {label}{#if shortcut}<kbd>{formatShortcut(shortcut)}</kbd>{/if}
   </span>
 </button>
 
