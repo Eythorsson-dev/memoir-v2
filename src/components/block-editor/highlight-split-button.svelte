@@ -26,7 +26,14 @@
 
 <div class="flex items-center">
   <button
-    class="relative flex items-center justify-center border border-transparent bg-transparent text-(--toolbar-fg) cursor-pointer [&_svg]:pointer-events-none rounded-l-[5px] px-1 pt-[2px] pb-2 w-[30px] h-7 [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg) [&:active:not(:disabled)]:bg-(--toolbar-btn-active-bg) aria-[pressed=true]:bg-(--toolbar-btn-active-bg) aria-[pressed=true]:border-(--toolbar-btn-active-border) aria-[pressed=true]:text-(--toolbar-btn-active-color)"
+    class="
+      relative flex items-center justify-center
+      rounded-l-[5px] px-1 pt-[2px] pb-2 w-[30px] h-7
+      border border-transparent bg-transparent text-(--toolbar-fg) cursor-pointer
+      [&_svg]:pointer-events-none
+      [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg) [&:active:not(:disabled)]:bg-(--toolbar-btn-active-bg)
+      aria-pressed:bg-(--toolbar-btn-active-bg) aria-pressed:border-(--toolbar-btn-active-border) aria-pressed:text-(--toolbar-btn-active-color)
+    "
     aria-label="Highlight"
     aria-pressed={active}
     onmousedown={(e) => { e.preventDefault(); onmainclick?.() }}
@@ -39,7 +46,13 @@
   <Dropdown>
     {#snippet trigger({ open, toggle })}
       <button
-        class="flex items-center justify-center self-stretch border border-transparent bg-transparent text-(--toolbar-fg) cursor-pointer [&_svg]:pointer-events-none rounded-r-[5px] px-[2px] w-[14px] h-auto [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg) [&:active:not(:disabled)]:bg-(--toolbar-btn-active-bg)"
+        class="
+          flex items-center justify-center self-stretch
+          rounded-r-[5px] px-[2px] w-[14px] h-auto
+          border border-transparent bg-transparent text-(--toolbar-fg) cursor-pointer
+          [&_svg]:pointer-events-none
+          [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg) [&:active:not(:disabled)]:bg-(--toolbar-btn-active-bg)
+        "
         aria-label="Highlight color options"
         aria-haspopup="true"
         aria-expanded={open}
@@ -51,14 +64,26 @@
 
     {#snippet menu({ close })}
       <div
-        class="absolute top-[calc(100%+8px)] left-0 z-[200] bg-(--panel-bg) text-(--fg) border border-(--border) rounded-[10px] p-[10px] flex flex-col gap-2 min-w-48 shadow-[0_2px_4px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.18)]"
+        class="
+          absolute top-[calc(100%+8px)] left-0 z-[200]
+          bg-(--panel-bg) text-(--fg) border border-(--border) rounded-[10px]
+          p-[10px] flex flex-col gap-2 min-w-48
+          shadow-[0_2px_4px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.18)]
+        "
         role="dialog"
         aria-label="Highlight color"
       >
         <div class="grid grid-cols-6 gap-[5px]">
           {#each COLORS as color (color)}
             <button
-              class="w-[26px] h-[26px] rounded-[6px] border-[1.5px] border-black/[0.14] cursor-pointer p-0 bg-(--swatch-bg) relative transition-[transform,box-shadow] duration-100 ease-in-out shrink-0 [&:hover:not(:disabled)]:scale-[1.2] [&:hover:not(:disabled)]:shadow-[0_2px_8px_rgba(0,0,0,0.22)] [&:hover:not(:disabled)]:z-[1] aria-[pressed=true]:border-(--fg) aria-[pressed=true]:shadow-[0_0_0_2px_var(--panel-bg),0_0_0_4px_var(--fg)]"
+              class="
+                w-[26px] h-[26px] rounded-[6px]
+                border-[1.5px] border-black/[0.14] cursor-pointer p-0
+                bg-(--swatch-bg) relative shrink-0
+                transition-[transform,box-shadow] duration-100 ease-in-out
+                [&:hover:not(:disabled)]:scale-[1.2] [&:hover:not(:disabled)]:shadow-[0_2px_8px_rgba(0,0,0,0.22)] [&:hover:not(:disabled)]:z-[1]
+                aria-pressed:border-(--fg) aria-pressed:shadow-[0_0_0_2px_var(--panel-bg),0_0_0_4px_var(--fg)]
+              "
               aria-label={color}
               aria-pressed={activeColor === color}
               data-color={color}
@@ -72,7 +97,13 @@
           {/each}
         </div>
         <button
-          class="w-full px-2 py-[5px] rounded-[6px] border border-(--border) bg-transparent text-(--fg) text-[11.5px] cursor-pointer text-center transition-[background,border-color] duration-100 [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg)"
+          class="
+            w-full px-2 py-[5px]
+            rounded-[6px] border border-(--border)
+            bg-transparent text-(--fg) text-[11.5px] cursor-pointer text-center
+            transition-[background,border-color] duration-100
+            [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg)
+          "
           onmousedown={(e) => { e.preventDefault(); close(); onremove?.() }}
         >
           Remove highlight

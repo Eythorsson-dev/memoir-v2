@@ -18,7 +18,14 @@
 <Dropdown>
   {#snippet trigger({ open, toggle })}
     <button
-      class="relative flex shrink-0 items-center gap-0.5 h-7 px-1.5 border border-transparent rounded-[5px] bg-transparent text-(--toolbar-fg) cursor-pointer [&_svg]:pointer-events-none [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg) [&:active:not(:disabled)]:bg-(--toolbar-btn-active-bg) aria-pressed:bg-(--toolbar-btn-active-bg) aria-pressed:border-(--toolbar-btn-active-border) aria-pressed:text-(--toolbar-btn-active-color)"
+      class="
+        relative flex shrink-0 items-center gap-0.5 h-7 px-1.5
+        border border-transparent rounded-[5px]
+        bg-transparent text-(--toolbar-fg) cursor-pointer
+        [&_svg]:pointer-events-none
+        [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg) [&:active:not(:disabled)]:bg-(--toolbar-btn-active-bg)
+        aria-pressed:bg-(--toolbar-btn-active-bg) aria-pressed:border-(--toolbar-btn-active-border) aria-pressed:text-(--toolbar-btn-active-color)
+      "
       aria-label="Heading"
       aria-pressed={activeLevel !== null}
       aria-haspopup="true"
@@ -32,10 +39,26 @@
   {/snippet}
 
   {#snippet menu({ close })}
-    <div class="absolute top-[calc(100%+4px)] left-0 bg-(--panel-bg) text-(--fg) border border-(--border) rounded-md p-1 flex flex-col gap-0.5 z-200 min-w-14 shadow-[0_2px_4px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.18)]" role="dialog" aria-label="Heading level">
+    <div
+      class="
+        absolute top-[calc(100%+4px)] left-0
+        bg-(--panel-bg) text-(--fg) border border-(--border) rounded-md
+        p-1 flex flex-col gap-0.5 z-200 min-w-14
+        shadow-[0_2px_4px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.18)]
+      "
+      role="dialog"
+      aria-label="Heading level"
+    >
       {#each LEVELS as level (level)}
         <button
-          class="w-full h-7 text-xs font-semibold rounded-sm px-2 border border-transparent bg-transparent text-(--toolbar-fg) cursor-pointer flex items-center justify-center [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg) aria-pressed:bg-(--toolbar-btn-active-bg) aria-pressed:border-(--toolbar-btn-active-border) aria-pressed:text-(--toolbar-btn-active-color)"
+          class="
+            w-full h-7
+            text-xs font-semibold rounded-sm px-2
+            border border-transparent bg-transparent text-(--toolbar-fg) cursor-pointer
+            flex items-center justify-center
+            [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg)
+            aria-pressed:bg-(--toolbar-btn-active-bg) aria-pressed:border-(--toolbar-btn-active-border) aria-pressed:text-(--toolbar-btn-active-color)
+          "
           aria-label="Heading {level}"
           aria-pressed={activeLevel === level}
           onmousedown={(e) => {
