@@ -142,7 +142,7 @@
 <div role="toolbar" aria-label="Text formatting" class="toolbar">
   <Button
     label="Undo"
-    shortcut="⌘Z"
+    shortcut={{ ctrl: true, key: 'Z' }}
     disabled={!canUndo}
     onclick={() => {
       editor?.undo()
@@ -154,7 +154,7 @@
 
   <Button
     label="Redo"
-    shortcut="⌘⇧Z"
+    shortcut={{ ctrl: true, shift: true, key: 'Z' }}
     disabled={!canRedo}
     onclick={() => {
       editor?.redo()
@@ -172,7 +172,7 @@
 
   <Button
     label="Bold"
-    shortcut="⌘B"
+    shortcut={{ ctrl: true, key: 'B' }}
     pressed={activeInlines.has('Bold')}
     onclick={() => editor?.toggleInline('Bold')}
   >
@@ -181,7 +181,7 @@
 
   <Button
     label="Italic"
-    shortcut="⌘I"
+    shortcut={{ ctrl: true, key: 'I' }}
     pressed={activeInlines.has('Italic')}
     onclick={() => editor?.toggleInline('Italic')}
   >
@@ -190,7 +190,7 @@
 
   <Button
     label="Underline"
-    shortcut="⌘U"
+    shortcut={{ ctrl: true, key: 'U' }}
     pressed={activeInlines.has('Underline')}
     onclick={() => editor?.toggleInline('Underline')}
   >
@@ -208,11 +208,11 @@
 
   <div class="separator" aria-hidden="true"></div>
 
-  <Button label="Indent" shortcut="Tab" onclick={() => editor?.indent()}>
+  <Button label="Indent" shortcut={{ key: 'Tab' }} onclick={() => editor?.indent()}>
     <ListIndentIncrease size={16} />
   </Button>
 
-  <Button label="Outdent" shortcut="⇧Tab" onclick={() => editor?.outdent()}>
+  <Button label="Outdent" shortcut={{ shift: true, key: 'Tab' }} onclick={() => editor?.outdent()}>
     <ListIndentDecrease size={16} />
   </Button>
 
