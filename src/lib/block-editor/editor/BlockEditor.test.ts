@@ -4,7 +4,7 @@ import { BlockEditorWithToolbar } from './BlockEditorWithToolbar'
 import { Blocks, TextBlock, OrderedListBlock, UnorderedListBlock, type Block } from '../blocks/blocks'
 import { Text, type InlineTypes } from '../text/text'
 import { BLOCK_EDITOR_EVENT_NAMES } from './events'
-import type { BlockDataUpdatedEventDto } from './events'
+import type { BlockCreatedEventDto, BlockDataUpdatedEventDto } from './events'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -117,6 +117,16 @@ function keydown(
     shiftKey: options.shiftKey ?? false,
   })
   editable.dispatchEvent(e)
+}
+
+/** Simulate typing a character by mutating the DOM text and firing input. */
+function simulateType(container: HTMLElement, blockId: string, newFullText: string, cursorAt: number): void {
+  const editable = getEditable(container)
+  const blockEl = editable.querySelector(`[id="${blockId}"]`)!
+  const p = blockEl.querySelector('p, h1, h2, h3')!
+  p.textContent = newFullText
+  setCursor(container, blockId, cursorAt)
+  editable.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
 /** Get all block IDs in pre-order */
@@ -379,9 +389,9 @@ describe('blockCreated events', () => {
   it('Enter at end of block — only blockCreated', () => {
     const container = makeContainer()
     const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
-    const created: Array<{ id: string; data: Text }> = []
+    const created: BlockCreatedEventDto[] = []
     const dataUpdated: string[] = []
-    editor.addEventListener('blockCreated', (e) => created.push({ ...e, data: e.data as Text }))
+    editor.addEventListener('blockCreated', (e) => created.push(e))
     editor.addEventListener('blockDataUpdated', (e) => dataUpdated.push(e.id))
 
     getEditable(container).focus()
@@ -398,8 +408,8 @@ describe('blockCreated events', () => {
     const container = makeContainer()
     const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello')]))
     const events: string[] = []
-    const createdData: Array<Text> = []
-    editor.addEventListener('blockCreated', (e) => { events.push(`created:${e.id}`); createdData.push(e.data as Text) })
+    const created: BlockCreatedEventDto[] = []
+    editor.addEventListener('blockCreated', (e) => { events.push(`created:${e.id}`); created.push(e) })
     editor.addEventListener('blockDataUpdated', (e) => events.push(`data:${e.id}`))
 
     getEditable(container).focus()
@@ -408,7 +418,8 @@ describe('blockCreated events', () => {
 
     expect(events[0]).toBe('data:a')
     expect(events[1]).toMatch(/^created:/)
-    expect(createdData[0].text).toBe('llo')  // tail of 'Hello' after split at offset 2
+    expect(created[0].data).toBeInstanceOf(Text)
+    expect((created[0].data as Text).text).toBe('llo')  // tail of 'Hello' after split at offset 2
     cleanup(editor, container)
   })
 
@@ -1379,16 +1390,6 @@ describe('convertBlockType', () => {
 // ─── markdown input shortcuts ────────────────────────────────────────────────
 
 describe('markdown input shortcuts', () => {
-  /** Simulate typing a character by mutating the DOM text and firing input. */
-  function simulateType(container: HTMLElement, blockId: string, newFullText: string, cursorAt: number): void {
-    const editable = getEditable(container)
-    const blockEl = editable.querySelector(`[id="${blockId}"]`)!
-    const p = blockEl.querySelector('p, h1, h2, h3')!
-    p.textContent = newFullText
-    setCursor(container, blockId, cursorAt)
-    editable.dispatchEvent(new Event('input', { bubbles: true }))
-  }
-
   it('typing "- " converts text block to unordered-list and strips marker', () => {
     const container = makeContainer()
     const editor = new BlockEditor(container, Blocks.from([dto('a', '')]))
@@ -1486,15 +1487,6 @@ describe('markdown input shortcuts', () => {
 import { HeaderBlock, Header } from '../blocks/blocks'
 
 describe('BlockEditor — heading input rules', () => {
-  function simulateType(container: HTMLElement, blockId: string, newFullText: string, cursorAt: number): void {
-    const editable = getEditable(container)
-    const blockEl = editable.querySelector(`[id="${blockId}"]`)!
-    const p = blockEl.querySelector('p, h1, h2, h3')!
-    p.textContent = newFullText
-    setCursor(container, blockId, cursorAt)
-    editable.dispatchEvent(new Event('input', { bubbles: true }))
-  }
-
   it('typing "# " converts text block to H1 and strips marker', () => {
     const container = makeContainer()
     const editor = new BlockEditor(container, Blocks.from([dto('a', '')]))
