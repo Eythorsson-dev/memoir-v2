@@ -274,28 +274,8 @@ class FlatBlock<T extends BlockTypes = BlockTypes> {
   }
 }
 
-/**
- * Accepted by `addBefore`, `addAfter`, `appendChild`, and `prependChild`.
- * When `blockType` is omitted the type is inherited from the neighbour
- * (falling back to `'text'` for headers).
- */
-type NewBlock<T extends BlockTypes = BlockTypes> =
-  | { id: BlockId; data: Text }
-  | { id: BlockId; blockType: T; data: BlockTypeMap[T] }
-
-/**
- * Resolves a `NewBlock` to a concrete `[blockType, data]` pair.
- * If the caller specified a `blockType`, use it as-is.
- * Otherwise inherit from `target`, falling back to `'text'` for headers.
- */
-function resolveNewBlock<T extends BlockTypes>(
-  block: NewBlock<T>,
-  target: FlatBlock,
-): [BlockTypes, BlockTypeMap[BlockTypes]] {
-  if ('blockType' in block) return [block.blockType, block.data]
-  const inherited: Exclude<BlockTypes, 'header'> = target.blockType === 'header' ? 'text' : target.blockType
-  return [inherited, block.data]
-}
+/** Accepted by `addBefore`, `addAfter`, `appendChild`, and `prependChild`. */
+type NewBlock<T extends BlockTypes = BlockTypes> = { id: BlockId; blockType: T; data: BlockTypeMap[T] }
 
 // ─── Validation ────────────────────────────────────────────────────────────────
 
@@ -631,11 +611,9 @@ export class Blocks {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`No block with id '${id}' found`)
     const target = this.#blocks[idx]
-    const [blockType, data] = resolveNewBlock(block, target)
-    const newBlock = new FlatBlock(block.id, blockType, data, target.indent)
     return new Blocks([
       ...this.#blocks.slice(0, idx),
-      newBlock,
+      new FlatBlock(block.id, block.blockType, block.data, target.indent),
       ...this.#blocks.slice(idx),
     ])
   }
@@ -650,11 +628,9 @@ export class Blocks {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`No block with id '${id}' found`)
     const target = this.#blocks[idx]
-    const [blockType, data] = resolveNewBlock(block, target)
-    const newBlock = new FlatBlock(block.id, blockType, data, target.indent)
     return new Blocks([
       ...this.#blocks.slice(0, idx + 1),
-      newBlock,
+      new FlatBlock(block.id, block.blockType, block.data, target.indent),
       ...this.#blocks.slice(idx + 1),
     ])
   }
@@ -674,11 +650,9 @@ export class Blocks {
     while (insertAt < this.#blocks.length && this.#blocks[insertAt].indent > targetIndent) {
       insertAt++
     }
-    const [blockType, data] = resolveNewBlock(block, target)
-    const newBlock = new FlatBlock(block.id, blockType, data, targetIndent + 1)
     return new Blocks([
       ...this.#blocks.slice(0, insertAt),
-      newBlock,
+      new FlatBlock(block.id, block.blockType, block.data, targetIndent + 1),
       ...this.#blocks.slice(insertAt),
     ])
   }
@@ -693,11 +667,9 @@ export class Blocks {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`No block with id '${id}' found`)
     const target = this.#blocks[idx]
-    const [blockType, data] = resolveNewBlock(block, target)
-    const newBlock = new FlatBlock(block.id, blockType, data, target.indent + 1)
     return new Blocks([
       ...this.#blocks.slice(0, idx + 1),
-      newBlock,
+      new FlatBlock(block.id, block.blockType, block.data, target.indent + 1),
       ...this.#blocks.slice(idx + 1),
     ])
   }

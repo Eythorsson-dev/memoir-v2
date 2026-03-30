@@ -14,8 +14,8 @@ function dto(id: string, text = '', children: TextBlock[] = []): TextBlock {
 }
 
 /** Build a block arg for use with mutation methods (addBefore, addAfter, etc.) */
-function block(id: string, data: Text = emptyText): { id: string; data: Text } {
-  return { id, data }
+function block(id: string, data: Text = emptyText): { id: string; blockType: 'text'; data: Text } {
+  return { id, blockType: 'text', data }
 }
 
 type AnyConcreteBlock = TextBlock | OrderedListBlock | UnorderedListBlock | HeaderBlock
@@ -1231,7 +1231,7 @@ describe('Blocks.diff', () => {
   it('reports added for a child block with correct parentBlockId', () => {
     const b1 = Blocks.from([dto('a'), dto('b', '', [dto('c')])])
     // Insert a new block after 'b' at same indent (root level)
-    const b2 = b1.addAfter('b', { id: 'x', data: new Text('hi', []) })
+    const b2 = b1.addAfter('b', { id: 'x', blockType: 'text', data: new Text('hi', []) })
     const changes = Blocks.diff(b1, b2)
     const addedChange = changes.find(c => c instanceof BlockAdded && c.id === 'x')
     expect(addedChange).toBeInstanceOf(BlockAdded)
