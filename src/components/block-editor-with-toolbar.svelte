@@ -2,7 +2,7 @@
   import { untrack } from 'svelte'
   import { BlockEditor, BLOCK_EDITOR_EVENT_NAMES } from '$lib/block-editor'
   import type { Blocks, BlockEditorOptions, BlockEditorEventDtoMap, BlockSelection, HighlightColor, HeaderLevel, InlineTypes } from '$lib/block-editor'
-  import ToolbarButton from './button.svelte'
+  import Button from './button.svelte'
   import HeadingPicker from './heading-picker.svelte'
   import HighlightSplitButton from './highlight-split-button.svelte'
   import { Bold, Italic, Underline, Undo2, Redo2, ListIndentIncrease, ListIndentDecrease, ListOrdered, List } from '@lucide/svelte'
@@ -140,7 +140,7 @@
 </script>
 
 <div role="toolbar" aria-label="Text formatting" class="toolbar">
-  <ToolbarButton
+  <Button
     label="Undo"
     shortcut="⌘Z"
     disabled={!canUndo}
@@ -150,9 +150,9 @@
     }}
   >
     <Undo2 size={16} />
-  </ToolbarButton>
+  </Button>
 
-  <ToolbarButton
+  <Button
     label="Redo"
     shortcut="⌘⇧Z"
     disabled={!canRedo}
@@ -162,7 +162,7 @@
     }}
   >
     <Redo2 size={16} />
-  </ToolbarButton>
+  </Button>
 
   <div class="separator" aria-hidden="true"></div>
 
@@ -170,32 +170,32 @@
 
   <div class="separator" aria-hidden="true"></div>
 
-  <ToolbarButton
+  <Button
     label="Bold"
     shortcut="⌘B"
     pressed={activeInlines.has('Bold')}
     onclick={() => editor?.toggleInline('Bold')}
   >
     <Bold size={16} />
-  </ToolbarButton>
+  </Button>
 
-  <ToolbarButton
+  <Button
     label="Italic"
     shortcut="⌘I"
     pressed={activeInlines.has('Italic')}
     onclick={() => editor?.toggleInline('Italic')}
   >
     <Italic size={16} />
-  </ToolbarButton>
+  </Button>
 
-  <ToolbarButton
+  <Button
     label="Underline"
     shortcut="⌘U"
     pressed={activeInlines.has('Underline')}
     onclick={() => editor?.toggleInline('Underline')}
   >
     <Underline size={16} />
-  </ToolbarButton>
+  </Button>
 
   <HighlightSplitButton
     active={activeInlines.has('Highlight')}
@@ -208,31 +208,31 @@
 
   <div class="separator" aria-hidden="true"></div>
 
-  <ToolbarButton label="Indent" shortcut="Tab" onclick={() => editor?.indent()}>
+  <Button label="Indent" shortcut="Tab" onclick={() => editor?.indent()}>
     <ListIndentIncrease size={16} />
-  </ToolbarButton>
+  </Button>
 
-  <ToolbarButton label="Outdent" shortcut="⇧Tab" onclick={() => editor?.outdent()}>
+  <Button label="Outdent" shortcut="⇧Tab" onclick={() => editor?.outdent()}>
     <ListIndentDecrease size={16} />
-  </ToolbarButton>
+  </Button>
 
   <div class="separator" aria-hidden="true"></div>
 
-  <ToolbarButton
+  <Button
     label="Ordered list"
     pressed={activeBlockType === 'ordered-list'}
     onclick={() => editor?.convertBlockType(activeBlockType === 'ordered-list' ? 'text' : 'ordered-list')}
   >
     <ListOrdered size={16} />
-  </ToolbarButton>
+  </Button>
 
-  <ToolbarButton
+  <Button
     label="Unordered list"
     pressed={activeBlockType === 'unordered-list'}
     onclick={() => editor?.convertBlockType(activeBlockType === 'unordered-list' ? 'text' : 'unordered-list')}
   >
     <List size={16} />
-  </ToolbarButton>
+  </Button>
 </div>
 
 <div {@attach mountEditor}></div>
