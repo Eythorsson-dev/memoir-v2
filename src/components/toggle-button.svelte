@@ -9,17 +9,19 @@
     disabled = false,
     pressed = false,
     onclick,
+    onmousedown,
     children,
   }: {
     label: string
     shortcut?: Shortcut
     disabled?: boolean
     pressed?: boolean
-    onclick?: () => void
+    onclick?: (e: MouseEvent) => void
+    onmousedown?: (e: MouseEvent) => void
     children?: Snippet
   } = $props()
 </script>
 
-<Button {label} {shortcut} {disabled} {onclick} aria-pressed={pressed}>
+<Button {label} {shortcut} {disabled} {onclick} {onmousedown} aria-pressed={pressed}>
   {@render children?.()}
 </Button>

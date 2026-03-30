@@ -145,7 +145,8 @@
     label="Undo"
     shortcut={{ ctrl: true, key: 'Z' }}
     disabled={!canUndo}
-    onclick={() => {
+    onmousedown={(e) => {
+      e.preventDefault()
       editor?.undo()
       if (editor) updateToolbarState(editor)
     }}
@@ -157,7 +158,8 @@
     label="Redo"
     shortcut={{ ctrl: true, shift: true, key: 'Z' }}
     disabled={!canRedo}
-    onclick={() => {
+    onmousedown={(e) => {
+      e.preventDefault()
       editor?.redo()
       if (editor) updateToolbarState(editor)
     }}
@@ -175,7 +177,7 @@
     label="Bold"
     shortcut={{ ctrl: true, key: 'B' }}
     pressed={activeInlines.has('Bold')}
-    onclick={() => editor?.toggleInline('Bold')}
+    onmousedown={(e) => { e.preventDefault(); editor?.toggleInline('Bold') }}
   >
     <Bold size={16} />
   </ToggleButton>
@@ -184,7 +186,7 @@
     label="Italic"
     shortcut={{ ctrl: true, key: 'I' }}
     pressed={activeInlines.has('Italic')}
-    onclick={() => editor?.toggleInline('Italic')}
+    onmousedown={(e) => { e.preventDefault(); editor?.toggleInline('Italic') }}
   >
     <Italic size={16} />
   </ToggleButton>
@@ -193,7 +195,7 @@
     label="Underline"
     shortcut={{ ctrl: true, key: 'U' }}
     pressed={activeInlines.has('Underline')}
-    onclick={() => editor?.toggleInline('Underline')}
+    onmousedown={(e) => { e.preventDefault(); editor?.toggleInline('Underline') }}
   >
     <Underline size={16} />
   </ToggleButton>
@@ -209,11 +211,19 @@
 
   <div class="separator" aria-hidden="true"></div>
 
-  <Button label="Indent" shortcut={{ key: 'Tab' }} onclick={() => editor?.indent()}>
+  <Button
+    label="Indent"
+    shortcut={{ key: 'Tab' }}
+    onmousedown={(e) => { e.preventDefault(); editor?.indent() }}
+  >
     <ListIndentIncrease size={16} />
   </Button>
 
-  <Button label="Outdent" shortcut={{ shift: true, key: 'Tab' }} onclick={() => editor?.outdent()}>
+  <Button
+    label="Outdent"
+    shortcut={{ shift: true, key: 'Tab' }}
+    onmousedown={(e) => { e.preventDefault(); editor?.outdent() }}
+  >
     <ListIndentDecrease size={16} />
   </Button>
 
@@ -222,7 +232,7 @@
   <ToggleButton
     label="Ordered list"
     pressed={activeBlockType === 'ordered-list'}
-    onclick={() => editor?.convertBlockType(activeBlockType === 'ordered-list' ? 'text' : 'ordered-list')}
+    onmousedown={(e) => { e.preventDefault(); editor?.convertBlockType(activeBlockType === 'ordered-list' ? 'text' : 'ordered-list') }}
   >
     <ListOrdered size={16} />
   </ToggleButton>
@@ -230,7 +240,7 @@
   <ToggleButton
     label="Unordered list"
     pressed={activeBlockType === 'unordered-list'}
-    onclick={() => editor?.convertBlockType(activeBlockType === 'unordered-list' ? 'text' : 'unordered-list')}
+    onmousedown={(e) => { e.preventDefault(); editor?.convertBlockType(activeBlockType === 'unordered-list' ? 'text' : 'unordered-list') }}
   >
     <List size={16} />
   </ToggleButton>
