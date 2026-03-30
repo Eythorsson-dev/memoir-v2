@@ -52,9 +52,9 @@ describe('popup hover persistence', () => {
 
   it('does not hide while cursor is inside popup container', async () => {
     const { mount, unmount } = await import('svelte')
-    const { popup } = await import('./popup-attachment')
+    const { popupOnHover } = await import('./popup-attachment')
     const el = makeAnchor()
-    const cleanup = popup({ title: 'T', body: 'B' })(el) as () => void
+    const cleanup = popupOnHover({ title: 'T', body: 'B' })(el) as () => void
 
     el.dispatchEvent(new MouseEvent('mouseenter', { clientX: 100, clientY: 100 }))
     expect(mount).toHaveBeenCalledTimes(1)
@@ -71,9 +71,9 @@ describe('popup hover persistence', () => {
   })
 
   it('hides after leaving both anchor and popup', async () => {
-    const { popup } = await import('./popup-attachment')
+    const { popupOnHover } = await import('./popup-attachment')
     const el = makeAnchor()
-    const cleanup = popup({ title: 'T', body: 'B' })(el) as () => void
+    const cleanup = popupOnHover({ title: 'T', body: 'B' })(el) as () => void
 
     el.dispatchEvent(new MouseEvent('mouseenter', { clientX: 100, clientY: 100 }))
     const container = document.body.lastElementChild as HTMLElement
@@ -87,10 +87,10 @@ describe('popup hover persistence', () => {
 
   it('closes previous group popup immediately when new one dwells long enough', async () => {
     const { mount, unmount } = await import('svelte')
-    const { popup } = await import('./popup-attachment')
+    const { popupOnHover } = await import('./popup-attachment')
     const a = makeAnchor(), b = makeAnchor()
-    const cleanA = popup({ title: 'A', body: '' }, 'grp')(a) as () => void
-    const cleanB = popup({ title: 'B', body: '' }, 'grp')(b) as () => void
+    const cleanA = popupOnHover({ title: 'A', body: '' }, 'grp')(a) as () => void
+    const cleanB = popupOnHover({ title: 'B', body: '' }, 'grp')(b) as () => void
 
     // Open A (initial delay: 300ms)
     a.dispatchEvent(new MouseEvent('mouseenter', { clientX: 50, clientY: 50 }))
@@ -110,10 +110,10 @@ describe('popup hover persistence', () => {
 
   it('does not open new popup when cursor grazes a row (leaves before switch delay)', async () => {
     const { mount } = await import('svelte')
-    const { popup } = await import('./popup-attachment')
+    const { popupOnHover } = await import('./popup-attachment')
     const a = makeAnchor(), b = makeAnchor()
-    const cleanA = popup({ title: 'A', body: '' }, 'grp4')(a) as () => void
-    const cleanB = popup({ title: 'B', body: '' }, 'grp4')(b) as () => void
+    const cleanA = popupOnHover({ title: 'A', body: '' }, 'grp4')(a) as () => void
+    const cleanB = popupOnHover({ title: 'B', body: '' }, 'grp4')(b) as () => void
 
     a.dispatchEvent(new MouseEvent('mouseenter', { clientX: 50, clientY: 50 }))
     vi.advanceTimersByTime(300)   // A opens
@@ -131,9 +131,9 @@ describe('popup hover persistence', () => {
 
   it('requires initial dwell before first popup opens', async () => {
     const { mount } = await import('svelte')
-    const { popup } = await import('./popup-attachment')
+    const { popupOnHover } = await import('./popup-attachment')
     const a = makeAnchor()
-    const cleanA = popup({ title: 'A', body: '' }, 'grp5')(a) as () => void
+    const cleanA = popupOnHover({ title: 'A', body: '' }, 'grp5')(a) as () => void
 
     a.dispatchEvent(new MouseEvent('mouseenter', { clientX: 50, clientY: 50 }))
     vi.advanceTimersByTime(200)    // not yet

@@ -1,7 +1,7 @@
 <script lang="ts">
   import CodePreview from './code-preview.svelte'
   import RelativeTimestamp from './relative-timestamp.svelte'
-  import { popup } from './popup-attachment'
+  import { popupOnHover } from './popup-attachment'
   import type { BlockEditorEventDtoMap } from '$lib/block-editor'
   import { Trash2Icon } from '@lucide/svelte'
 
@@ -52,7 +52,7 @@
           <CodePreview language="json" code={JSON.stringify(entry.payload, null, 2)} />
         {/snippet}
         <div
-          {@attach popup({
+          {@attach popupOnHover({
             title: entry.name,
             subtitle: new Date(entry.timestamp).toLocaleTimeString(),
             body: popupBody
