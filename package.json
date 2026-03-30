@@ -37,6 +37,7 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "^0.577.0",
+		"gsd": "^0.0.3",
 		"lucide": "^0.577.0",
 		"prismjs": "^1.30.0"
 	}
