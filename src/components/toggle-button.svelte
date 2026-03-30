@@ -7,6 +7,7 @@
     label,
     shortcut,
     disabled = false,
+    showTooltip = true,
     pressed = false,
     onclick,
     onmousedown,
@@ -18,6 +19,7 @@
     label: string
     shortcut?: Shortcut
     disabled?: boolean
+    showTooltip?: boolean
     pressed?: boolean
     onclick?: (e: MouseEvent) => void
     onmousedown?: (e: MouseEvent) => void
@@ -28,6 +30,6 @@
   } = $props()
 </script>
 
-<Button {label} {shortcut} {disabled} {onclick} {onmousedown} aria-pressed={pressed} aria-haspopup={ariaHasPopup} aria-expanded={ariaExpanded} class={className}>
+<Button {label} {shortcut} {disabled} {showTooltip} {onclick} {onmousedown} aria-pressed={pressed} aria-haspopup={ariaHasPopup} aria-expanded={ariaExpanded} class={className}>
   {@render children?.()}
 </Button>
