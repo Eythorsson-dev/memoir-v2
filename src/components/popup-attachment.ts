@@ -40,21 +40,41 @@ export function computePosition(
   return { left, top }
 }
 
-export function popup(options: PopupOptions, group?: string): Attachment {
+/**
+ * Core hover attachment. Calls `show` after an optional delay on mouseenter
+ * and `hide` (optionally deferred) on mouseleave.
+ *
+ * @param show - Called with `(x, anchorTop, anchorBottom)` when the hover delay elapses.
+ * @param hide - Called to dismiss the overlay.
+ * @param options.openDelay - ms to wait before calling `show`. Accepts a callback so
+ *   the delay can be computed dynamically at hover time (e.g. warm-group detection).
+ * @param options.closeDelay - ms grace period before calling `hide` on mouseleave.
+ * @param options.keepOpen - If provided, mouseenter on this element cancels any
+ *   pending hide so the overlay stays visible when the pointer moves onto it.
+ */
+export function hoverAttachment(
+  show: (x: number, anchorTop: number, anchorBottom: number) => void,
+  hide: () => void,
+  {
+    openDelay = 0,
+    closeDelay = 0,
+    keepOpen,
+  }: {
+    openDelay?: number | (() => number)
+    closeDelay?: number
+    keepOpen?: HTMLElement
+  } = {}
+): Attachment {
   return (element: Element) => {
-    let instance: ReturnType<typeof mount> | null = null
-    const container = document.createElement('div')
     let hideTimeout: ReturnType<typeof setTimeout> | null = null
     let openTimeout: ReturnType<typeof setTimeout> | null = null
 
-    const hide = () => {
-      if (instance) { unmount(instance); instance = null }
-      container.remove()
-      if (group && groups.get(group) === hide) groups.delete(group)
-    }
-
     const scheduleHide = () => {
-      hideTimeout = setTimeout(hide, CLOSE_DELAY)
+      if (closeDelay > 0) {
+        hideTimeout = setTimeout(hide, closeDelay)
+      } else {
+        hide()
+      }
     }
 
     const cancelHide = () => {
@@ -65,12 +85,80 @@ export function popup(options: PopupOptions, group?: string): Attachment {
       if (openTimeout) { clearTimeout(openTimeout); openTimeout = null }
     }
 
-    const show = (x: number, anchorTop: number, anchorBottom: number) => {
+    const onEnter = (evt: Event) => {
+      cancelHide()
+      cancelOpen()
+      const { clientX } = evt as MouseEvent
+      const delay = typeof openDelay === 'function' ? openDelay() : openDelay
+      if (delay > 0) {
+        openTimeout = setTimeout(() => {
+          openTimeout = null
+          const rect = element.getBoundingClientRect()
+          show(clientX, rect.top, rect.bottom)
+        }, delay)
+      } else {
+        const rect = element.getBoundingClientRect()
+        show(clientX, rect.top, rect.bottom)
+      }
+    }
+
+    const onLeave = () => {
+      cancelOpen()
+      scheduleHide()
+    }
+
+    if (keepOpen) {
+      keepOpen.addEventListener('mouseenter', cancelHide)
+      keepOpen.addEventListener('mouseleave', scheduleHide)
+    }
+    element.addEventListener('mouseenter', onEnter)
+    element.addEventListener('mouseleave', onLeave)
+
+    return () => {
+      element.removeEventListener('mouseenter', onEnter)
+      element.removeEventListener('mouseleave', onLeave)
+      if (keepOpen) {
+        keepOpen.removeEventListener('mouseenter', cancelHide)
+        keepOpen.removeEventListener('mouseleave', scheduleHide)
+      }
+      cancelHide()
+      cancelOpen()
+      hide()
+    }
+  }
+}
+
+/**
+ * Attachment that calls `handler` whenever the user clicks outside the element.
+ * Useful for closing dropdowns or popovers on outside interaction.
+ */
+export function clickOutside(handler: () => void): Attachment {
+  return (element: Element) => {
+    const onMouseDown = (e: MouseEvent) => {
+      if (!element.contains(e.target as Node)) handler()
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }
+}
+
+export function popup(options: PopupOptions, group?: string): Attachment {
+  return (element: Element) => {
+    let instance: ReturnType<typeof mount> | null = null
+    const container = document.createElement('div')
+
+    const doHide = () => {
+      if (instance) { unmount(instance); instance = null }
+      container.remove()
+      if (group && groups.get(group) === doHide) groups.delete(group)
+    }
+
+    const doShow = (x: number, anchorTop: number, anchorBottom: number) => {
       // Close any other popup in the same group immediately (no delay)
       if (group) {
         const prev = groups.get(group)
-        if (prev && prev !== hide) prev()
-        groups.set(group, hide)
+        if (prev && prev !== doHide) prev()
+        groups.set(group, doHide)
       }
       if (instance) return  // re-entered while hide was pending; already mounted
       document.body.appendChild(container)
@@ -80,42 +168,13 @@ export function popup(options: PopupOptions, group?: string): Attachment {
       })
     }
 
-    const onEnter = (evt: Event) => {
-      cancelHide()
-      cancelOpen()
-      const e = evt as MouseEvent
-      const isWarm = group != null && groups.has(group) && groups.get(group) !== hide
-      const delay = isWarm ? SWITCH_OPEN_DELAY : (group != null ? INITIAL_OPEN_DELAY : 0)
-      if (delay > 0) {
-        openTimeout = setTimeout(() => {
-          openTimeout = null
-          const rect = element.getBoundingClientRect()
-          show(e.clientX, rect.top, rect.bottom)
-        }, delay)
-      } else {
-        const rect = element.getBoundingClientRect()
-        show(e.clientX, rect.top, rect.bottom)
-      }
-    }
-
-    const onLeave = () => {
-      cancelOpen()
-      scheduleHide()
-    }
-
-    container.addEventListener('mouseenter', cancelHide)
-    container.addEventListener('mouseleave', scheduleHide)
-    element.addEventListener('mouseenter', onEnter)
-    element.addEventListener('mouseleave', onLeave)
-
-    return () => {
-      element.removeEventListener('mouseenter', onEnter)
-      element.removeEventListener('mouseleave', onLeave)
-      container.removeEventListener('mouseenter', cancelHide)
-      container.removeEventListener('mouseleave', scheduleHide)
-      cancelHide()
-      cancelOpen()
-      hide()
-    }
+    return hoverAttachment(doShow, doHide, {
+      openDelay: () => {
+        const isWarm = group != null && groups.has(group) && groups.get(group) !== doHide
+        return isWarm ? SWITCH_OPEN_DELAY : (group != null ? INITIAL_OPEN_DELAY : 0)
+      },
+      closeDelay: CLOSE_DELAY,
+      keepOpen: container,
+    })(element)
   }
 }

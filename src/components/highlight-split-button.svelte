@@ -3,6 +3,7 @@
   import type { HighlightColor } from '$lib/block-editor'
   import Dropdown from './dropdown.svelte'
   import { tooltip } from './tooltip-attachment.ts'
+  import type { Shortcut } from './shortcut.ts'
 
   const COLORS: HighlightColor[] = ['red', 'amber', 'green', 'blue', 'violet', 'fuchsia']
 
@@ -29,7 +30,7 @@
     aria-label="Highlight"
     aria-pressed={active}
     onmousedown={(e) => { e.preventDefault(); onmainclick?.() }}
-    {@attach tooltip('Highlight', '⌘⇧H')}
+    {@attach tooltip('Highlight', { ctrl: true, shift: true, key: 'H' } satisfies Shortcut)}
   >
     <Highlighter size={16} />
     <span class="block absolute bottom-[5px] left-[5px] right-[21px] h-[3px] rounded-[2px] pointer-events-none bg-(--swatch-bg)" data-color={lastUsed}></span>

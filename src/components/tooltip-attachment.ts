@@ -1,81 +1,40 @@
+import { mount, unmount } from 'svelte'
 import type { Attachment } from 'svelte/attachments'
+import type { Shortcut } from './shortcut.ts'
+import { hoverAttachment } from './popup-attachment.ts'
+import TooltipContainer from './tooltip-container.svelte'
 
 const SHOW_DELAY = 400 // ms dwell before tooltip appears
 
 /**
- * Attachment that shows a small tooltip above the element on hover.
+ * Attachment that shows a tooltip above the element on hover.
  *
- * Suppresses the tooltip while the element is disabled. The shortcut
- * string (if any) must be pre-formatted by the caller — pass the output
- * of formatShortcut or an equivalent string.
+ * Suppresses the tooltip while the element is disabled. Uses the shared
+ * hover lifecycle from popup-attachment (hoverAttachment) for consistent
+ * show/hide timing behaviour.
  *
  * @param label - Accessible label displayed in the tooltip.
- * @param shortcutStr - Optional pre-formatted shortcut string (e.g. `⌘B`).
+ * @param shortcut - Optional keyboard shortcut displayed alongside the label.
  */
-export function tooltip(label: string, shortcutStr?: string): Attachment {
+export function tooltip(label: string, shortcut?: Shortcut): Attachment {
   return (element: Element) => {
-    let el: HTMLSpanElement | null = null
-    let showTimeout: ReturnType<typeof setTimeout> | null = null
+    let instance: ReturnType<typeof mount> | null = null
+    const container = document.createElement('div')
 
-    const show = () => {
-      const rect = element.getBoundingClientRect()
-      el = document.createElement('span')
-      el.style.cssText = [
-        'position:fixed',
-        `left:${rect.left + rect.width / 2}px`,
-        `bottom:${window.innerHeight - rect.top + 6}px`,
-        'transform:translateX(-50%)',
-        'white-space:nowrap',
-        'font-size:11px',
-        'padding:3px 8px',
-        'border-radius:4px',
-        'pointer-events:none',
-        'z-index:100',
-        'background:var(--tooltip-bg)',
-        'color:var(--tooltip-color)',
-      ].join(';')
-
-      const text = document.createTextNode(label)
-      el.appendChild(text)
-
-      if (shortcutStr) {
-        const kbd = document.createElement('kbd')
-        kbd.textContent = shortcutStr
-        kbd.style.cssText = 'opacity:0.65;font-family:inherit;margin-left:4px'
-        el.appendChild(kbd)
-      }
-
-      document.body.appendChild(el)
-    }
-
-    const hide = () => {
-      el?.remove()
-      el = null
-    }
-
-    const cancelShow = () => {
-      if (showTimeout) { clearTimeout(showTimeout); showTimeout = null }
-    }
-
-    const onEnter = () => {
+    const doShow = (x: number, anchorTop: number) => {
       if ((element as HTMLButtonElement).disabled) return
-      cancelShow()
-      showTimeout = setTimeout(() => { showTimeout = null; show() }, SHOW_DELAY)
+      document.body.appendChild(container)
+      instance = mount(TooltipContainer, {
+        target: container,
+        props: { label, shortcut, x, anchorTop },
+      })
     }
 
-    const onLeave = () => {
-      cancelShow()
-      hide()
+    const doHide = () => {
+      if (instance) { unmount(instance); instance = null }
+      container.remove()
     }
 
-    element.addEventListener('mouseenter', onEnter)
-    element.addEventListener('mouseleave', onLeave)
-
-    return () => {
-      element.removeEventListener('mouseenter', onEnter)
-      element.removeEventListener('mouseleave', onLeave)
-      cancelShow()
-      hide()
-    }
+    return hoverAttachment(doShow, doHide, { openDelay: SHOW_DELAY })(element)
   }
 }
