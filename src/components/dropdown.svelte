@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
+  import { clickOutside } from './popup-attachment.ts'
 
   let {
     trigger,
@@ -21,15 +22,7 @@
     open = false
   }
 
-  function setupOutsideClick(node: HTMLElement) {
-    const handler = (e: MouseEvent) => {
-      if (open && !node.contains(e.target as Node)) {
-        open = false
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }
+  const setupOutsideClick = clickOutside(close)
 </script>
 
 <div class="relative" {@attach setupOutsideClick}>

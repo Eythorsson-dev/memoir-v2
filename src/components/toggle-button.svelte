@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import Button from './button.svelte'
-  import type { Shortcut } from './button.svelte'
+  import type { Shortcut } from './shortcut.ts'
 
   let {
     label,
