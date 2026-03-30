@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { BlockEditor } from './BlockEditor'
-import { BlockEditorWithToolbar } from './BlockEditorWithToolbar'
 import { Blocks, TextBlock, OrderedListBlock, UnorderedListBlock, type Block } from '../blocks/blocks'
 import { Text, type InlineTypes } from '../text/text'
 import { BLOCK_EDITOR_EVENT_NAMES } from './events'
@@ -14,7 +13,7 @@ function makeContainer(): HTMLElement {
   return div
 }
 
-function cleanup(editor: BlockEditor | BlockEditorWithToolbar, container: HTMLElement): void {
+function cleanup(editor: BlockEditor, container: HTMLElement): void {
   editor.destroy()
   container.remove()
 }
@@ -1121,90 +1120,6 @@ describe('cross-block inline operations', () => {
   })
 })
 
-// ─── BlockEditorWithToolbar ───────────────────────────────────────────────────
-
-describe('BlockEditorWithToolbar', () => {
-  it('constructs with one empty block when no initial given', () => {
-    const container = makeContainer()
-    const editor = new BlockEditorWithToolbar(container)
-    expect(editor.getValue().blocks).toHaveLength(1)
-    cleanup(editor, container)
-  })
-
-  it('getValue / setValue / addEventListener work', () => {
-    const container = makeContainer()
-    const editor = new BlockEditorWithToolbar(container)
-    const created: string[] = []
-    editor.addEventListener('blockCreated', (e) => created.push(e.id))
-
-    const newState = Blocks.from([dto('x', 'foo')])
-    editor.setValue(newState)
-    expect(editor.getValue().blocks[0].id).toBe('x')
-
-    // Fire Enter to create a block and confirm addEventListener works through toolbar
-    getEditable(container).focus()
-    setCursor(container, 'x', 3)
-    keydown(container, 'Enter')
-    expect(created).toHaveLength(1)
-
-    cleanup(editor, container)
-  })
-
-  it('Bold button click → getValue block has Bold inline', () => {
-    const container = makeContainer()
-    const editor = new BlockEditorWithToolbar(container, Blocks.from([dto('a', 'Hello')]))
-    const editable = container.querySelector('.block-editor-editable') as HTMLElement
-    editable.focus()
-    setRange(container, 'a', 0, 'a', 5)
-    const boldBtn = container.querySelector('[data-inline-type="Bold"]') as HTMLButtonElement
-    boldBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
-    const block = editor.getValue().blocks[0] as TextBlock
-    expect(block.data.inline).toContainEqual({ type: 'Bold', start: 0, end: 5 })
-    cleanup(editor, container)
-  })
-
-  it('Bold button click twice → removed', () => {
-    const container = makeContainer()
-    const editor = new BlockEditorWithToolbar(container, Blocks.from([dto('a', 'Hello')]))
-    const editable = container.querySelector('.block-editor-editable') as HTMLElement
-    editable.focus()
-    setRange(container, 'a', 0, 'a', 5)
-    const boldBtn = container.querySelector('[data-inline-type="Bold"]') as HTMLButtonElement
-    boldBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
-    boldBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
-    const block = editor.getValue().blocks[0] as TextBlock
-    expect(block.data.inline).toHaveLength(0)
-    cleanup(editor, container)
-  })
-
-  it('Indent button click → getValue reflects indent', () => {
-    const container = makeContainer()
-    const editor = new BlockEditorWithToolbar(container, Blocks.from([dto('a', 'AA'), dto('b', 'BB')]))
-    const editable = container.querySelector('.block-editor-editable') as HTMLElement
-    editable.focus()
-    setCursor(container, 'b', 0)
-    const indentBtn = container.querySelector('[aria-label="Indent"]') as HTMLButtonElement
-    indentBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
-    const blocks = editor.getValue()
-    expect(find(blocks, 'a').children.map((x: Block<unknown>) => x.id)).toContain('b')
-    cleanup(editor, container)
-  })
-
-  it('Outdent button click → getValue reflects unindent', () => {
-    const container = makeContainer()
-    const editor = new BlockEditorWithToolbar(container, Blocks.from([dto('a', 'AA', [dto('b', 'BB')])]))
-    const editable = container.querySelector('.block-editor-editable') as HTMLElement
-    editable.focus()
-    setCursor(container, 'b', 0)
-    const outdentBtn = container.querySelector('[aria-label="Outdent"]') as HTMLButtonElement
-    outdentBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
-    const blocks = editor.getValue()
-    expect(blocks.blocks.map(x => x.id)).toContain('b')
-    expect(find(blocks, 'a').children).toHaveLength(0)
-    cleanup(editor, container)
-  })
-})
-
 // ─── undo/redo events ─────────────────────────────────────────────────────────
 
 describe('undo/redo events', () => {
@@ -1311,21 +1226,6 @@ describe('undo/redo events', () => {
   })
 })
 
-// ─── Record<InlineTypes, ...> exhaustiveness ─────────────────────────────────
-
-describe('Record<InlineTypes, HTMLButtonElement> exhaustiveness', () => {
-  it('toolbar has buttons for all InlineTypes', () => {
-    const container = makeContainer()
-    const editor = new BlockEditorWithToolbar(container)
-    // If any InlineType is missing a button, TypeScript would error at compile time.
-    // At runtime, verify all known types have a button
-    const types: InlineTypes[] = ['Bold', 'Italic', 'Underline']
-    for (const type of types) {
-      expect(container.querySelector(`[data-inline-type="${type}"]`)).not.toBeNull()
-    }
-    cleanup(editor, container)
-  })
-})
 
 // ─── isBlockTypeActive ────────────────────────────────────────────────────────
 

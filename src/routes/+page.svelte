@@ -1,6 +1,7 @@
 <script lang="ts">
-    import { Blocks, TextBlock, Text, BlockEditorWithToolbar, BLOCK_EDITOR_EVENT_NAMES } from "$lib/block-editor";
-    import type { BlockSelection, BlockEditorEventDtoMap } from "$lib/block-editor";
+    import { Blocks, TextBlock, Text } from "$lib/block-editor";
+    import type { BlockSelection } from "$lib/block-editor";
+    import BlockEditorWithToolbar from "../components/block-editor-with-toolbar.svelte";
     import ResizableLayout from "../components/resizable-layout.svelte";
     import CollapsibleSection from "../components/collapsible-section.svelte";
     import CodePreview from "../components/code-preview.svelte";
@@ -33,33 +34,11 @@
 
     let selection = $state<BlockSelection | null>(null);
     let blocks = $state(initialBlocks.blocks);
-    const log = localState<LogEntry<keyof BlockEditorEventDtoMap>[]>('event-log', []);
+    const log = localState<LogEntry[]>("event-log", []);
 
-    const selectionOpen = localState('inspector-selection', true)
-    const stateOpen     = localState('inspector-state',     true)
-    const eventLogOpen  = localState('inspector-event-log', true)
-
-    function mountEditor(node: HTMLElement) {
-        const editor = new BlockEditorWithToolbar(node, initialBlocks);
-
-        editor.addEventListener("selectionChange", (sel) => {
-            selection = sel;
-        });
-
-        const stateEvents = BLOCK_EDITOR_EVENT_NAMES.filter(
-            (n): n is Exclude<typeof n, 'selectionChange'> => n !== 'selectionChange'
-        );
-
-        for (const name of stateEvents) {
-            editor.addEventListener(name, (payload) => {
-                blocks = editor.getValue().blocks;
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(blocks));
-                log.value = [{ timestamp: Date.now(), name, payload }, ...log.value].slice(0, 50);
-            });
-        }
-
-        return () => editor.destroy();
-    }
+    const selectionOpen = localState("inspector-selection", true);
+    const stateOpen = localState("inspector-state", true);
+    const eventLogOpen = localState("inspector-event-log", true);
 </script>
 
 <ResizableLayout>
@@ -68,7 +47,17 @@
             <div class="absolute top-4 right-4 z-10">
                 <ThemeToggle />
             </div>
-            <div class="max-w-2xl mx-auto px-6 pt-12 pb-8" {@attach mountEditor}></div>
+            <div class="max-w-2xl mx-auto px-6 pt-12 pb-8">
+                <BlockEditorWithToolbar
+                    initial={initialBlocks}
+                    onselectionchange={(sel) => (selection = sel)}
+                    onchange={({ name, payload, blocks: newBlocks }) => {
+                        blocks = newBlocks.blocks;
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(newBlocks.blocks));
+                        log.value = [{ timestamp: Date.now(), name, payload }, ...log.value].slice(0, 50);
+                    }}
+                />
+            </div>
         </div>
     {/snippet}
 
