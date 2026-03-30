@@ -2,6 +2,7 @@
   import { Heading, ChevronDown } from '@lucide/svelte'
   import type { HeaderLevel } from '$lib/block-editor'
   import Dropdown from './dropdown.svelte'
+  import { tooltip } from './tooltip-attachment.ts'
 
   const LEVELS = [1, 2, 3] as const satisfies ReadonlyArray<HeaderLevel>
 
@@ -17,18 +18,16 @@
 <Dropdown>
   {#snippet trigger({ open, toggle })}
     <button
-      class="group relative flex shrink-0 items-center gap-[2px] h-7 px-[6px] border border-transparent rounded-[5px] bg-transparent text-(--toolbar-fg) cursor-pointer [&_svg]:pointer-events-none [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg) [&:active:not(:disabled)]:bg-(--toolbar-btn-active-bg) aria-[pressed=true]:bg-(--toolbar-btn-active-bg) aria-[pressed=true]:border-(--toolbar-btn-active-border) aria-[pressed=true]:text-(--toolbar-btn-active-color)"
+      class="relative flex shrink-0 items-center gap-[2px] h-7 px-[6px] border border-transparent rounded-[5px] bg-transparent text-(--toolbar-fg) cursor-pointer [&_svg]:pointer-events-none [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg) [&:active:not(:disabled)]:bg-(--toolbar-btn-active-bg) aria-[pressed=true]:bg-(--toolbar-btn-active-bg) aria-[pressed=true]:border-(--toolbar-btn-active-border) aria-[pressed=true]:text-(--toolbar-btn-active-color)"
       aria-label="Heading"
       aria-pressed={activeLevel !== null}
       aria-haspopup="true"
       aria-expanded={open}
       onmousedown={(e) => { e.preventDefault(); toggle() }}
+      {@attach tooltip('Heading')}
     >
       <Heading size={16} />
       <ChevronDown size={14} />
-      <span class="hidden group-[&:hover:not(:disabled)]:block absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 whitespace-nowrap bg-(--tooltip-bg) text-(--tooltip-color) text-[11px] px-2 py-[3px] rounded pointer-events-none z-[100]">
-        Heading
-      </span>
     </button>
   {/snippet}
 

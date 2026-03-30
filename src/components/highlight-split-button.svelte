@@ -2,6 +2,7 @@
   import { Highlighter, ChevronDown } from '@lucide/svelte'
   import type { HighlightColor } from '$lib/block-editor'
   import Dropdown from './dropdown.svelte'
+  import { tooltip } from './tooltip-attachment.ts'
 
   const COLORS: HighlightColor[] = ['red', 'amber', 'green', 'blue', 'violet', 'fuchsia']
 
@@ -24,16 +25,14 @@
 
 <div class="flex items-center">
   <button
-    class="group relative flex items-center justify-center border border-transparent bg-transparent text-(--toolbar-fg) cursor-pointer [&_svg]:pointer-events-none rounded-l-[5px] px-1 pt-[2px] pb-2 w-[30px] h-7 [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg) [&:active:not(:disabled)]:bg-(--toolbar-btn-active-bg) aria-[pressed=true]:bg-(--toolbar-btn-active-bg) aria-[pressed=true]:border-(--toolbar-btn-active-border) aria-[pressed=true]:text-(--toolbar-btn-active-color)"
+    class="relative flex items-center justify-center border border-transparent bg-transparent text-(--toolbar-fg) cursor-pointer [&_svg]:pointer-events-none rounded-l-[5px] px-1 pt-[2px] pb-2 w-[30px] h-7 [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg) [&:active:not(:disabled)]:bg-(--toolbar-btn-active-bg) aria-[pressed=true]:bg-(--toolbar-btn-active-bg) aria-[pressed=true]:border-(--toolbar-btn-active-border) aria-[pressed=true]:text-(--toolbar-btn-active-color)"
     aria-label="Highlight"
     aria-pressed={active}
     onmousedown={(e) => { e.preventDefault(); onmainclick?.() }}
+    {@attach tooltip('Highlight', '⌘⇧H')}
   >
     <Highlighter size={16} />
     <span class="block absolute bottom-[5px] left-[5px] right-[21px] h-[3px] rounded-[2px] pointer-events-none bg-(--swatch-bg)" data-color={lastUsed}></span>
-    <span class="hidden group-[&:hover:not(:disabled)]:block absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 whitespace-nowrap bg-(--tooltip-bg) text-(--tooltip-color) text-[11px] px-2 py-[3px] rounded pointer-events-none z-[100]">
-      Highlight<kbd class="opacity-[0.65] font-[inherit] ml-1">⌘⇧H</kbd>
-    </span>
   </button>
 
   <Dropdown>
