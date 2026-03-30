@@ -2,7 +2,7 @@
   import { Heading, ChevronDown } from '@lucide/svelte'
   import type { HeaderLevel } from '$lib/block-editor'
   import Dropdown from '../dropdown.svelte'
-  import { tooltip } from '../tooltip-attachment.ts'
+  import ToggleButton from '../toggle-button.svelte'
 
   const LEVELS = [1, 2, 3] as const satisfies ReadonlyArray<HeaderLevel>
 
@@ -17,25 +17,17 @@
 
 <Dropdown>
   {#snippet trigger({ open, toggle })}
-    <button
-      class="
-        relative flex shrink-0 items-center gap-0.5 h-7 px-1.5
-        border border-transparent rounded-[5px]
-        bg-transparent text-(--toolbar-fg) cursor-pointer
-        [&_svg]:pointer-events-none
-        [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg) [&:active:not(:disabled)]:bg-(--toolbar-btn-active-bg)
-        aria-pressed:bg-(--toolbar-btn-active-bg) aria-pressed:border-(--toolbar-btn-active-border) aria-pressed:text-(--toolbar-btn-active-color)
-      "
-      aria-label="Heading"
-      aria-pressed={activeLevel !== null}
+    <ToggleButton
+      label="Heading"
+      pressed={activeLevel !== null}
+      class="h-7 px-1.5 gap-0.5 shrink-0"
       aria-haspopup="true"
       aria-expanded={open}
       onmousedown={(e) => { e.preventDefault(); toggle() }}
-      {@attach tooltip('Heading')}
     >
       <Heading size={16} />
       <ChevronDown size={14} />
-    </button>
+    </ToggleButton>
   {/snippet}
 
   {#snippet menu({ close })}
