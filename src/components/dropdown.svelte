@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
-  import { clickOutside } from './popup-attachment.ts'
+  import { clickOutside, popupOnClick } from './popup-attachment.ts'
 
   let {
     trigger,
@@ -13,6 +13,7 @@
   } = $props()
 
   let open = $state(false)
+  let wrapperEl = $state<HTMLElement | null>(null)
 
   function toggle() {
     open = !open
@@ -25,9 +26,11 @@
   const setupOutsideClick = clickOutside(close)
 </script>
 
-<div class="relative" {@attach setupOutsideClick}>
+<div bind:this={wrapperEl} {@attach setupOutsideClick}>
   {@render trigger({ open, toggle })}
-  {#if open}
-    {@render menu({ close })}
+  {#if open && wrapperEl}
+    <div style="position: fixed; z-index: 200;" {@attach popupOnClick(wrapperEl)}>
+      {@render menu({ close })}
+    </div>
   {/if}
 </div>
