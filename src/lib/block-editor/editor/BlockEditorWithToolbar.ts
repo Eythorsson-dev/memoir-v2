@@ -104,6 +104,55 @@ export class BlockEditorWithToolbar {
     sep1.setAttribute('aria-hidden', 'true')
     this.#toolbar.appendChild(sep1)
 
+    // ── Heading split button ────────────────────────────────────────────────
+
+    const headingWrapper = document.createElement('div')
+    headingWrapper.className = 'toolbar-heading-split'
+    headingWrapper.style.position = 'relative'
+
+    this.#headingBtn = document.createElement('button')
+    this.#headingBtn.className = 'heading-main-btn'
+    this.#headingBtn.setAttribute('aria-label', 'Heading')
+    this.#headingBtn.setAttribute('aria-pressed', 'false')
+    this.#headingBtn.setAttribute('aria-haspopup', 'true')
+    this.#headingBtn.setAttribute('aria-expanded', 'false')
+    this.#headingBtn.appendChild(createElement(Heading))
+    this.#headingBtn.appendChild(createElement(ChevronDown))
+    addTooltip(this.#headingBtn, 'Heading')
+    this.#headingBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      this.#toggleHeadingPicker()
+    })
+    headingWrapper.appendChild(this.#headingBtn)
+
+    this.#headingPicker = document.createElement('div')
+    this.#headingPicker.className = 'heading-picker'
+    this.#headingPicker.setAttribute('role', 'dialog')
+    this.#headingPicker.setAttribute('aria-label', 'Heading level')
+
+    for (const level of [1, 2, 3] as const) {
+      const btn = document.createElement('button')
+      btn.className = 'heading-picker-option'
+      btn.setAttribute('aria-label', `Heading ${level}`)
+      btn.setAttribute('aria-pressed', 'false')
+      btn.textContent = `H${level}`
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault()
+        this.#closeHeadingPicker()
+        this.#editor.convertToHeader(level)
+      })
+      this.#headingPicker.appendChild(btn)
+      this.#headingLevelBtns.set(level, btn)
+    }
+
+    headingWrapper.appendChild(this.#headingPicker)
+    this.#toolbar.appendChild(headingWrapper)
+
+    const sep1b = document.createElement('div')
+    sep1b.className = 'toolbar-separator'
+    sep1b.setAttribute('aria-hidden', 'true')
+    this.#toolbar.appendChild(sep1b)
+
     this.#inlineButtons = {} as Record<InlineTypes, HTMLButtonElement>
     for (const { type, icon, shortcut } of inlineDefs) {
       const btn = document.createElement('button')
@@ -262,55 +311,6 @@ export class BlockEditorWithToolbar {
       this.#editor.convertBlockType(newType)
     })
     this.#toolbar.appendChild(this.#unorderedListBtn)
-
-    const sep4 = document.createElement('div')
-    sep4.className = 'toolbar-separator'
-    sep4.setAttribute('aria-hidden', 'true')
-    this.#toolbar.appendChild(sep4)
-
-    // ── Heading split button ────────────────────────────────────────────────
-
-    const headingWrapper = document.createElement('div')
-    headingWrapper.className = 'toolbar-heading-split'
-    headingWrapper.style.position = 'relative'
-
-    this.#headingBtn = document.createElement('button')
-    this.#headingBtn.className = 'heading-main-btn'
-    this.#headingBtn.setAttribute('aria-label', 'Heading')
-    this.#headingBtn.setAttribute('aria-pressed', 'false')
-    this.#headingBtn.setAttribute('aria-haspopup', 'true')
-    this.#headingBtn.setAttribute('aria-expanded', 'false')
-    this.#headingBtn.appendChild(createElement(Heading))
-    this.#headingBtn.appendChild(createElement(ChevronDown))
-    addTooltip(this.#headingBtn, 'Heading')
-    this.#headingBtn.addEventListener('mousedown', (e) => {
-      e.preventDefault()
-      this.#toggleHeadingPicker()
-    })
-    headingWrapper.appendChild(this.#headingBtn)
-
-    this.#headingPicker = document.createElement('div')
-    this.#headingPicker.className = 'heading-picker'
-    this.#headingPicker.setAttribute('role', 'dialog')
-    this.#headingPicker.setAttribute('aria-label', 'Heading level')
-
-    for (const level of [1, 2, 3] as const) {
-      const btn = document.createElement('button')
-      btn.className = 'heading-picker-option'
-      btn.setAttribute('aria-label', `Heading ${level}`)
-      btn.setAttribute('aria-pressed', 'false')
-      btn.textContent = `H${level}`
-      btn.addEventListener('mousedown', (e) => {
-        e.preventDefault()
-        this.#closeHeadingPicker()
-        this.#editor.convertToHeader(level)
-      })
-      this.#headingPicker.appendChild(btn)
-      this.#headingLevelBtns.set(level, btn)
-    }
-
-    headingWrapper.appendChild(this.#headingPicker)
-    this.#toolbar.appendChild(headingWrapper)
 
     container.appendChild(this.#toolbar)
 
