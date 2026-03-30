@@ -138,8 +138,9 @@ export class BlockEditor {
         try {
           const block = this.#state.getBlock(id)
           return { id, blockType: block.blockType, data: block.data }
-        } catch {
-          return null  // block was removed; skip
+        } catch (err) {
+          if (err instanceof Error) return null  // block was removed; skip
+          throw err
         }
       },
       {
@@ -197,42 +198,48 @@ export class BlockEditor {
     return this.#emitter.addEventListener(event, handler)
   }
 
+  /**
+   * Resolves the current selection to a `[fromId, toId]` pair.
+   * Returns `null` when there is no selection.
+   */
+  #getSelectionBlockIds(): { sel: BlockSelection; fromId: BlockId; toId: BlockId } | null {
+    const sel = this.#getSelection()
+    if (!sel) return null
+    const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
+    const toId   = sel instanceof BlockRange ? sel.end.blockId   : sel.blockId
+    return { sel, fromId, toId }
+  }
+
   /** Indent current block range; re-render preserving full BlockSelection. */
   indent(): void {
-    const sel = this.#getSelection()
-    if (!sel) return
-    this.#pendingSelectionBefore = sel
-    const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
-    const toId = sel instanceof BlockRange ? sel.end.blockId : sel.blockId
+    const r = this.#getSelectionBlockIds()
+    if (!r) return
+    this.#pendingSelectionBefore = r.sel
     const oldState = this.#state
-    this.#state = this.#state.indent(fromId, toId)
-    this.#render(sel)
+    this.#state = this.#state.indent(r.fromId, r.toId)
+    this.#render(r.sel)
     this.#emitEvents(oldState)
   }
 
   /** Unindent current block range; re-render preserving full BlockSelection. */
   outdent(): void {
-    const sel = this.#getSelection()
-    if (!sel) return
-    this.#pendingSelectionBefore = sel
-    const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
-    const toId = sel instanceof BlockRange ? sel.end.blockId : sel.blockId
+    const r = this.#getSelectionBlockIds()
+    if (!r) return
+    this.#pendingSelectionBefore = r.sel
     const oldState = this.#state
-    this.#state = this.#state.unindent(fromId, toId)
-    this.#render(sel)
+    this.#state = this.#state.unindent(r.fromId, r.toId)
+    this.#render(r.sel)
     this.#emitEvents(oldState)
   }
 
   /** Converts all blocks in the current selection to `newType`. */
   convertBlockType(newType: Exclude<BlockTypes, 'header'>): void {
-    const sel = this.#getSelection()
-    if (!sel) return
-    this.#pendingSelectionBefore = sel
-    const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
-    const toId   = sel instanceof BlockRange ? sel.end.blockId   : sel.blockId
+    const r = this.#getSelectionBlockIds()
+    if (!r) return
+    this.#pendingSelectionBefore = r.sel
     const oldState = this.#state
-    this.#state = this.#state.convertType(fromId, toId, newType)
-    this.#render(sel)
+    this.#state = this.#state.convertType(r.fromId, r.toId, newType)
+    this.#render(r.sel)
     this.#emitEvents(oldState)
   }
 
@@ -242,52 +249,54 @@ export class BlockEditor {
    * them to plain text instead (toggle behaviour).
    */
   convertToHeader(level: HeaderLevel): void {
-    const sel = this.#getSelection()
-    if (!sel) return
-    this.#pendingSelectionBefore = sel
-    const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
-    const toId   = sel instanceof BlockRange ? sel.end.blockId   : sel.blockId
+    const r = this.#getSelectionBlockIds()
+    if (!r) return
+    this.#pendingSelectionBefore = r.sel
     const oldState = this.#state
-    if (this.#state.isBlockTypeActive(fromId, toId, 'header') &&
-        this.#state.getHeaderLevel(fromId) === level) {
-      this.#state = this.#state.convertType(fromId, toId, 'text')
+    if (this.#state.getCommonHeaderLevel(r.fromId, r.toId) === level) {
+      this.#state = this.#state.convertType(r.fromId, r.toId, 'text')
     } else {
-      this.#state = this.#state.convertToHeader(fromId, toId, level)
+      this.#state = this.#state.convertToHeader(r.fromId, r.toId, level)
     }
-    this.#render(sel)
+    this.#render(r.sel)
     this.#emitEvents(oldState)
   }
 
   /**
    * Returns the common header level of the current selection, or `null` if
    * the selection is empty, not a header, or contains mixed levels.
+   *
+   * @remarks
+   * Returns `null` when the selection references a block that no longer
+   * exists (stale selection during DOM reconciliation).
    */
   getActiveHeaderLevel(): HeaderLevel | null {
-    const sel = this.#getSelection()
-    if (!sel) return null
-    const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
-    const toId   = sel instanceof BlockRange ? sel.end.blockId   : sel.blockId
+    const r = this.#getSelectionBlockIds()
+    if (!r) return null
     try {
-      if (!this.#state.isBlockTypeActive(fromId, toId, 'header')) return null
-      return this.#state.getHeaderLevel(fromId)
-    } catch {
-      return null
+      return this.#state.getCommonHeaderLevel(r.fromId, r.toId)
+    } catch (err) {
+      if (err instanceof Error) return null  // stale selection
+      throw err
     }
   }
 
   /**
    * Returns true only when every block in the current selection is `type`.
    * Returns false for no selection or a mixed selection.
+   *
+   * @remarks
+   * Returns `false` when the selection references a block that no longer
+   * exists (stale selection during DOM reconciliation).
    */
   isBlockTypeActive(type: BlockTypes): boolean {
-    const sel = this.#getSelection()
-    if (!sel) return false
-    const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
-    const toId   = sel instanceof BlockRange ? sel.end.blockId   : sel.blockId
+    const r = this.#getSelectionBlockIds()
+    if (!r) return false
     try {
-      return this.#state.isBlockTypeActive(fromId, toId, type)
-    } catch {
-      return false
+      return this.#state.isBlockTypeActive(r.fromId, r.toId, type)
+    } catch (err) {
+      if (err instanceof Error) return false  // stale selection
+      throw err
     }
   }
 
@@ -336,8 +345,9 @@ export class BlockEditor {
     if (!(sel instanceof BlockRange)) return false
     try {
       return this.#state.isInlineActive(sel, type)
-    } catch {
-      return false
+    } catch (err) {
+      if (err instanceof Error) return false  // stale selection
+      throw err
     }
   }
 
@@ -353,8 +363,9 @@ export class BlockEditor {
     if (!(sel instanceof BlockRange)) return null
     try {
       return this.#state.getActiveInline(sel, type)
-    } catch {
-      return null
+    } catch (err) {
+      if (err instanceof Error) return null  // stale selection
+      throw err
     }
   }
 
