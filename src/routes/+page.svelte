@@ -1,7 +1,7 @@
 <script lang="ts">
     import { Blocks, TextBlock, Text } from "$lib/block-editor";
     import type { BlockSelection } from "$lib/block-editor";
-    import BlockEditorWithToolbar from "../components/block-editor-with-toolbar.svelte";
+    import BlockEditorWithToolbar from "../components/block-editor/block-editor-with-toolbar.svelte";
     import ResizableLayout from "../components/resizable-layout.svelte";
     import CollapsibleSection from "../components/collapsible-section.svelte";
     import CodePreview from "../components/code-preview.svelte";
