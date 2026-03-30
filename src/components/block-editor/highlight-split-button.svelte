@@ -2,7 +2,7 @@
   import { Highlighter, ChevronDown } from '@lucide/svelte'
   import type { HighlightColor } from '$lib/block-editor'
   import Dropdown from '../dropdown.svelte'
-  import { tooltip } from '../tooltip-attachment.ts'
+  import { tooltip } from '../popup-attachment.ts'
   import type { Shortcut } from '../shortcut.ts'
 
   const COLORS: HighlightColor[] = ['red', 'amber', 'green', 'blue', 'violet', 'fuchsia']
@@ -65,7 +65,6 @@
     {#snippet menu({ close })}
       <div
         class="
-          absolute top-[calc(100%+8px)] left-0 z-[200]
           bg-(--panel-bg) text-(--fg) border border-(--border) rounded-[10px]
           p-[10px] flex flex-col gap-2 min-w-48
           shadow-[0_2px_4px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.18)]

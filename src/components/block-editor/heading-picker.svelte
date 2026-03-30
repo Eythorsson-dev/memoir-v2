@@ -33,9 +33,8 @@
   {#snippet menu({ close })}
     <div
       class="
-        absolute top-[calc(100%+4px)] left-0
         bg-(--panel-bg) text-(--fg) border border-(--border) rounded-md
-        p-1 flex flex-col gap-0.5 z-200 min-w-14
+        p-1 flex flex-col gap-0.5 min-w-14
         shadow-[0_2px_4px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.18)]
       "
       role="dialog"
