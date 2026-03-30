@@ -274,6 +274,29 @@ class FlatBlock<T extends BlockTypes = BlockTypes> {
   }
 }
 
+/**
+ * Accepted by `addBefore`, `addAfter`, `appendChild`, and `prependChild`.
+ * When `blockType` is omitted the type is inherited from the neighbour
+ * (falling back to `'text'` for headers).
+ */
+type NewBlock<T extends BlockTypes = BlockTypes> =
+  | { id: BlockId; data: Text }
+  | { id: BlockId; blockType: T; data: BlockTypeMap[T] }
+
+/**
+ * Resolves a `NewBlock` to a concrete `[blockType, data]` pair.
+ * If the caller specified a `blockType`, use it as-is.
+ * Otherwise inherit from `target`, falling back to `'text'` for headers.
+ */
+function resolveNewBlock<T extends BlockTypes>(
+  block: NewBlock<T>,
+  target: FlatBlock,
+): [BlockTypes, BlockTypeMap[BlockTypes]] {
+  if ('blockType' in block) return [block.blockType, block.data]
+  const inherited: Exclude<BlockTypes, 'header'> = target.blockType === 'header' ? 'text' : target.blockType
+  return [inherited, block.data]
+}
+
 // ─── Validation ────────────────────────────────────────────────────────────────
 
 function validate(blocks: ReadonlyArray<FlatBlock>): void {
@@ -604,12 +627,12 @@ export class Blocks {
    * @throws if no block with `id` exists.
    * @throws if `block.id` already exists (via constructor).
    */
-  addBefore(id: BlockId, block: { id: BlockId; data: Text }): Blocks {
+  addBefore<T extends BlockTypes>(id: BlockId, block: NewBlock<T>): Blocks {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`No block with id '${id}' found`)
     const target = this.#blocks[idx]
-    const newType: Exclude<BlockTypes, 'header'> = target.blockType === 'header' ? 'text' : target.blockType
-    const newBlock = new FlatBlock(block.id, newType, block.data, target.indent)
+    const [blockType, data] = resolveNewBlock(block, target)
+    const newBlock = new FlatBlock(block.id, blockType, data, target.indent)
     return new Blocks([
       ...this.#blocks.slice(0, idx),
       newBlock,
@@ -623,12 +646,12 @@ export class Blocks {
    * @throws if no block with `id` exists.
    * @throws if `block.id` already exists (via constructor).
    */
-  addAfter(id: BlockId, block: { id: BlockId; data: Text }): Blocks {
+  addAfter<T extends BlockTypes>(id: BlockId, block: NewBlock<T>): Blocks {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`No block with id '${id}' found`)
     const target = this.#blocks[idx]
-    const newType: Exclude<BlockTypes, 'header'> = target.blockType === 'header' ? 'text' : target.blockType
-    const newBlock = new FlatBlock(block.id, newType, block.data, target.indent)
+    const [blockType, data] = resolveNewBlock(block, target)
+    const newBlock = new FlatBlock(block.id, blockType, data, target.indent)
     return new Blocks([
       ...this.#blocks.slice(0, idx + 1),
       newBlock,
@@ -642,7 +665,7 @@ export class Blocks {
    * @throws if no block with `id` exists.
    * @throws if `block.id` already exists (via constructor).
    */
-  appendChild(id: BlockId, block: { id: BlockId; data: Text }): Blocks {
+  appendChild<T extends BlockTypes>(id: BlockId, block: NewBlock<T>): Blocks {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`No block with id '${id}' found`)
     const target = this.#blocks[idx]
@@ -651,8 +674,8 @@ export class Blocks {
     while (insertAt < this.#blocks.length && this.#blocks[insertAt].indent > targetIndent) {
       insertAt++
     }
-    const newType: Exclude<BlockTypes, 'header'> = target.blockType === 'header' ? 'text' : target.blockType
-    const newBlock = new FlatBlock(block.id, newType, block.data, targetIndent + 1)
+    const [blockType, data] = resolveNewBlock(block, target)
+    const newBlock = new FlatBlock(block.id, blockType, data, targetIndent + 1)
     return new Blocks([
       ...this.#blocks.slice(0, insertAt),
       newBlock,
@@ -666,12 +689,12 @@ export class Blocks {
    * @throws if no block with `id` exists.
    * @throws if `block.id` already exists (via constructor).
    */
-  prependChild(id: BlockId, block: { id: BlockId; data: Text }): Blocks {
+  prependChild<T extends BlockTypes>(id: BlockId, block: NewBlock<T>): Blocks {
     const idx = this.#blocks.findIndex(b => b.id === id)
     if (idx === -1) throw new Error(`No block with id '${id}' found`)
     const target = this.#blocks[idx]
-    const newType: Exclude<BlockTypes, 'header'> = target.blockType === 'header' ? 'text' : target.blockType
-    const newBlock = new FlatBlock(block.id, newType, block.data, target.indent + 1)
+    const [blockType, data] = resolveNewBlock(block, target)
+    const newBlock = new FlatBlock(block.id, blockType, data, target.indent + 1)
     return new Blocks([
       ...this.#blocks.slice(0, idx + 1),
       newBlock,
@@ -1029,18 +1052,13 @@ export class Blocks {
           state = state.convertType(change.id, change.id, change.blockType)
         }
       } else if (change instanceof BlockAdded) {
-        const text = change.data instanceof Header ? change.data.text : change.data
+        const newBlock = { id: change.id, blockType: change.blockType, data: change.data }
         if (change.previousBlockId !== null) {
-          state = state.addAfter(change.previousBlockId, { id: change.id, data: text })
+          state = state.addAfter(change.previousBlockId, newBlock)
         } else if (change.parentBlockId !== null) {
-          state = state.prependChild(change.parentBlockId, { id: change.id, data: text })
+          state = state.prependChild(change.parentBlockId, newBlock)
         } else {
-          state = state.addBefore(state.#blocks[0].id, { id: change.id, data: text })
-        }
-        if (change.blockType === 'header') {
-          state = state.convertToHeader(change.id, change.id, (change.data as Header).level)
-        } else if (change.blockType !== 'text') {
-          state = state.convertType(change.id, change.id, change.blockType)
+          state = state.addBefore(state.#blocks[0].id, newBlock)
         }
       } else if (change instanceof BlockRemoved) {
         state = state.delete(change.id)

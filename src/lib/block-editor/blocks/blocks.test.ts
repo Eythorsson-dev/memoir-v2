@@ -174,6 +174,13 @@ describe('addBefore', () => {
     expect(result).not.toBe(b)
     expect(b.blocks).toHaveLength(1)
   })
+
+  it('inserts a header block when blockType and Header data are provided', () => {
+    const b = Blocks.from([dto('a')])
+    const result = b.addBefore('a', { id: 'h1', blockType: 'header', data: new Header(1, new Text('Heading', [])) })
+    expect(result.getBlock('h1')).toBeInstanceOf(HeaderBlock)
+    expect((result.getBlock('h1') as HeaderBlock).data.level).toBe(1)
+  })
 })
 
 // ─── addAfter ─────────────────────────────────────────────────────────────────
@@ -205,6 +212,13 @@ describe('addAfter', () => {
   it('throws if new block id already exists in the tree', () => {
     const b = Blocks.from([dto('a'), dto('b')])
     expect(() => b.addAfter('a', block('b'))).toThrow()
+  })
+
+  it('inserts a header block when blockType and Header data are provided', () => {
+    const b = Blocks.from([dto('a')])
+    const result = b.addAfter('a', { id: 'h1', blockType: 'header', data: new Header(2, new Text('Title', [])) })
+    expect(result.getBlock('h1')).toBeInstanceOf(HeaderBlock)
+    expect((result.getBlock('h1') as HeaderBlock).data.level).toBe(2)
   })
 })
 
@@ -263,6 +277,13 @@ describe('prependChild', () => {
   it('throws if new block id already exists', () => {
     const b = Blocks.from([dto('a'), dto('b')])
     expect(() => b.prependChild('a', block('b'))).toThrow()
+  })
+
+  it('inserts a header block when blockType and Header data are provided', () => {
+    const b = Blocks.from([dto('parent')])
+    const result = b.prependChild('parent', { id: 'h1', blockType: 'header', data: new Header(3, new Text('Sub', [])) })
+    expect(result.getBlock('h1')).toBeInstanceOf(HeaderBlock)
+    expect((result.getBlock('h1') as HeaderBlock).data.level).toBe(3)
   })
 })
 
@@ -1401,6 +1422,15 @@ describe('Blocks.fromEvents', () => {
       new BlockDataChanged('a', 'ordered-list', new Text('hello', [])),
     ])
     expect(result.getBlock('a')).toBeInstanceOf(OrderedListBlock)
+  })
+
+  it('BlockAdded with header type creates a HeaderBlock', () => {
+    const base = Blocks.from([dto('a')])
+    const result = Blocks.fromEvents(base, [
+      new BlockAdded('h1', 'header', new Header(2, new Text('Title', [])), 'a', null),
+    ])
+    expect(result.getBlock('h1')).toBeInstanceOf(HeaderBlock)
+    expect((result.getBlock('h1') as HeaderBlock).data.level).toBe(2)
   })
 })
 
