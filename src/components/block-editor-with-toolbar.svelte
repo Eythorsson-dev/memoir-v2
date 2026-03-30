@@ -3,6 +3,7 @@
   import { BlockEditor, BLOCK_EDITOR_EVENT_NAMES } from '$lib/block-editor'
   import type { Blocks, BlockEditorOptions, BlockEditorEventDtoMap, BlockSelection, HighlightColor, HeaderLevel, InlineTypes } from '$lib/block-editor'
   import Button from './button.svelte'
+  import ToggleButton from './toggle-button.svelte'
   import HeadingPicker from './heading-picker.svelte'
   import HighlightSplitButton from './highlight-split-button.svelte'
   import { Bold, Italic, Underline, Undo2, Redo2, ListIndentIncrease, ListIndentDecrease, ListOrdered, List } from '@lucide/svelte'
@@ -170,32 +171,32 @@
 
   <div class="separator" aria-hidden="true"></div>
 
-  <Button
+  <ToggleButton
     label="Bold"
     shortcut={{ ctrl: true, key: 'B' }}
     pressed={activeInlines.has('Bold')}
     onclick={() => editor?.toggleInline('Bold')}
   >
     <Bold size={16} />
-  </Button>
+  </ToggleButton>
 
-  <Button
+  <ToggleButton
     label="Italic"
     shortcut={{ ctrl: true, key: 'I' }}
     pressed={activeInlines.has('Italic')}
     onclick={() => editor?.toggleInline('Italic')}
   >
     <Italic size={16} />
-  </Button>
+  </ToggleButton>
 
-  <Button
+  <ToggleButton
     label="Underline"
     shortcut={{ ctrl: true, key: 'U' }}
     pressed={activeInlines.has('Underline')}
     onclick={() => editor?.toggleInline('Underline')}
   >
     <Underline size={16} />
-  </Button>
+  </ToggleButton>
 
   <HighlightSplitButton
     active={activeInlines.has('Highlight')}
@@ -218,21 +219,21 @@
 
   <div class="separator" aria-hidden="true"></div>
 
-  <Button
+  <ToggleButton
     label="Ordered list"
     pressed={activeBlockType === 'ordered-list'}
     onclick={() => editor?.convertBlockType(activeBlockType === 'ordered-list' ? 'text' : 'ordered-list')}
   >
     <ListOrdered size={16} />
-  </Button>
+  </ToggleButton>
 
-  <Button
+  <ToggleButton
     label="Unordered list"
     pressed={activeBlockType === 'unordered-list'}
     onclick={() => editor?.convertBlockType(activeBlockType === 'unordered-list' ? 'text' : 'unordered-list')}
   >
     <List size={16} />
-  </Button>
+  </ToggleButton>
 </div>
 
 <div {@attach mountEditor}></div>
