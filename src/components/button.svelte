@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
-  import { tooltip } from './tooltip-attachment.ts'
+  import { tooltip } from './popup-attachment.ts'
   import type { Shortcut } from './shortcut.ts'
 
   export type { Shortcut }
