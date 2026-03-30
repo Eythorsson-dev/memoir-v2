@@ -86,9 +86,9 @@
   align-items: center;
 }
 
-.heading-main-btn {
-  width: auto !important;
-  padding: 0 6px !important;
+.text-editor-toolbar .heading-main-btn {
+  width: auto;
+  padding: 0 6px;
   gap: 2px;
 }
 
@@ -111,7 +111,9 @@
   gap: 2px;
   flex-direction: column;
   z-index: 200;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.12),
+    0 8px 24px rgba(0, 0, 0, 0.18);
   min-width: 56px;
 }
 
@@ -119,13 +121,13 @@
   display: flex;
 }
 
-.heading-picker-option {
-  width: 100% !important;
-  height: 28px !important;
+.text-editor-toolbar .heading-picker-option {
+  width: 100%;
+  height: 28px;
   font-size: 12px;
   font-weight: 600;
   border-radius: 4px;
-  padding: 0 8px !important;
+  padding: 0 8px;
   justify-content: center;
 }
 
