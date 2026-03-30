@@ -41,17 +41,10 @@
       aria-label="Heading level"
     >
       {#each LEVELS as level (level)}
-        <button
-          class="
-            w-full h-7
-            text-xs font-semibold rounded-sm px-2
-            border border-transparent bg-transparent text-(--toolbar-fg) cursor-pointer
-            flex items-center justify-center
-            [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg)
-            aria-pressed:bg-(--toolbar-btn-active-bg) aria-pressed:border-(--toolbar-btn-active-border) aria-pressed:text-(--toolbar-btn-active-color)
-          "
-          aria-label="Heading {level}"
-          aria-pressed={activeLevel === level}
+        <ToggleButton
+          label="Heading {level}"
+          pressed={activeLevel === level}
+          class="w-full h-7 text-xs font-semibold px-2"
           onmousedown={(e) => {
             e.preventDefault()
             close()
@@ -59,7 +52,7 @@
           }}
         >
           H{level}
-        </button>
+        </ToggleButton>
       {/each}
     </div>
   {/snippet}
