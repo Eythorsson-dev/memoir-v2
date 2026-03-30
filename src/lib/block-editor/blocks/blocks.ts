@@ -733,6 +733,24 @@ export class Blocks {
     return block.blockType === 'header' ? (block.data as Header).level : null
   }
 
+  /**
+   * Returns the common header level across the range [`from`, `to`], or `null`
+   * if any block is not a header or the levels are mixed.
+   * @throws {Error} if `from` or `to` are not found, or `to` precedes `from`.
+   */
+  getCommonHeaderLevel(from: BlockId, to: BlockId): HeaderLevel | null {
+    const [fromIdx, toIdx] = getRange(this.#blocks, from, to)
+    let common: HeaderLevel | null = null
+    for (let i = fromIdx; i <= toIdx; i++) {
+      const b = this.#blocks[i]
+      if (b.blockType !== 'header') return null
+      const level = (b.data as Header).level
+      if (common === null) common = level
+      else if (common !== level) return null
+    }
+    return common
+  }
+
   #blockIdsInRange(from: BlockId, to: BlockId): BlockId[] {
     const [fromIdx, toIdx] = getRange(this.#blocks, from, to)
     return this.#blocks.slice(fromIdx, toIdx + 1).map(b => b.id)

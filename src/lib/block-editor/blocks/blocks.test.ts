@@ -1804,6 +1804,44 @@ describe('Blocks.getHeaderLevel', () => {
   })
 })
 
+describe('Blocks.getCommonHeaderLevel', () => {
+  it('returns the level when all blocks in range are the same header level', () => {
+    const b = Blocks.from([
+      new HeaderBlock('a', new Header(2, new Text('', [])), []),
+      new HeaderBlock('b', new Header(2, new Text('', [])), []),
+    ])
+    expect(b.getCommonHeaderLevel('a', 'b')).toBe(2)
+  })
+
+  it('returns null when headers in range have different levels', () => {
+    const b = Blocks.from([
+      new HeaderBlock('a', new Header(2, new Text('', [])), []),
+      new HeaderBlock('b', new Header(3, new Text('', [])), []),
+    ])
+    expect(b.getCommonHeaderLevel('a', 'b')).toBeNull()
+  })
+
+  it('returns null when range contains a non-header block', () => {
+    const b = Blocks.from([
+      new HeaderBlock('a', new Header(1, new Text('', [])), []),
+      new TextBlock('b', new Text('', []), []),
+    ])
+    expect(b.getCommonHeaderLevel('a', 'b')).toBeNull()
+  })
+
+  it('returns the level for a single-block range', () => {
+    const b = Blocks.from([
+      new HeaderBlock('a', new Header(3, new Text('', [])), []),
+    ])
+    expect(b.getCommonHeaderLevel('a', 'a')).toBe(3)
+  })
+
+  it('returns null for a single non-header block', () => {
+    const b = Blocks.from([dto('a')])
+    expect(b.getCommonHeaderLevel('a', 'a')).toBeNull()
+  })
+})
+
 describe('Blocks.update on a header block', () => {
   it('updates text content without changing the header level', () => {
     const h = new HeaderBlock('a', new Header(2, new Text('Old', [])), [])
