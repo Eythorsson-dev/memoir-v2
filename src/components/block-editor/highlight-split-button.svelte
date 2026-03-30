@@ -47,8 +47,8 @@
     {#snippet trigger({ open, toggle })}
       <button
         class="
-          flex items-center justify-center self-stretch
-          rounded-r-[5px] px-[2px] w-[14px] h-auto
+          flex items-center justify-center
+          rounded-r-[5px] px-[2px] w-[14px] h-7
           border border-transparent bg-transparent text-(--toolbar-fg) cursor-pointer
           [&_svg]:pointer-events-none
           [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg) [&:active:not(:disabled)]:bg-(--toolbar-btn-active-bg)
