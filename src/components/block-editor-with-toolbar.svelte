@@ -5,7 +5,7 @@
   import ToolbarButton from './toolbar-button.svelte'
   import HeadingPicker from './heading-picker.svelte'
   import HighlightSplitButton from './highlight-split-button.svelte'
-  import { Bold, Italic, Underline, Undo2, Redo2, IndentIncrease, IndentDecrease, ListOrdered, List } from '@lucide/svelte'
+  import { Bold, Italic, Underline, Undo2, Redo2, ListIndentIncrease, ListIndentDecrease, ListOrdered, List } from '@lucide/svelte'
 
   export type BlockEditorChangeEvent = {
     [K in Exclude<keyof BlockEditorEventDtoMap, 'selectionChange'>]: {
@@ -209,11 +209,11 @@
   <div class="separator" aria-hidden="true"></div>
 
   <ToolbarButton label="Indent" shortcut="Tab" onclick={() => editor?.indent()}>
-    <IndentIncrease size={16} />
+    <ListIndentIncrease size={16} />
   </ToolbarButton>
 
   <ToolbarButton label="Outdent" shortcut="⇧Tab" onclick={() => editor?.outdent()}>
-    <IndentDecrease size={16} />
+    <ListIndentDecrease size={16} />
   </ToolbarButton>
 
   <div class="separator" aria-hidden="true"></div>
