@@ -32,85 +32,22 @@
     onclick?: () => void
     children?: Snippet
   } = $props()
+
+  function handleMouseDown(e: MouseEvent) {
+    e.preventDefault()
+    onclick?.()
+  }
 </script>
 
 <button
   aria-label={label}
   aria-pressed={pressed}
   {disabled}
-  class:is-active={pressed}
-  onmousedown={(e) => { e.preventDefault(); onclick?.() }}
+  class="group relative flex shrink-0 items-center justify-center w-7 h-7 border border-transparent rounded-[5px] bg-transparent text-(--toolbar-fg) cursor-pointer [&_svg]:w-4 [&_svg]:h-4 [&_svg]:pointer-events-none [&:hover:not(:disabled)]:bg-(--toolbar-btn-hover-bg) [&:active:not(:disabled)]:bg-(--toolbar-btn-active-bg) disabled:opacity-[0.35] disabled:cursor-default aria-[pressed=true]:bg-(--toolbar-btn-active-bg) aria-[pressed=true]:border-(--toolbar-btn-active-border) aria-[pressed=true]:text-(--toolbar-btn-active-color)"
+  onmousedown={handleMouseDown}
 >
   {@render children?.()}
-  <span class="tooltip">
-    {label}{#if shortcut}<kbd>{formatShortcut(shortcut)}</kbd>{/if}
+  <span class="hidden group-[&:hover:not(:disabled)]:block absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 whitespace-nowrap bg-(--tooltip-bg) text-(--tooltip-color) text-[11px] px-2 py-[3px] rounded pointer-events-none z-[100]">
+    {label}{#if shortcut}<kbd class="opacity-[0.65] font-[inherit] ml-1">{formatShortcut(shortcut)}</kbd>{/if}
   </span>
 </button>
-
-<style>
-  button {
-    width: 28px;
-    height: 28px;
-    border: 1px solid transparent;
-    border-radius: 5px;
-    background: transparent;
-    color: var(--toolbar-fg);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    flex-shrink: 0;
-  }
-
-  button :global(svg) {
-    width: 16px;
-    height: 16px;
-    pointer-events: none;
-  }
-
-  button:hover:not(:disabled) {
-    background: var(--toolbar-btn-hover-bg);
-  }
-
-  button:active:not(:disabled) {
-    background: var(--toolbar-btn-active-bg);
-  }
-
-  button:disabled {
-    opacity: 0.35;
-    cursor: default;
-  }
-
-  button.is-active {
-    background: var(--toolbar-btn-active-bg);
-    border-color: var(--toolbar-btn-active-border);
-    color: var(--toolbar-btn-active-color);
-  }
-
-  .tooltip {
-    display: none;
-    position: absolute;
-    bottom: calc(100% + 6px);
-    left: 50%;
-    transform: translateX(-50%);
-    white-space: nowrap;
-    background: var(--tooltip-bg);
-    color: var(--tooltip-color);
-    font-size: 11px;
-    padding: 3px 8px;
-    border-radius: 4px;
-    pointer-events: none;
-    z-index: 100;
-  }
-
-  button:hover .tooltip {
-    display: block;
-  }
-
-  kbd {
-    opacity: 0.65;
-    font-family: inherit;
-    margin-left: 4px;
-  }
-</style>
