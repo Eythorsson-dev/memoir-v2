@@ -319,9 +319,34 @@ function clampPass(blocks: FlatBlock[]): FlatBlock[] {
 
 // ─── Block (tree DTO) → FlatBlock conversion ──────────────────────────────────
 
+/**
+ * Ensures `raw` is a proper `Text` instance.
+ * When blocks are deserialised from JSON (e.g. `localStorage`), `data` arrives
+ * as a plain object that lacks the `Text` prototype methods. This reviver
+ * reconstructs the instance so that methods like `split` are available.
+ */
+function reviveText(raw: unknown): Text {
+  if (raw instanceof Text) return raw
+  const { text, inline } = raw as TextDto
+  return new Text(text, inline as InlineDto[])
+}
+
+/**
+ * Ensures block data is a proper class instance.
+ * Handles both live instances (no-op) and plain JSON-deserialised objects.
+ */
+function reviveData<T extends BlockTypes>(blockType: T, raw: unknown): BlockTypeMap[T] {
+  if (blockType === 'header') {
+    if (raw instanceof Header) return raw as BlockTypeMap[T]
+    const { level, text } = raw as { level: HeaderLevel; text: unknown }
+    return new Header(level, reviveText(text)) as BlockTypeMap[T]
+  }
+  return reviveText(raw) as BlockTypeMap[T]
+}
+
 function dtoToFlat(dtos: ReadonlyArray<AnyBlock>, depth = 0, result: FlatBlock[] = []): FlatBlock[] {
   for (const block of dtos) {
-    result.push(new FlatBlock(block.id, block.blockType, block.data, depth))
+    result.push(new FlatBlock(block.id, block.blockType, reviveData(block.blockType, block.data), depth))
     dtoToFlat(block.children as ReadonlyArray<AnyBlock>, depth + 1, result)
   }
   return result
