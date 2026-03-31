@@ -1,8 +1,7 @@
 <script lang="ts">
   import { Heading, ChevronDown } from '@lucide/svelte'
-  import type { HeaderLevel } from '$lib/block-editor'
-  import Dropdown from '../dropdown.svelte'
-  import ToggleButton from '../toggle-button.svelte'
+  import type { HeaderLevel } from '@memoir/block-editor'
+  import { Dropdown, ToggleButton } from '@memoir/ui'
 
   const LEVELS = [1, 2, 3] as const satisfies ReadonlyArray<HeaderLevel>
 

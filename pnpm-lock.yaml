@@ -6,14 +6,22 @@ settings:
 
 importers:
 
-  .:
+  .: {}
+
+  apps/demo:
     dependencies:
       '@lucide/svelte':
         specifier: ^0.577.0
         version: 0.577.0(svelte@5.53.12)
-      lucide:
-        specifier: ^0.577.0
-        version: 0.577.0
+      '@memoir/block-editor':
+        specifier: workspace:*
+        version: link:../../packages/block-editor
+      '@memoir/block-editor-svelte':
+        specifier: workspace:*
+        version: link:../../packages/block-editor-svelte
+      '@memoir/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       prismjs:
         specifier: ^1.30.0
         version: 1.30.0
@@ -33,15 +41,9 @@ importers:
       '@types/prismjs':
         specifier: ^1.26.6
         version: 1.26.6
-      '@vitest/browser-playwright':
-        specifier: ^4.1.0
-        version: 4.1.0(playwright@1.58.2)(vite@7.3.1(@types/node@25.5.0)(jiti@2.6.1)(lightningcss@1.31.1))(vitest@4.1.0)
       happy-dom:
         specifier: ^20.8.4
         version: 20.8.4
-      playwright:
-        specifier: ^1.58.2
-        version: 1.58.2
       svelte:
         specifier: ^5.51.0
         version: 5.53.12
@@ -60,9 +62,74 @@ importers:
       vitest:
         specifier: ^4.1.0
         version: 4.1.0(@types/node@25.5.0)(@vitest/browser-playwright@4.1.0)(happy-dom@20.8.4)(vite@7.3.1(@types/node@25.5.0)(jiti@2.6.1)(lightningcss@1.31.1))
+
+  packages/block-editor:
+    dependencies:
+      lucide:
+        specifier: ^0.577.0
+        version: 0.577.0
+    devDependencies:
+      happy-dom:
+        specifier: ^20.8.4
+        version: 20.8.4
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.0
+        version: 4.1.0(@types/node@25.5.0)(@vitest/browser-playwright@4.1.0)(happy-dom@20.8.4)(vite@7.3.1(@types/node@25.5.0)(jiti@2.6.1)(lightningcss@1.31.1))
+
+  packages/block-editor-svelte:
+    dependencies:
+      '@lucide/svelte':
+        specifier: ^0.577.0
+        version: 0.577.0(svelte@5.53.12)
+      '@memoir/block-editor':
+        specifier: workspace:*
+        version: link:../block-editor
+      '@memoir/ui':
+        specifier: workspace:*
+        version: link:../ui
+    devDependencies:
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^6.2.4
+        version: 6.2.4(svelte@5.53.12)(vite@7.3.1(@types/node@25.5.0)(jiti@2.6.1)(lightningcss@1.31.1))
+      '@vitest/browser-playwright':
+        specifier: ^4.1.0
+        version: 4.1.0(playwright@1.58.2)(vite@7.3.1(@types/node@25.5.0)(jiti@2.6.1)(lightningcss@1.31.1))(vitest@4.1.0)
+      playwright:
+        specifier: ^1.58.2
+        version: 1.58.2
+      svelte:
+        specifier: ^5.51.0
+        version: 5.53.12
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.0
+        version: 4.1.0(@types/node@25.5.0)(@vitest/browser-playwright@4.1.0)(happy-dom@20.8.4)(vite@7.3.1(@types/node@25.5.0)(jiti@2.6.1)(lightningcss@1.31.1))
       vitest-browser-svelte:
         specifier: ^2.0.2
         version: 2.1.0(svelte@5.53.12)(vitest@4.1.0)
+
+  packages/ui:
+    devDependencies:
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^6.2.4
+        version: 6.2.4(svelte@5.53.12)(vite@7.3.1(@types/node@25.5.0)(jiti@2.6.1)(lightningcss@1.31.1))
+      happy-dom:
+        specifier: ^20.8.4
+        version: 20.8.4
+      svelte:
+        specifier: ^5.51.0
+        version: 5.53.12
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.0
+        version: 4.1.0(@types/node@25.5.0)(@vitest/browser-playwright@4.1.0)(happy-dom@20.8.4)(vite@7.3.1(@types/node@25.5.0)(jiti@2.6.1)(lightningcss@1.31.1))
 
 packages:
 

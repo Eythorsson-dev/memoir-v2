@@ -1,8 +1,8 @@
 <script lang="ts">
   import CodePreview from './code-preview.svelte'
   import RelativeTimestamp from './relative-timestamp.svelte'
-  import { popupOnHover } from './popup-attachment'
-  import type { BlockEditorEventDtoMap } from '$lib/block-editor'
+  import { popupOnHover } from '@memoir/ui'
+  import type { BlockEditorEventDtoMap } from '@memoir/block-editor'
   import { Trash2Icon } from '@lucide/svelte'
 
   export type LogEntry<T extends keyof BlockEditorEventDtoMap = keyof BlockEditorEventDtoMap> = {

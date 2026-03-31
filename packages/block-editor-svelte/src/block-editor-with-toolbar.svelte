@@ -1,9 +1,8 @@
 <script lang="ts">
   import { untrack } from 'svelte'
-  import { BlockEditor, BLOCK_EDITOR_EVENT_NAMES } from '$lib/block-editor'
-  import type { Blocks, BlockEditorOptions, BlockEditorEventDtoMap, BlockSelection, HighlightColor, HeaderLevel, InlineTypes } from '$lib/block-editor'
-  import Button from '../button.svelte'
-  import ToggleButton from '../toggle-button.svelte'
+  import { BlockEditor, BLOCK_EDITOR_EVENT_NAMES } from '@memoir/block-editor'
+  import type { Blocks, BlockEditorOptions, BlockEditorEventDtoMap, BlockSelection, HighlightColor, HeaderLevel, InlineTypes } from '@memoir/block-editor'
+  import { Button, ToggleButton } from '@memoir/ui'
   import HeadingPicker from './heading-picker.svelte'
   import HighlightSplitButton from './highlight-split-button.svelte'
   import { Bold, Italic, Underline, Undo2, Redo2, ListIndentIncrease, ListIndentDecrease, ListOrdered, List } from '@lucide/svelte'
