@@ -4,6 +4,9 @@ import { sveltekit } from '@sveltejs/kit/vite'
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
+	ssr: {
+		noExternal: ['@memoir/block-editor', '@memoir/ui', '@memoir/block-editor-svelte'],
+	},
 	test: {
 		environment: 'happy-dom',
 		include: ['src/**/*.{test,spec}.{js,ts}'],
