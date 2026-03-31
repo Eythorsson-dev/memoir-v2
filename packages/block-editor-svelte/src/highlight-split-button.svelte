@@ -1,9 +1,8 @@
 <script lang="ts">
   import { Highlighter, ChevronDown } from '@lucide/svelte'
-  import type { HighlightColor } from '$lib/block-editor'
-  import Dropdown from '../dropdown.svelte'
-  import { tooltip } from '../popup-attachment.ts'
-  import type { Shortcut } from '../shortcut.ts'
+  import type { HighlightColor } from '@memoir/block-editor'
+  import { Dropdown, tooltip } from '@memoir/ui'
+  import type { Shortcut } from '@memoir/ui'
 
   const COLORS: HighlightColor[] = ['red', 'amber', 'green', 'blue', 'violet', 'fuchsia']
 

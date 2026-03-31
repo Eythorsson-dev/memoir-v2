@@ -1,43 +1,16 @@
 {
-	"name": "memoir",
-	"private": true,
-	"version": "0.0.1",
-	"type": "module",
-	"scripts": {
-		"dev": "vite dev",
-		"build": "vite build",
-		"preview": "vite preview",
-		"prepare": "svelte-kit sync || echo ''",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"test:unit": "vitest",
-		"test": "npm run test:unit -- --run"
-	},
-	"devDependencies": {
-		"@sveltejs/adapter-auto": "^7.0.0",
-		"@sveltejs/kit": "^2.50.2",
-		"@sveltejs/vite-plugin-svelte": "^6.2.4",
-		"@tailwindcss/vite": "^4.1.18",
-		"@types/prismjs": "^1.26.6",
-		"@vitest/browser-playwright": "^4.1.0",
-		"happy-dom": "^20.8.4",
-		"playwright": "^1.58.2",
-		"svelte": "^5.51.0",
-		"svelte-check": "^4.4.2",
-		"tailwindcss": "^4.1.18",
-		"typescript": "^5.9.3",
-		"vite": "^7.3.1",
-		"vitest": "^4.1.0",
-		"vitest-browser-svelte": "^2.0.2"
-	},
-	"pnpm": {
-		"onlyBuiltDependencies": [
-			"esbuild"
-		]
-	},
-	"dependencies": {
-		"@lucide/svelte": "^0.577.0",
-		"lucide": "^0.577.0",
-		"prismjs": "^1.30.0"
-	}
+  "name": "memoir",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter @memoir/demo dev",
+    "build": "pnpm --filter @memoir/demo build",
+    "check": "pnpm -r check",
+    "test": "pnpm -r test"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
 }

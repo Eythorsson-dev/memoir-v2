@@ -1,9 +1,8 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { render, cleanup } from 'vitest-browser-svelte'
 import BlockEditorWithToolbar from './block-editor-with-toolbar.svelte'
-import { Blocks, TextBlock } from '$lib/block-editor'
-import { Text } from '$lib/block-editor'
-import type { Block } from '$lib/block-editor'
+import { Blocks, TextBlock, Text } from '@memoir/block-editor'
+import type { Block } from '@memoir/block-editor'
 import type { BlockEditorChangeEvent } from './block-editor-with-toolbar.svelte'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
