@@ -6,7 +6,11 @@
     "dev": "pnpm --filter @memoir/demo dev",
     "build": "pnpm --filter @memoir/demo build",
     "check": "pnpm -r check",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "tauri:run:desktop": "pnpm --filter @memoir/tauri-app tauri dev",
+    "tauri:run:ios": "pnpm --filter @memoir/tauri-app tauri ios dev",
+    "tauri:build:desktop": "pnpm --filter @memoir/tauri-app tauri build",
+    "tauri:build:ios": "pnpm --filter @memoir/tauri-app tauri ios build"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
