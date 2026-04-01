@@ -68,32 +68,58 @@
   counter-increment: ol-decimal;
   counter-reset: ol-alpha ol-roman;
 }
-[data-list-style="decimal"] > p::before {
-  content: counter(ol-decimal, decimal) ". ";
-}
 [data-list-style="lower-alpha"] {
   counter-increment: ol-alpha;
   counter-reset: ol-roman;
 }
-[data-list-style="lower-alpha"] > p::before {
-  content: counter(ol-alpha, lower-alpha) ". ";
-}
 [data-list-style="lower-roman"] {
   counter-increment: ol-roman;
-}
-[data-list-style="lower-roman"] > p::before {
-  content: counter(ol-roman, lower-roman) ". ";
 }
 .block:not([data-block-type="ordered-list"]) {
   counter-reset: ol-decimal ol-alpha ol-roman;
 }
 
-[data-list-style="disc"] > p::before {
-  content: "• ";
+/* ─── List block layout ──────────────────────────────────────────────────────
+ * The bullet/number is rendered via ::before on the block <div>, not on <p>.
+ * This keeps the <p> free of pseudo-element content so Safari positions the
+ * caret correctly inside the editable area even when the block is empty.
+ */
+.block-editor-editable .block[data-list-style] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
 }
-[data-list-style="circle"] > p::before {
-  content: "◦ ";
+
+.block-editor-editable .block[data-list-style]::before {
+  flex-shrink: 0;
+  /* Match the vertical padding and left padding of <p> so the bullet
+     baseline aligns with the paragraph text. */
+  padding: 2px 0 2px 4px;
 }
-[data-list-style="square"] > p::before {
-  content: "▪ ";
+
+/* Remove the left padding from <p> inside list blocks — the bullet
+   pseudo-element on the parent div takes that role. */
+.block-editor-editable .block[data-list-style] > p {
+  flex: 1;
+  min-width: 0;
+  padding-left: 0;
+}
+
+/* Children sit on a new flex row, indented past the bullet. */
+.block-editor-editable .block[data-list-style] > .children {
+  flex-basis: 100%;
+}
+
+[data-list-style="disc"]::before    { content: "• "; }
+[data-list-style="circle"]::before  { content: "◦ "; }
+[data-list-style="square"]::before  { content: "▪ "; }
+
+[data-list-style="decimal"]::before {
+  content: counter(ol-decimal, decimal) ". ";
+}
+[data-list-style="lower-alpha"]::before {
+  content: counter(ol-alpha, lower-alpha) ". ";
+}
+[data-list-style="lower-roman"]::before {
+  content: counter(ol-roman, lower-roman) ". ";
 }
