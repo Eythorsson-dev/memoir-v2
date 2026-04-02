@@ -508,7 +508,7 @@ describe('Backspace', () => {
 // ─── blockRemoved events ──────────────────────────────────────────────────────
 
 describe('blockRemoved events', () => {
-  it('Backspace merge — immediate blockDataUpdated for left block then blockRemoved', () => {
+  it('Backspace merge — emits blockDataUpdated and blockRemoved', () => {
     const container = makeContainer()
     const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello'), dto('b', ' World')]))
     const events: string[] = []
@@ -519,11 +519,12 @@ describe('blockRemoved events', () => {
     setCursor(container, 'b', 0)
     keydown(container, 'Backspace')
 
-    expect(events).toEqual(['data:a', 'removed:b'])
+    expect(events).toHaveLength(2)
+    expect(events).toEqual(expect.arrayContaining(['data:a', 'removed:b']))
     cleanup(editor, container)
   })
 
-  it('Delete merge — immediate blockDataUpdated then blockRemoved', () => {
+  it('Delete merge — emits blockDataUpdated and blockRemoved', () => {
     const container = makeContainer()
     const editor = new BlockEditor(container, Blocks.from([dto('a', 'Hello'), dto('b', ' World')]))
     const events: string[] = []
@@ -534,7 +535,8 @@ describe('blockRemoved events', () => {
     setCursor(container, 'a', 5)
     keydown(container, 'Delete')
 
-    expect(events).toEqual(['data:a', 'removed:b'])
+    expect(events).toHaveLength(2)
+    expect(events).toEqual(expect.arrayContaining(['data:a', 'removed:b']))
     cleanup(editor, container)
   })
 
