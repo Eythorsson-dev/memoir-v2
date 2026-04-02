@@ -643,4 +643,18 @@ describe('Text.insert', () => {
     expect(result.text).toBe('Hello')
     expect(result.inline).toEqual([{ type: 'Bold', start: 0, end: 1 }])
   })
+
+  it('extends an inline that spans the insertion point', () => {
+    const t = new Text('abc', [{ type: 'Bold', start: 0, end: 3 }])
+    const result = t.insert(1, 'x')
+    expect(result.text).toBe('axbc')
+    expect(result.inline).toEqual([{ type: 'Bold', start: 0, end: 4 }])
+  })
+
+  it('extends a payload inline that spans the insertion point, preserving payload', () => {
+    const t = new Text('abc', [{ type: 'Highlight', color: 'red', start: 0, end: 3 }])
+    const result = t.insert(1, 'x')
+    expect(result.text).toBe('axbc')
+    expect(result.inline).toEqual([{ type: 'Highlight', color: 'red', start: 0, end: 4 }])
+  })
 })

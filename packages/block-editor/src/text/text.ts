@@ -324,12 +324,32 @@ export class Text implements TextDto {
    * Returns a new `Text` with a single character inserted at `offset`.
    * Inline annotations that start at or after `offset` are shifted right by 1.
    * Inline annotations that end at or before `offset` are unchanged.
+   * Inline annotations that start at or after `offset` are shifted right by 1.
+   * Inline annotations that span `offset` (`start < offset < end`) are
+   * extended by 1 so the inserted character inherits the annotation.
    *
    * @throws {RangeError} if offset < 0 or offset > text.length.
    */
   insert(offset: number, char: string): Text {
-    const [left, right] = this.split(offset)
-    return Text.merge(Text.merge(left, new Text(char, [])), right)
+    if (offset < 0) throw new RangeError(`offset must be >= 0, got ${offset}`)
+    if (offset > this.text.length)
+      throw new RangeError(`offset must be <= text.length (${this.text.length}), got ${offset}`)
+
+    const newText = this.text.substring(0, offset) + char + this.text.substring(offset)
+    const newInlines: InlineDto[] = []
+
+    for (const inline of this.inline as InlineDto[]) {
+      if (inline.end <= offset) {
+        newInlines.push(inline)
+      } else if (inline.start >= offset) {
+        newInlines.push({ ...inline, start: inline.start + 1, end: inline.end + 1 } as InlineDto)
+      } else {
+        // start < offset < end — inline spans the insertion point; extend to cover the new char
+        newInlines.push({ ...inline, end: inline.end + 1 } as InlineDto)
+      }
+    }
+
+    return new Text(newText, newInlines)
   }
 
   /**
