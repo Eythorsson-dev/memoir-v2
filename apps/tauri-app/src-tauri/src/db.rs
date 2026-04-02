@@ -53,6 +53,19 @@ pub fn load_note(conn: &Connection, id: &str) -> rusqlite::Result<Option<NoteDto
     }
 }
 
+/// Return the note for `date` (ISO YYYY-MM-DD), creating an empty one if absent.
+///
+/// The note `id` is the ISO date string. Content is initialised to `"[]"` (an
+/// empty block array) so callers always receive a valid, parseable note.
+/// Idempotent — calling twice for the same date returns the same row.
+pub fn get_or_create_daily_note(conn: &Connection, date: &str) -> rusqlite::Result<NoteDto> {
+    if let Some(note) = load_note(conn, date)? {
+        return Ok(note);
+    }
+    save_note(conn, date, "[]")?;
+    load_note(conn, date).map(|opt| opt.expect("note must exist after save"))
+}
+
 /// List all notes, returning metadata only (no content)
 pub fn list_notes(conn: &Connection) -> rusqlite::Result<Vec<NoteMetadataDto>> {
     let mut stmt = conn.prepare("SELECT id, updated_at FROM notes ORDER BY updated_at DESC")?;
@@ -155,5 +168,36 @@ mod tests {
         let conn = test_conn();
         let result = load_note(&conn, "does-not-exist").unwrap();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn get_or_create_creates_note_when_absent() {
+        let conn = test_conn();
+        let note = get_or_create_daily_note(&conn, "2024-01-15").unwrap();
+        assert_eq!(note.id, "2024-01-15");
+        assert_eq!(note.content, "[]");
+        assert!(!note.updated_at.is_empty());
+    }
+
+    #[test]
+    fn get_or_create_returns_existing_note() {
+        let conn = test_conn();
+        save_note(&conn, "2024-01-15", r#"[{"blockType":"text"}]"#).unwrap();
+        let note = get_or_create_daily_note(&conn, "2024-01-15").unwrap();
+        assert_eq!(note.content, r#"[{"blockType":"text"}]"#);
+    }
+
+    #[test]
+    fn get_or_create_is_idempotent() {
+        let conn = test_conn();
+        let first = get_or_create_daily_note(&conn, "2024-01-15").unwrap();
+        let second = get_or_create_daily_note(&conn, "2024-01-15").unwrap();
+        assert_eq!(first.id, second.id);
+        assert_eq!(first.content, second.content);
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM notes", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
     }
 }
