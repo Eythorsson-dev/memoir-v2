@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { BlockEventEmitter } from './BlockEventEmitter'
+import { BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved } from '../blocks/blocks'
 import { Text } from '../text/text'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -207,5 +208,72 @@ describe('cancelAll', () => {
     emitter.cancelAll()
     vi.advanceTimersByTime(2000)
     expect(events).toHaveLength(0)
+  })
+})
+
+// ─── dispatchChanges ──────────────────────────────────────────────────────────
+
+describe('dispatchChanges', () => {
+  const empty = new Text('', [])
+
+  it('emits blockDataUpdated for BlockDataChanged', () => {
+    const emitter = makeEmitter()
+    const events: string[] = []
+    emitter.addEventListener('blockDataUpdated', (e) => events.push(e.id))
+    emitter.dispatchChanges([new BlockDataChanged('a', 'text', empty)])
+    expect(events).toEqual(['a'])
+  })
+
+  it('emits blockCreated for BlockAdded', () => {
+    const emitter = makeEmitter()
+    const events: string[] = []
+    emitter.addEventListener('blockCreated', (e) => events.push(e.id))
+    emitter.dispatchChanges([new BlockAdded('a', 'text', empty, null, null)])
+    expect(events).toEqual(['a'])
+  })
+
+  it('emits blockRemoved for BlockRemoved', () => {
+    const emitter = makeEmitter()
+    const events: string[] = []
+    emitter.addEventListener('blockRemoved', (e) => events.push(e.id))
+    emitter.dispatchChanges([new BlockRemoved('a')])
+    expect(events).toEqual(['a'])
+  })
+
+  it('emits blockMoved for BlockMoved', () => {
+    const emitter = makeEmitter()
+    const events: string[] = []
+    emitter.addEventListener('blockMoved', (e) => events.push(e.id))
+    emitter.dispatchChanges([new BlockMoved('a', null, null)])
+    expect(events).toEqual(['a'])
+  })
+
+  it('cancels pending debounced events before dispatching', () => {
+    vi.useFakeTimers()
+    try {
+      const emitter = makeEmitter(1000)
+      const events: string[] = []
+      emitter.addEventListener('blockDataUpdated', (e) => events.push(e.id))
+      emitter.scheduleDataUpdated('a')
+      emitter.dispatchChanges([new BlockRemoved('b')])
+      vi.advanceTimersByTime(2000)
+      expect(events).not.toContain('a')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('dispatches all changes in a mixed list', () => {
+    const emitter = makeEmitter()
+    const created: string[] = []
+    const removed: string[] = []
+    emitter.addEventListener('blockCreated', (e) => created.push(e.id))
+    emitter.addEventListener('blockRemoved', (e) => removed.push(e.id))
+    emitter.dispatchChanges([
+      new BlockAdded('x', 'text', empty, null, null),
+      new BlockRemoved('y'),
+    ])
+    expect(created).toEqual(['x'])
+    expect(removed).toEqual(['y'])
   })
 })
