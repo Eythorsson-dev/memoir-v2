@@ -1,4 +1,4 @@
-import type { BlockId } from '../blocks/blocks'
+import { BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved, type BlockId, type BlocksChange } from '../blocks/blocks'
 import type { BlockEditorEventDtoMap, BlockDataUpdatedEventDto } from './events'
 import { makeDebounced, type DebouncedFn } from './debounce'
 
@@ -88,5 +88,30 @@ export class BlockEventEmitter {
   cancelAll(): void {
     for (const fn of this.#pending.values()) fn.cancel()
     this.#pending.clear()
+  }
+
+  /**
+   * Cancels pending debounced events then immediately emits the corresponding
+   * editor event for each change in `changes`.
+   *
+   * @throws {Error} if a `BlocksChange` subtype is not handled (exhaustiveness guard).
+   */
+  dispatchChanges(changes: BlocksChange[]): void {
+    this.cancelAll()
+
+    for (const change of changes) {
+      if (change instanceof BlockDataChanged) {
+        this.emit('blockDataUpdated', { id: change.id, blockType: change.blockType, data: change.data })
+      } else if (change instanceof BlockAdded) {
+        this.emit('blockCreated', { id: change.id, blockType: change.blockType, data: change.data, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
+      } else if (change instanceof BlockRemoved) {
+        this.emit('blockRemoved', { id: change.id })
+      } else if (change instanceof BlockMoved) {
+        this.emit('blockMoved', { id: change.id, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
+      } else {
+        const _exhaustive: never = change
+        throw new Error(`Unhandled BlocksChange: ${(_exhaustive as { constructor: { name: string } }).constructor.name}`)
+      }
+    }
   }
 }

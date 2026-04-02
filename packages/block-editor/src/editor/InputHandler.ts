@@ -1,5 +1,5 @@
 import { textSerializer } from '../text/serializer'
-import { Blocks, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved, type BlocksChange, type HeaderLevel } from '../blocks/blocks'
+import { Blocks, BlockOffset, BlockRange, BlockDataChanged, type HeaderLevel } from '../blocks/blocks'
 import type { BlockSelection } from './events'
 import type { BlockRenderer } from './BlockRenderer'
 import { getBlockElementContent } from './BlockRenderer'
@@ -237,27 +237,6 @@ export class InputHandler {
     this.#emitter.scheduleDataUpdated(blockId)
   }
 
-  // ─── Private ──────────────────────────────────────────────────────────────
-
-  #dispatchChanges(changes: BlocksChange[]): void {
-    this.#emitter.cancelAll()
-
-    for (const change of changes) {
-      if (change instanceof BlockDataChanged) {
-        this.#emitter.emit('blockDataUpdated', { id: change.id, blockType: change.blockType, data: change.data })
-      } else if (change instanceof BlockAdded) {
-        this.#emitter.emit('blockCreated', { id: change.id, blockType: change.blockType, data: change.data, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
-      } else if (change instanceof BlockRemoved) {
-        this.#emitter.emit('blockRemoved', { id: change.id })
-      } else if (change instanceof BlockMoved) {
-        this.#emitter.emit('blockMoved', { id: change.id, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
-      } else {
-        const _exhaustive: never = change
-        throw new Error(`Unhandled BlocksChange: ${(_exhaustive as { constructor: { name: string } }).constructor.name}`)
-      }
-    }
-  }
-
   #emitEvents(oldState: Blocks): void {
     const newState = this.#getState()
     const changes = Blocks.diff(oldState, newState)
@@ -266,6 +245,6 @@ export class InputHandler {
       this.#history.add(changes, this.#pendingSelectionBefore, selAfter)
     }
     this.#pendingSelectionBefore = null
-    this.#dispatchChanges(changes)
+    this.#emitter.dispatchChanges(changes)
   }
 }

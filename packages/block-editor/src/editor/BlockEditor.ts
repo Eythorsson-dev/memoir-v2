@@ -1,5 +1,5 @@
 import { type InlineTypes, type InlineDtoMap, type InlineDto } from '../text/text'
-import { Blocks, type BlockId, type BlockTypes, type BlocksChange, type HeaderLevel, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved } from '../blocks/blocks'
+import { Blocks, type BlockId, type BlockTypes, type HeaderLevel, BlockOffset, BlockRange } from '../blocks/blocks'
 import type { BlockEditorEventDtoMap, BlockEditorOptions, BlockSelection } from './events'
 import { BlockEventEmitter } from './BlockEventEmitter'
 import { BlockHistory } from './BlockHistory'
@@ -298,7 +298,7 @@ export class BlockEditor {
     const { blocks, selection } = this.#history.undo()
     this.#state = blocks
     this.#renderer.render(this.#state, selection ?? undefined)
-    this.#dispatchChanges(Blocks.diff(oldState, this.#state))
+    this.#emitter.dispatchChanges(Blocks.diff(oldState, this.#state))
   }
 
   redo(): void {
@@ -307,7 +307,7 @@ export class BlockEditor {
     const { blocks, selection } = this.#history.redo()
     this.#state = blocks
     this.#renderer.render(this.#state, selection ?? undefined)
-    this.#dispatchChanges(Blocks.diff(oldState, this.#state))
+    this.#emitter.dispatchChanges(Blocks.diff(oldState, this.#state))
   }
 
   /**
@@ -324,25 +324,6 @@ export class BlockEditor {
 
   // ─── Private helpers ────────────────────────────────────────────────────────
 
-  #dispatchChanges(changes: BlocksChange[]): void {
-    this.#emitter.cancelAll()
-
-    for (const change of changes) {
-      if (change instanceof BlockDataChanged) {
-        this.#emitter.emit('blockDataUpdated', { id: change.id, blockType: change.blockType, data: change.data })
-      } else if (change instanceof BlockAdded) {
-        this.#emitter.emit('blockCreated', { id: change.id, blockType: change.blockType, data: change.data, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
-      } else if (change instanceof BlockRemoved) {
-        this.#emitter.emit('blockRemoved', { id: change.id })
-      } else if (change instanceof BlockMoved) {
-        this.#emitter.emit('blockMoved', { id: change.id, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
-      } else {
-        const _exhaustive: never = change
-        throw new Error(`Unhandled BlocksChange: ${(_exhaustive as { constructor: { name: string } }).constructor.name}`)
-      }
-    }
-  }
-
   #emitEvents(oldState: Blocks): void {
     const changes = Blocks.diff(oldState, this.#state)
     if (changes.length > 0) {
@@ -350,7 +331,7 @@ export class BlockEditor {
       this.#history.add(changes, this.#input.pendingSelectionBefore, selAfter)
     }
     this.#input.pendingSelectionBefore = null
-    this.#dispatchChanges(changes)
+    this.#emitter.dispatchChanges(changes)
   }
 
   // ─── Private: keydown routing ─────────────────────────────────────────────
