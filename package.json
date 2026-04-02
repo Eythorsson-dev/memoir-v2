@@ -16,5 +16,8 @@
     "onlyBuiltDependencies": [
       "esbuild"
     ]
+  },
+  "devDependencies": {
+    "@ai-hero/sandcastle": "^0.1.8"
   }
 }
