@@ -41,6 +41,13 @@ describe('InputRules.match', () => {
   it('matches "- Hello" at cursor offset 2 — content after marker is irrelevant', () => {
     expect(InputRules.match('- Hello', 2, 'text')).toEqual({ targetType: 'unordered-list', stripLength: 2 })
   })
+
+  it('matches when space is \\u00a0 (browsers insert nbsp at end of contenteditable text)', () => {
+    expect(InputRules.match('-\u00a0', 2, 'text')).toEqual({ targetType: 'unordered-list', stripLength: 2 })
+    expect(InputRules.match('*\u00a0', 2, 'text')).toEqual({ targetType: 'unordered-list', stripLength: 2 })
+    expect(InputRules.match('1.\u00a0', 3, 'text')).toEqual({ targetType: 'ordered-list', stripLength: 3 })
+    expect(InputRules.match('#\u00a0', 2, 'text')).toEqual({ targetType: 'header', headerLevel: 1, stripLength: 2 })
+  })
 })
 
 describe('InputRules.match — heading shortcuts', () => {

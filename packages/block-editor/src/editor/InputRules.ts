@@ -41,21 +41,25 @@ export class InputRules {
     cursorOffset: number,
     currentType: BlockTypes,
   ): InputRuleMatch | null {
-    if (cursorOffset === 2 && (text.startsWith('- ') || text.startsWith('* '))) {
+    // Browsers insert \u00a0 (non-breaking space) instead of a regular space
+    // when the caret is at the end of a contenteditable block (common in empty
+    // blocks). Normalize so the patterns below match either space character.
+    const t = text.replace(/\u00a0/g, ' ')
+    if (cursorOffset === 2 && (t.startsWith('- ') || t.startsWith('* '))) {
       if (currentType === 'unordered-list') return null
       return { targetType: 'unordered-list', stripLength: 2 }
     }
-    if (cursorOffset === 3 && text.startsWith('1. ')) {
+    if (cursorOffset === 3 && t.startsWith('1. ')) {
       if (currentType === 'ordered-list') return null
       return { targetType: 'ordered-list', stripLength: 3 }
     }
-    if (cursorOffset === 2 && text.startsWith('# ')) {
+    if (cursorOffset === 2 && t.startsWith('# ')) {
       return { targetType: 'header', headerLevel: 1, stripLength: 2 }
     }
-    if (cursorOffset === 3 && text.startsWith('## ')) {
+    if (cursorOffset === 3 && t.startsWith('## ')) {
       return { targetType: 'header', headerLevel: 2, stripLength: 3 }
     }
-    if (cursorOffset === 4 && text.startsWith('### ')) {
+    if (cursorOffset === 4 && t.startsWith('### ')) {
       return { targetType: 'header', headerLevel: 3, stripLength: 4 }
     }
     return null
