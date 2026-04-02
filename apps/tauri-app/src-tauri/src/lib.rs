@@ -24,6 +24,12 @@ fn list_notes(state: tauri::State<DbState>) -> Result<Vec<db::NoteMetadataDto>, 
     db::list_notes(&conn).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn get_or_create_daily_note(state: tauri::State<DbState>, date: String) -> Result<db::NoteDto, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    db::get_or_create_daily_note(&conn, &date).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -48,7 +54,7 @@ pub fn run() {
             app.manage(DbState(Mutex::new(conn)));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![save_note, load_note, list_notes])
+        .invoke_handler(tauri::generate_handler![save_note, load_note, list_notes, get_or_create_daily_note])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
