@@ -321,6 +321,18 @@ export class Text implements TextDto {
   }
 
   /**
+   * Returns a new `Text` with a single character inserted at `offset`.
+   * Inline annotations that start at or after `offset` are shifted right by 1.
+   * Inline annotations that end at or before `offset` are unchanged.
+   *
+   * @throws {RangeError} if offset < 0 or offset > text.length.
+   */
+  insert(offset: number, char: string): Text {
+    const [left, right] = this.split(offset)
+    return Text.merge(Text.merge(left, new Text(char, [])), right)
+  }
+
+  /**
    * Returns a new `Text` with all inlines of the given `type` removed from
    * `[start, end)`, regardless of payload.
    *
