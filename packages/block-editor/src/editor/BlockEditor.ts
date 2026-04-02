@@ -327,27 +327,30 @@ export class BlockEditor {
   #dispatchChanges(changes: BlocksChange[]): void {
     this.#emitter.cancelAll()
 
-    // Emit in a stable semantic order: dataChanged → added → removed → moved
+    const dataChanged: BlockDataChanged[] = []
+    const added: BlockAdded[] = []
+    const removed: BlockRemoved[] = []
+    const moved: BlockMoved[] = []
+
     for (const change of changes) {
       if (change instanceof BlockDataChanged) {
-        this.#emitter.emit('blockDataUpdated', { id: change.id, blockType: change.blockType, data: change.data })
+        dataChanged.push(change)
+      } else if (change instanceof BlockAdded) {
+        added.push(change)
+      } else if (change instanceof BlockRemoved) {
+        removed.push(change)
+      } else if (change instanceof BlockMoved) {
+        moved.push(change)
+      } else {
+        const _exhaustive: never = change
+        throw new Error(`Unhandled BlocksChange: ${(_exhaustive as { constructor: { name: string } }).constructor.name}`)
       }
     }
-    for (const change of changes) {
-      if (change instanceof BlockAdded) {
-        this.#emitter.emit('blockCreated', { id: change.id, blockType: change.blockType, data: change.data, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
-      }
-    }
-    for (const change of changes) {
-      if (change instanceof BlockRemoved) {
-        this.#emitter.emit('blockRemoved', { id: change.id })
-      }
-    }
-    for (const change of changes) {
-      if (change instanceof BlockMoved) {
-        this.#emitter.emit('blockMoved', { id: change.id, previousBlockId: change.previousBlockId, parentBlockId: change.parentBlockId })
-      }
-    }
+
+    for (const c of dataChanged) this.#emitter.emit('blockDataUpdated', { id: c.id, blockType: c.blockType, data: c.data })
+    for (const c of added) this.#emitter.emit('blockCreated', { id: c.id, blockType: c.blockType, data: c.data, previousBlockId: c.previousBlockId, parentBlockId: c.parentBlockId })
+    for (const c of removed) this.#emitter.emit('blockRemoved', { id: c.id })
+    for (const c of moved) this.#emitter.emit('blockMoved', { id: c.id, previousBlockId: c.previousBlockId, parentBlockId: c.parentBlockId })
   }
 
   #emitEvents(oldState: Blocks): void {
