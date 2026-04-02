@@ -2,6 +2,8 @@ export { Block, TextBlock, OrderedListBlock, UnorderedListBlock, HeaderBlock, He
 export { BlockEditor } from "./editor/BlockEditor";
 export { BlockRenderer } from "./editor/BlockRenderer";
 export { InputHandler } from "./editor/InputHandler";
+export { DailyNoteEditor } from "./editor/DailyNoteEditor";
+export type { NoteProvider } from "./editor/NoteProvider";
 export { BLOCK_EDITOR_EVENT_NAMES } from "./editor/events"
 export type {
   BlockEditorOptions,

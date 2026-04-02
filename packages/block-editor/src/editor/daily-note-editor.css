@@ -1,0 +1,15 @@
+.daily-note-editor {
+  display: flex;
+  flex-direction: column;
+}
+
+.daily-note-header {
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.5;
+  padding-bottom: 0.5rem;
+  user-select: none;
+  pointer-events: none;
+}
