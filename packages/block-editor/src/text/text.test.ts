@@ -611,3 +611,36 @@ describe('Text is frozen', () => {
     expect(() => { (t as any).text = 'x' }).toThrow(TypeError)
   })
 })
+
+// ─── insert ───────────────────────────────────────────────────────────────────
+
+describe('Text.insert', () => {
+  it('inserts a character at the start', () => {
+    const t = new Text('ello', [])
+    expect(t.insert(0, 'H').text).toBe('Hello')
+  })
+
+  it('inserts a character in the middle', () => {
+    const t = new Text('Hllo', [])
+    expect(t.insert(1, 'e').text).toBe('Hello')
+  })
+
+  it('inserts a character at the end', () => {
+    const t = new Text('Hell', [])
+    expect(t.insert(4, 'o').text).toBe('Hello')
+  })
+
+  it('preserves inlines that come entirely after the insertion point', () => {
+    const t = new Text('Hllo', [{ type: 'Bold', start: 1, end: 4 }])
+    const result = t.insert(1, 'e')
+    expect(result.text).toBe('Hello')
+    expect(result.inline).toEqual([{ type: 'Bold', start: 2, end: 5 }])
+  })
+
+  it('preserves inlines that come entirely before the insertion point', () => {
+    const t = new Text('Hllo', [{ type: 'Bold', start: 0, end: 1 }])
+    const result = t.insert(1, 'e')
+    expect(result.text).toBe('Hello')
+    expect(result.inline).toEqual([{ type: 'Bold', start: 0, end: 1 }])
+  })
+})

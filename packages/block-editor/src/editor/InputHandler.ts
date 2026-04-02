@@ -1,4 +1,3 @@
-import { Text } from '../text/text'
 import { textSerializer } from '../text/serializer'
 import { Blocks, BlockOffset, BlockRange, BlockDataChanged, BlockAdded, BlockRemoved, BlockMoved, type BlocksChange, type HeaderLevel } from '../blocks/blocks'
 import type { BlockSelection } from './events'
@@ -7,14 +6,6 @@ import { getBlockElementContent } from './BlockRenderer'
 import type { BlockHistory } from './BlockHistory'
 import type { BlockEventEmitter } from './BlockEventEmitter'
 import { InputRules } from './InputRules'
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/** Inserts a single character into a Text at the given offset. */
-function insertChar(text: Text, offset: number, char: string): Text {
-  const [left, right] = text.split(offset)
-  return Text.merge(Text.merge(left, new Text(char, [])), right)
-}
 
 // ─── InputHandler ───────────────────────────────────────────────────────────
 
@@ -176,7 +167,7 @@ export class InputHandler {
     const state = this.#getState()
     const block = state.getBlock(cursor.blockId)
     const text = block.getText()
-    const newText = insertChar(text, cursor.offset, char)
+    const newText = text.insert(cursor.offset, char)
     const newCursor = new BlockOffset(cursor.blockId, cursor.offset + 1)
     const newState = state.update(cursor.blockId, newText)
     this.#setState(newState)
