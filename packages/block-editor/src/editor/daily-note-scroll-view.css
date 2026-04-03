@@ -1,0 +1,15 @@
+.daily-note-scroll-view {
+  display: flex;
+  flex-direction: column;
+}
+
+.daily-note-sentinel-top,
+.daily-note-sentinel-bottom {
+  height: 1px;
+  flex-shrink: 0;
+}
+
+.daily-note-section {
+  display: flex;
+  flex-direction: column;
+}
