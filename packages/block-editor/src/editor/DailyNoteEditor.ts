@@ -52,14 +52,20 @@ export class DailyNoteEditor {
     }
   }
 
-  /** Place cursor at offset 0 of the first block and focus the editable. */
-  focusStart(): void {
-    this.#editor.focusStart()
+  /**
+   * Focus and place cursor at the start of the first block.
+   * Pass `x` (client X) to land at the same horizontal column on the first visual line.
+   */
+  focusStart(x?: number): void {
+    this.#editor.focusStart(x)
   }
 
-  /** Place cursor at the end of the last block and focus the editable. */
-  focusEnd(): void {
-    this.#editor.focusEnd()
+  /**
+   * Focus and place cursor at the end of the last block.
+   * Pass `x` (client X) to land at the same horizontal column on the last visual line.
+   */
+  focusEnd(x?: number): void {
+    this.#editor.focusEnd(x)
   }
 
   /**

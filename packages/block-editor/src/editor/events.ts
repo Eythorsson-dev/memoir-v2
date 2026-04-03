@@ -27,15 +27,19 @@ export interface BlockEditorOptions {
    */
   highlightStorageKey?: string
   /**
-   * Called when ArrowUp is pressed with the cursor at offset 0 of the first block.
-   * Lets a container (e.g. `DailyNoteScrollView`) move focus to the previous section.
+   * Called when ArrowUp is pressed with the cursor on the first visual line of the
+   * first block. Lets a container (e.g. `DailyNoteScrollView`) move focus to the
+   * previous section. `x` is the client X coordinate of the cursor for same-column
+   * placement in the destination section.
    */
-  onTopBoundaryEscape?: () => void
+  onTopBoundaryEscape?: (x: number) => void
   /**
-   * Called when ArrowDown is pressed with the cursor at the end of the last block.
-   * Lets a container (e.g. `DailyNoteScrollView`) move focus to the next section.
+   * Called when ArrowDown is pressed with the cursor on the last visual line of the
+   * last block. Lets a container (e.g. `DailyNoteScrollView`) move focus to the
+   * next section. `x` is the client X coordinate of the cursor for same-column
+   * placement in the destination section.
    */
-  onBottomBoundaryEscape?: () => void
+  onBottomBoundaryEscape?: (x: number) => void
 }
 
 export const BLOCK_EDITOR_EVENT_NAMES = [

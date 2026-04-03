@@ -132,8 +132,8 @@ export class DailyNoteScrollView {
     const editor = new DailyNoteEditor(sectionEl, this.#provider, date, {
       dataUpdateDebounceMs: this.#opts.dataUpdateDebounceMs,
       dataUpdateMaxWaitMs: this.#opts.dataUpdateMaxWaitMs,
-      onTopBoundaryEscape: () => this.#focusPrevSection(date),
-      onBottomBoundaryEscape: () => this.#focusNextSection(date),
+      onTopBoundaryEscape: (x) => this.#focusPrevSection(date, x),
+      onBottomBoundaryEscape: (x) => this.#focusNextSection(date, x),
     })
 
     this.#editors.set(date, editor)
@@ -173,17 +173,17 @@ export class DailyNoteScrollView {
     this.#unmountSection(removed)
   }
 
-  #focusPrevSection(date: string): void {
+  #focusPrevSection(date: string, x?: number): void {
     const idx = this.#dates.indexOf(date)
     if (idx <= 0) return
     const prevDate = this.#dates[idx - 1]
-    this.#editors.get(prevDate)?.focusEnd()
+    this.#editors.get(prevDate)?.focusEnd(x)
   }
 
-  #focusNextSection(date: string): void {
+  #focusNextSection(date: string, x?: number): void {
     const idx = this.#dates.indexOf(date)
     if (idx < 0 || idx >= this.#dates.length - 1) return
     const nextDate = this.#dates[idx + 1]
-    this.#editors.get(nextDate)?.focusStart()
+    this.#editors.get(nextDate)?.focusStart(x)
   }
 }
