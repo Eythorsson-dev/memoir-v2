@@ -95,6 +95,60 @@ describe('DailyNoteScrollView', () => {
     return { view, container }
   }
 
+  // ─── Single contenteditable ────────────────────────────────────────────────
+
+  it('uses a single contenteditable for all day sections', () => {
+    const { container } = make()
+    expect(container.querySelectorAll('[contenteditable="true"]').length).toBe(1)
+  })
+
+  it('renders block elements inside every day section', () => {
+    const { container } = make(makeProvider(), '2024-01-15', { windowSize: 3 })
+    const sections = Array.from(container.querySelectorAll('.daily-note-section'))
+    expect(sections.length).toBe(3)
+    for (const section of sections) {
+      expect(section.querySelectorAll('.block').length).toBeGreaterThan(0)
+    }
+  })
+
+  it('renders non-editable date headers inside each section', () => {
+    const { container } = make(makeProvider(), '2024-01-15', { windowSize: 3 })
+    const headers = Array.from(container.querySelectorAll('.daily-note-header'))
+    expect(headers.length).toBe(3)
+    for (const header of headers) {
+      expect((header as HTMLElement).contentEditable).toBe('false')
+    }
+  })
+
+  // ─── Backspace boundary protection ────────────────────────────────────────
+
+  it('Backspace at offset 0 of the first block of a section does not cross into the previous section', async () => {
+    const { container } = make(makeProvider(), '2024-01-15', { windowSize: 3 })
+    // sections: 2024-01-14 | 2024-01-15 | 2024-01-16
+
+    const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
+    await vi.waitFor(() => expect(container.querySelectorAll('.block').length).toBeGreaterThan(0))
+
+    const blockCountBefore = container.querySelectorAll('.block').length
+
+    // Focus the first block of the middle section (2024-01-15)
+    const sections = Array.from(container.querySelectorAll('.daily-note-section'))
+    const middleSection = sections.find(s => s.getAttribute('data-date') === '2024-01-15')!
+    const content = middleSection.querySelector('.daily-note-content')!
+    const firstBlock = content.querySelector('.block')!
+    const p = firstBlock.querySelector('p, h1, h2, h3')!
+    const range = document.createRange()
+    range.setStart(p, 0)
+    range.setEnd(p, 0)
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+
+    editable.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }))
+
+    // Block count must not decrease — no cross-day merge
+    expect(container.querySelectorAll('.block').length).toBe(blockCountBefore)
+  })
+
   // ─── Rendering ─────────────────────────────────────────────────────────────
 
   it('renders the default window of 7 day sections', () => {
@@ -118,7 +172,6 @@ describe('DailyNoteScrollView', () => {
     const { container } = make(makeProvider(), '2024-01-15', { windowSize: 3 })
     const sections = Array.from(container.querySelectorAll('.daily-note-section'))
     const dates = sections.map(s => s.getAttribute('data-date'))
-    // windowSize 3 → today ±1
     expect(dates).toContain('2024-01-14')
     expect(dates).toContain('2024-01-15')
     expect(dates).toContain('2024-01-16')
@@ -142,8 +195,6 @@ describe('DailyNoteScrollView', () => {
     const sections = Array.from(container.querySelectorAll('.daily-note-section'))
     expect(sections.length).toBe(3)
     const dates = sections.map(s => s.getAttribute('data-date'))
-    // Was: 2024-01-14, 2024-01-15, 2024-01-16
-    // After sliding down: 2024-01-15, 2024-01-16, 2024-01-17
     expect(dates).not.toContain('2024-01-14')
     expect(dates).toContain('2024-01-17')
   })
@@ -160,85 +211,17 @@ describe('DailyNoteScrollView', () => {
     const sections = Array.from(container.querySelectorAll('.daily-note-section'))
     expect(sections.length).toBe(3)
     const dates = sections.map(s => s.getAttribute('data-date'))
-    // Was: 2024-01-14, 2024-01-15, 2024-01-16
-    // After sliding up: 2024-01-13, 2024-01-14, 2024-01-15
     expect(dates).not.toContain('2024-01-16')
     expect(dates).toContain('2024-01-13')
   })
 
-  // ─── Cross-day navigation ──────────────────────────────────────────────────
-
-  it('ArrowUp at top of a section moves cursor to end of the previous section', async () => {
-    const { container } = make(makeProvider(), '2024-01-15', { windowSize: 3 })
-    // sections: 2024-01-14, 2024-01-15, 2024-01-16
-    // Wait for editables to render
-    await vi.waitFor(() => expect(container.querySelectorAll('.block-editor-editable').length).toBe(3))
-
-    // Get the editable for 2024-01-15 (middle section, index 1)
-    const sections = Array.from(container.querySelectorAll('.daily-note-section'))
-    const middleSection = sections.find(s => s.getAttribute('data-date') === '2024-01-15')!
-    const middleEditable = middleSection.querySelector('.block-editor-editable') as HTMLElement
-
-    // Focus the editable and place cursor at offset 0 of the first block
-    const firstBlock = middleEditable.querySelector('.block')!
-    const p = firstBlock.querySelector('p, h1, h2, h3')!
-    const range = document.createRange()
-    range.setStart(p, 0)
-    range.setEnd(p, 0)
-    window.getSelection()!.removeAllRanges()
-    window.getSelection()!.addRange(range)
-    middleEditable.focus()
-
-    // Dispatch ArrowUp — should trigger onTopBoundaryEscape → focusEnd on 2024-01-14
-    middleEditable.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }))
-
-    // The previous section's editable should now be focused
-    const prevSection = sections.find(s => s.getAttribute('data-date') === '2024-01-14')!
-    const prevEditable = prevSection.querySelector('.block-editor-editable') as HTMLElement
-    expect(prevEditable.contains(window.getSelection()!.anchorNode)).toBe(true)
-  })
-
-  it('ArrowDown at bottom of a section moves cursor to start of the next section', async () => {
-    const { container } = make(makeProvider(), '2024-01-15', { windowSize: 3 })
-    await vi.waitFor(() => expect(container.querySelectorAll('.block-editor-editable').length).toBe(3))
-
-    const sections = Array.from(container.querySelectorAll('.daily-note-section'))
-    const middleSection = sections.find(s => s.getAttribute('data-date') === '2024-01-15')!
-    const middleEditable = middleSection.querySelector('.block-editor-editable') as HTMLElement
-
-    // Place cursor at end of last block using the same offset logic as BlockRenderer:
-    // for an empty block the <p> has a <br> child, so use (p, 0) as focusEnd() does.
-    const blocks = Array.from(middleEditable.querySelectorAll('.block'))
-    const lastBlock = blocks[blocks.length - 1]
-    const p = lastBlock.querySelector('p, h1, h2, h3')!
-    const range = document.createRange()
-    const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT)
-    const textNode = walker.nextNode()
-    if (textNode) {
-      const len = (textNode.textContent ?? '').length
-      range.setStart(textNode, len)
-      range.setEnd(textNode, len)
-    } else {
-      range.setStart(p, 0)
-      range.setEnd(p, 0)
-    }
-    window.getSelection()!.removeAllRanges()
-    window.getSelection()!.addRange(range)
-    middleEditable.focus()
-
-    middleEditable.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))
-
-    const nextSection = sections.find(s => s.getAttribute('data-date') === '2024-01-16')!
-    const nextEditable = nextSection.querySelector('.block-editor-editable') as HTMLElement
-    expect(nextEditable.contains(window.getSelection()!.anchorNode)).toBe(true)
-  })
+  // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
   it('destroy disconnects the IntersectionObserver', () => {
     const { view } = make()
     const io = MockIntersectionObserver.instances[0]
     const disconnectSpy = vi.spyOn(io, 'disconnect')
     view.destroy()
-    // remove from afterEach list since already destroyed
     views.splice(views.indexOf(view), 1)
     expect(disconnectSpy).toHaveBeenCalled()
   })
