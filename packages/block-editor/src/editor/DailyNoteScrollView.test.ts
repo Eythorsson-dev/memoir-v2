@@ -64,6 +64,19 @@ function makeContainer(): HTMLElement {
   return div
 }
 
+/** Set a DOM selection that spans from one day section to another. */
+function setCrossDayRange(container: HTMLElement, startDate: string, endDate: string): void {
+  const startBlock = container.querySelector(`[data-date="${startDate}"] .daily-note-content .block`)!
+  const endBlock   = container.querySelector(`[data-date="${endDate}"] .daily-note-content .block`)!
+  const startEl = startBlock.querySelector('p, h1, h2, h3')!
+  const endEl   = endBlock.querySelector('p, h1, h2, h3')!
+  const range = document.createRange()
+  range.setStart(startEl, 0)
+  range.setEnd(endEl, 0)
+  window.getSelection()!.removeAllRanges()
+  window.getSelection()!.addRange(range)
+}
+
 // ─── tests ────────────────────────────────────────────────────────────────────
 
 describe('DailyNoteScrollView', () => {
@@ -213,6 +226,69 @@ describe('DailyNoteScrollView', () => {
     const dates = sections.map(s => s.getAttribute('data-date'))
     expect(dates).not.toContain('2024-01-16')
     expect(dates).toContain('2024-01-13')
+  })
+
+  // ─── Cross-day selection ──────────────────────────────────────────────────
+
+  it('cross-day Backspace calls preventDefault and preserves all day sections', async () => {
+    const { container } = make(makeProvider(), '2024-01-15', { windowSize: 3 })
+    const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
+    await vi.waitFor(() => expect(container.querySelectorAll('.block').length).toBe(3))
+
+    setCrossDayRange(container, '2024-01-14', '2024-01-15')
+
+    const event = new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true })
+    const preventDefaultSpy = vi.spyOn(event, 'preventDefault')
+    editable.dispatchEvent(event)
+
+    expect(preventDefaultSpy).toHaveBeenCalled()
+    expect(container.querySelectorAll('.daily-note-section').length).toBe(3)
+    expect(container.querySelector('[data-date="2024-01-14"]')).toBeTruthy()
+    expect(container.querySelector('[data-date="2024-01-15"]')).toBeTruthy()
+  })
+
+  it('cross-day Backspace places the cursor in the end day', async () => {
+    const { container } = make(makeProvider(), '2024-01-15', { windowSize: 3 })
+    const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
+    await vi.waitFor(() => expect(container.querySelectorAll('.block').length).toBe(3))
+
+    setCrossDayRange(container, '2024-01-14', '2024-01-15')
+    editable.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }))
+
+    const endSection = container.querySelector('[data-date="2024-01-15"]')!
+    const endContent = endSection.querySelector('.daily-note-content')!
+    const anchor = window.getSelection()!.anchorNode
+    expect(endContent.contains(anchor)).toBe(true)
+  })
+
+  it('cross-day Enter calls preventDefault and preserves all day sections', async () => {
+    const { container } = make(makeProvider(), '2024-01-15', { windowSize: 3 })
+    const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
+    await vi.waitFor(() => expect(container.querySelectorAll('.block').length).toBe(3))
+
+    setCrossDayRange(container, '2024-01-14', '2024-01-15')
+
+    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    const preventDefaultSpy = vi.spyOn(event, 'preventDefault')
+    editable.dispatchEvent(event)
+
+    expect(preventDefaultSpy).toHaveBeenCalled()
+    expect(container.querySelectorAll('.daily-note-section').length).toBe(3)
+  })
+
+  it('cross-day character input calls preventDefault and preserves all day sections', async () => {
+    const { container } = make(makeProvider(), '2024-01-15', { windowSize: 3 })
+    const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
+    await vi.waitFor(() => expect(container.querySelectorAll('.block').length).toBe(3))
+
+    setCrossDayRange(container, '2024-01-14', '2024-01-15')
+
+    const event = new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true })
+    const preventDefaultSpy = vi.spyOn(event, 'preventDefault')
+    editable.dispatchEvent(event)
+
+    expect(preventDefaultSpy).toHaveBeenCalled()
+    expect(container.querySelectorAll('.daily-note-section').length).toBe(3)
   })
 
   // ─── Lifecycle ─────────────────────────────────────────────────────────────

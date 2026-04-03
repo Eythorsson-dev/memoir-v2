@@ -1,7 +1,7 @@
 import { Blocks, BlockOffset, BlockRange, type BlockId } from '../blocks/blocks'
 import type { NoteProvider } from './NoteProvider'
 import type { BlockSelection } from './events'
-import { BlockRenderer } from './BlockRenderer'
+import { BlockRenderer, getBlockElement, getBlockElementContent, getCharOffset } from './BlockRenderer'
 import { BlockHistory } from './BlockHistory'
 import { BlockEventEmitter } from './BlockEventEmitter'
 import { InputHandler } from './InputHandler'
@@ -41,6 +41,16 @@ export interface DailyNoteScrollViewOptions {
 // ─── Internal per-day state ───────────────────────────────────────────────────
 
 const DATA_EVENTS = ['blockCreated', 'blockDataUpdated', 'blockRemoved', 'blockMoved'] as const
+
+interface CrossDaySelection {
+  startDay: DayState
+  startBlockId: string
+  startOffset: number
+  endDay: DayState
+  endBlockId: string
+  endOffset: number
+  middleDays: DayState[]
+}
 
 interface DayState {
   date: string
@@ -276,6 +286,19 @@ export class DailyNoteScrollView {
 
   // ─── Private: event routing ───────────────────────────────────────────────────
 
+  /** Walk up from `node` to find the `.daily-note-section[data-date]` ancestor. */
+  #getDayForNode(node: Node): DayState | null {
+    let current: Node | null = node
+    while (current) {
+      if (current.nodeType === Node.ELEMENT_NODE) {
+        const date = (current as Element).getAttribute?.('data-date')
+        if (date) return this.#dayStates.get(date) ?? null
+      }
+      current = current.parentNode
+    }
+    return null
+  }
+
   /**
    * Find the day state whose content element contains the current selection anchor.
    * Returns null when the cursor is in a header or outside all sections.
@@ -283,17 +306,134 @@ export class DailyNoteScrollView {
   #getActiveDayState(): DayState | null {
     const domSel = window.getSelection()
     if (!domSel || domSel.rangeCount === 0) return null
-    const anchor = domSel.getRangeAt(0).startContainer
+    return this.#getDayForNode(domSel.getRangeAt(0).startContainer)
+  }
 
-    let node: Node | null = anchor
-    while (node) {
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const date = (node as Element).getAttribute?.('data-date')
-        if (date) return this.#dayStates.get(date) ?? null
-      }
-      node = node.parentNode
+  /** True when the DOM selection spans two different day sections. */
+  #isCrossDaySelection(): boolean {
+    const domSel = window.getSelection()
+    if (!domSel || domSel.isCollapsed || domSel.rangeCount === 0) return false
+    const a = this.#getDayForNode(domSel.anchorNode!)
+    const f = this.#getDayForNode(domSel.focusNode!)
+    return a !== null && f !== null && a !== f
+  }
+
+  /**
+   * Resolve a cross-day DOM selection into structured start/end state.
+   * Returns null if the selection is collapsed, same-day, or doesn't map to
+   * identifiable block elements.
+   */
+  #getCrossDaySelection(): CrossDaySelection | null {
+    const domSel = window.getSelection()
+    if (!domSel || domSel.isCollapsed || domSel.rangeCount === 0) return null
+
+    const anchorDay = this.#getDayForNode(domSel.anchorNode!)
+    const focusDay  = this.#getDayForNode(domSel.focusNode!)
+    if (!anchorDay || !focusDay || anchorDay === focusDay) return null
+
+    // Determine document order (anchor may come after focus for backwards selections)
+    const anchorFirst = !!(
+      domSel.anchorNode!.compareDocumentPosition(domSel.focusNode!) &
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
+
+    const startDay  = anchorFirst ? anchorDay  : focusDay
+    const startNode = anchorFirst ? domSel.anchorNode! : domSel.focusNode!
+    const startOff  = anchorFirst ? domSel.anchorOffset : domSel.focusOffset
+    const endDay    = anchorFirst ? focusDay   : anchorDay
+    const endNode   = anchorFirst ? domSel.focusNode!  : domSel.anchorNode!
+    const endOff    = anchorFirst ? domSel.focusOffset : domSel.anchorOffset
+
+    const startBlockEl = getBlockElement(startNode)
+    const endBlockEl   = getBlockElement(endNode)
+    if (!startBlockEl || !endBlockEl) return null
+
+    const startP = getBlockElementContent(startBlockEl)
+    const endP   = getBlockElementContent(endBlockEl)
+    const startCharOff = getCharOffset(startP, startNode, startOff)
+    const endCharOff   = getCharOffset(endP,   endNode,   endOff)
+    if (startCharOff === -1 || endCharOff === -1) return null
+
+    const startIdx = this.#dates.indexOf(startDay.date)
+    const endIdx   = this.#dates.indexOf(endDay.date)
+    const middleDays: DayState[] = []
+    for (let i = startIdx + 1; i < endIdx; i++) {
+      const d = this.#dayStates.get(this.#dates[i])
+      if (d) middleDays.push(d)
     }
-    return null
+
+    return {
+      startDay, startBlockId: startBlockEl.id, startOffset: startCharOff,
+      endDay,   endBlockId:   endBlockEl.id,   endOffset:   endCharOff,
+      middleDays,
+    }
+  }
+
+  /**
+   * Delete the cross-day selection:
+   * 1. Trim start day: keep content before selection start.
+   * 2. Clear middle days to a single empty block.
+   * 3. Trim end day: remove content before selection end; cursor lands at offset 0
+   *    of the first remaining block in the end day.
+   *
+   * Returns the cursor `BlockOffset` in the end day, or null on failure.
+   */
+  #handleCrossDayDeletion(cs: CrossDaySelection): BlockOffset {
+    // 1. Trim start day: delete from selection start to end of start day
+    const startLastBlock = cs.startDay.ref.blocks.blocks.at(-1)!
+    const needsStartTrim =
+      cs.startBlockId !== startLastBlock.id ||
+      cs.startOffset !== startLastBlock.getLength()
+    if (needsStartTrim) {
+      cs.startDay.input.pendingSelectionBefore = null
+      cs.startDay.input.deleteRange(new BlockRange(
+        new BlockOffset(cs.startBlockId, cs.startOffset),
+        new BlockOffset(startLastBlock.id, startLastBlock.getLength()),
+      ))
+      cs.startDay.renderer.render(cs.startDay.ref.blocks)
+    }
+
+    // 2. Clear middle days
+    for (const mid of cs.middleDays) {
+      const cleared = Blocks.from([Blocks.createTextBlock()])
+      const old = mid.ref.blocks
+      mid.ref.blocks = cleared
+      mid.renderer.render(cleared)
+      mid.emitter.dispatchChanges(Blocks.diff(old, cleared))
+    }
+
+    // 3. Trim end day: delete from start of end day to selection end
+    const endFirstBlock = cs.endDay.ref.blocks.blocks[0]
+    const endRangeCollapsed =
+      endFirstBlock.id === cs.endBlockId && cs.endOffset === 0
+    if (!endRangeCollapsed) {
+      cs.endDay.input.pendingSelectionBefore = null
+      const cursor = cs.endDay.input.deleteRange(new BlockRange(
+        new BlockOffset(endFirstBlock.id, 0),
+        new BlockOffset(cs.endBlockId, cs.endOffset),
+      ))
+      cs.endDay.renderer.render(cs.endDay.ref.blocks, cursor)
+      return cursor
+    }
+    // Nothing to trim — place cursor at start of first block in end day
+    const cursor = new BlockOffset(endFirstBlock.id, 0)
+    cs.endDay.renderer.render(cs.endDay.ref.blocks, cursor)
+    return cursor
+  }
+
+  #handleCrossDayEnter(cs: CrossDaySelection): void {
+    this.#handleCrossDayDeletion(cs)
+  }
+
+  #handleCrossDayCharInput(cs: CrossDaySelection, char: string): void {
+    const cursor = this.#handleCrossDayDeletion(cs)
+    const state = cs.endDay.ref.blocks
+    const block = state.getBlock(cursor.blockId)
+    const newText = block.getText().insert(cursor.offset, char)
+    const newCursor = new BlockOffset(cursor.blockId, cursor.offset + 1)
+    cs.endDay.ref.blocks = state.update(cursor.blockId, newText)
+    cs.endDay.renderer.render(cs.endDay.ref.blocks, newCursor)
+    cs.endDay.emitter.scheduleDataUpdated(cursor.blockId)
   }
 
   #handleBlur(): void {
@@ -361,6 +501,28 @@ export class DailyNoteScrollView {
         dayState.emitter.dispatchChanges(Blocks.diff(oldBlocks, blocks))
       }
       return
+    }
+
+    // Cross-day selection: block destructive operations that would merge sections
+    if (this.#isCrossDaySelection()) {
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault()
+        const cs = this.#getCrossDaySelection()
+        if (cs) this.#handleCrossDayDeletion(cs)
+        return
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        const cs = this.#getCrossDaySelection()
+        if (cs) this.#handleCrossDayEnter(cs)
+        return
+      }
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault()
+        const cs = this.#getCrossDaySelection()
+        if (cs) this.#handleCrossDayCharInput(cs, e.key)
+        return
+      }
     }
 
     const dayState = this.#getActiveDayState()
