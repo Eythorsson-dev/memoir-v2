@@ -52,6 +52,16 @@ export class DailyNoteEditor {
     }
   }
 
+  /** Place cursor at offset 0 of the first block and focus the editable. */
+  focusStart(): void {
+    this.#editor.focusStart()
+  }
+
+  /** Place cursor at the end of the last block and focus the editable. */
+  focusEnd(): void {
+    this.#editor.focusEnd()
+  }
+
   /**
    * Remove the editor from the DOM and cancel any pending debounced events.
    *
