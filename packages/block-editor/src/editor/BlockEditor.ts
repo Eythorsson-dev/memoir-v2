@@ -355,10 +355,24 @@ export class BlockEditor {
 
   // ─── Private helpers ────────────────────────────────────────────────────────
 
-  /** Returns the client X coordinate of the current cursor. */
+  /**
+   * Returns the client X coordinate of the current cursor or focus end of a selection.
+   * Used to preserve horizontal position when crossing section boundaries.
+   */
   #getCursorClientX(): number {
     const domSel = window.getSelection()
-    if (!domSel || domSel.rangeCount === 0) return 0
+    if (!domSel) return 0
+    // For a non-collapsed selection, use the focus node (where the user last clicked/arrowed)
+    if (!domSel.isCollapsed && domSel.focusNode) {
+      try {
+        const focusRange = document.createRange()
+        focusRange.setStart(domSel.focusNode, domSel.focusOffset)
+        focusRange.collapse(true)
+        const rect = focusRange.getBoundingClientRect()
+        if (rect.height > 0) return rect.left
+      } catch { /* fall through */ }
+    }
+    if (domSel.rangeCount === 0) return 0
     return domSel.getRangeAt(0).getBoundingClientRect().left
   }
 
@@ -464,9 +478,15 @@ export class BlockEditor {
 
     if (e.key === 'ArrowUp' && this.#onTopBoundaryEscape) {
       const firstBlock = this.#state.blocks[0]
-      if (firstBlock && sel instanceof BlockOffset && sel.blockId === firstBlock.id) {
-        const atStart = sel.offset === 0
-        if (atStart || this.#isOnFirstVisualLine(firstBlock.id)) {
+      if (firstBlock) {
+        let shouldEscape = false
+        if (sel instanceof BlockOffset && sel.blockId === firstBlock.id) {
+          shouldEscape = sel.offset === 0 || this.#isOnFirstVisualLine(firstBlock.id)
+        } else if (sel instanceof BlockRange && sel.start.blockId === firstBlock.id && sel.start.offset === 0) {
+          // Range whose visual top is at the section boundary — escape regardless of Shift
+          shouldEscape = true
+        }
+        if (shouldEscape) {
           e.preventDefault()
           this.#onTopBoundaryEscape(this.#getCursorClientX())
           return
@@ -477,9 +497,15 @@ export class BlockEditor {
     if (e.key === 'ArrowDown' && this.#onBottomBoundaryEscape) {
       const blocks = this.#state.blocks
       const lastBlock = blocks[blocks.length - 1]
-      if (lastBlock && sel instanceof BlockOffset && sel.blockId === lastBlock.id) {
-        const atEnd = sel.offset === lastBlock.getLength()
-        if (atEnd || this.#isOnLastVisualLine(lastBlock.id)) {
+      if (lastBlock) {
+        let shouldEscape = false
+        if (sel instanceof BlockOffset && sel.blockId === lastBlock.id) {
+          shouldEscape = sel.offset === lastBlock.getLength() || this.#isOnLastVisualLine(lastBlock.id)
+        } else if (sel instanceof BlockRange && sel.end.blockId === lastBlock.id && sel.end.offset === lastBlock.getLength()) {
+          // Range whose visual bottom is at the section boundary — escape regardless of Shift
+          shouldEscape = true
+        }
+        if (shouldEscape) {
           e.preventDefault()
           this.#onBottomBoundaryEscape(this.#getCursorClientX())
           return
