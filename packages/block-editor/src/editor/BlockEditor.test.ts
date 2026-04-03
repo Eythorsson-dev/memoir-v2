@@ -1506,3 +1506,101 @@ describe('BlockEditor — blockDataUpdated carries Header data', () => {
     cleanup(editor, container)
   })
 })
+
+// ─── focusStart / focusEnd ────────────────────────────────────────────────────
+
+describe('focusStart / focusEnd', () => {
+  it('focusStart places cursor at offset 0 of the first block', () => {
+    const container = makeContainer()
+    const initial = Blocks.from([dto('b1', 'hello'), dto('b2', 'world')])
+    const editor = new BlockEditor(container, initial)
+
+    editor.focusStart()
+
+    const sel = window.getSelection()!
+    const range = sel.getRangeAt(0)
+    expect(range.collapsed).toBe(true)
+    // cursor should be inside block b1
+    expect(getEditable(container).querySelector('[id="b1"]')!.contains(range.startContainer)).toBe(true)
+    cleanup(editor, container)
+  })
+
+  it('focusEnd places cursor at the end of the last block', () => {
+    const container = makeContainer()
+    const initial = Blocks.from([dto('b1', 'hello'), dto('b2', 'world')])
+    const editor = new BlockEditor(container, initial)
+
+    editor.focusEnd()
+
+    const sel = window.getSelection()!
+    const range = sel.getRangeAt(0)
+    expect(range.collapsed).toBe(true)
+    // cursor should be inside block b2 at offset 5
+    expect(getEditable(container).querySelector('[id="b2"]')!.contains(range.startContainer)).toBe(true)
+    cleanup(editor, container)
+  })
+})
+
+// ─── Boundary callbacks ────────────────────────────────────────────────────────
+
+describe('boundary callbacks', () => {
+  it('calls onTopBoundaryEscape when ArrowUp at first block offset 0', () => {
+    const onTop = vi.fn()
+    const container = makeContainer()
+    const initial = Blocks.from([dto('b1', 'hello'), dto('b2', 'world')])
+    const editor = new BlockEditor(container, initial, { onTopBoundaryEscape: onTop })
+
+    setCursor(container, 'b1', 0)
+    keydown(container, 'ArrowUp')
+
+    expect(onTop).toHaveBeenCalledOnce()
+    cleanup(editor, container)
+  })
+
+  it('does not call onTopBoundaryEscape when ArrowUp not at first block offset 0', () => {
+    const onTop = vi.fn()
+    const container = makeContainer()
+    const initial = Blocks.from([dto('b1', 'hello'), dto('b2', 'world')])
+    const editor = new BlockEditor(container, initial, { onTopBoundaryEscape: onTop })
+
+    setCursor(container, 'b1', 3)
+    keydown(container, 'ArrowUp')
+    expect(onTop).not.toHaveBeenCalled()
+
+    setCursor(container, 'b2', 0)
+    keydown(container, 'ArrowUp')
+    expect(onTop).not.toHaveBeenCalled()
+
+    cleanup(editor, container)
+  })
+
+  it('calls onBottomBoundaryEscape when ArrowDown at last block end', () => {
+    const onBottom = vi.fn()
+    const container = makeContainer()
+    const initial = Blocks.from([dto('b1', 'hello'), dto('b2', 'world')])
+    const editor = new BlockEditor(container, initial, { onBottomBoundaryEscape: onBottom })
+
+    setCursor(container, 'b2', 5)
+    keydown(container, 'ArrowDown')
+
+    expect(onBottom).toHaveBeenCalledOnce()
+    cleanup(editor, container)
+  })
+
+  it('does not call onBottomBoundaryEscape when ArrowDown not at last block end', () => {
+    const onBottom = vi.fn()
+    const container = makeContainer()
+    const initial = Blocks.from([dto('b1', 'hello'), dto('b2', 'world')])
+    const editor = new BlockEditor(container, initial, { onBottomBoundaryEscape: onBottom })
+
+    setCursor(container, 'b2', 2)
+    keydown(container, 'ArrowDown')
+    expect(onBottom).not.toHaveBeenCalled()
+
+    setCursor(container, 'b1', 5)
+    keydown(container, 'ArrowDown')
+    expect(onBottom).not.toHaveBeenCalled()
+
+    cleanup(editor, container)
+  })
+})

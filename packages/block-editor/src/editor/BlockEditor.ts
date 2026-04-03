@@ -30,6 +30,8 @@ export class BlockEditor {
   #emitter: BlockEventEmitter
   #renderer: BlockRenderer
   #input: InputHandler
+  #onTopBoundaryEscape: (() => void) | undefined
+  #onBottomBoundaryEscape: (() => void) | undefined
 
   #onSelectionChange = (): void => {
     if (document.activeElement === this.#renderer.editable) {
@@ -43,6 +45,8 @@ export class BlockEditor {
   }
 
   constructor(container: HTMLElement, initial?: Blocks, opts: BlockEditorOptions = {}) {
+    this.#onTopBoundaryEscape = opts.onTopBoundaryEscape
+    this.#onBottomBoundaryEscape = opts.onBottomBoundaryEscape
     this.#state = initial ?? Blocks.from([Blocks.createTextBlock()])
     this.#history = new BlockHistory(this.#state)
     this.#emitter = new BlockEventEmitter(
@@ -289,6 +293,23 @@ export class BlockEditor {
     }
   }
 
+  /** Place cursor at offset 0 of the first block and focus the editable. */
+  focusStart(): void {
+    const firstBlock = this.#state.blocks[0]
+    if (!firstBlock) return
+    this.#renderer.editable.focus()
+    this.#renderer.restoreSelection(new BlockOffset(firstBlock.id, 0))
+  }
+
+  /** Place cursor at the end of the last block and focus the editable. */
+  focusEnd(): void {
+    const blocks = this.#state.blocks
+    const lastBlock = blocks[blocks.length - 1]
+    if (!lastBlock) return
+    this.#renderer.editable.focus()
+    this.#renderer.restoreSelection(new BlockOffset(lastBlock.id, lastBlock.getLength()))
+  }
+
   canUndo(): boolean { return this.#history.canUndo() }
   canRedo(): boolean { return this.#history.canRedo() }
 
@@ -358,6 +379,25 @@ export class BlockEditor {
 
     const sel = this.#renderer.getSelection()
     this.#input.pendingSelectionBefore = sel
+
+    if (e.key === 'ArrowUp' && this.#onTopBoundaryEscape) {
+      const firstBlock = this.#state.blocks[0]
+      if (firstBlock && sel instanceof BlockOffset && sel.blockId === firstBlock.id && sel.offset === 0) {
+        e.preventDefault()
+        this.#onTopBoundaryEscape()
+        return
+      }
+    }
+
+    if (e.key === 'ArrowDown' && this.#onBottomBoundaryEscape) {
+      const blocks = this.#state.blocks
+      const lastBlock = blocks[blocks.length - 1]
+      if (lastBlock && sel instanceof BlockOffset && sel.blockId === lastBlock.id && sel.offset === lastBlock.getLength()) {
+        e.preventDefault()
+        this.#onBottomBoundaryEscape()
+        return
+      }
+    }
 
     if (e.key === 'Enter') {
       e.preventDefault()
