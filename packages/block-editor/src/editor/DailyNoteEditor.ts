@@ -53,6 +53,22 @@ export class DailyNoteEditor {
   }
 
   /**
+   * Focus and place cursor at the start of the first block.
+   * Pass `x` (client X) to land at the same horizontal column on the first visual line.
+   */
+  focusStart(x?: number): void {
+    this.#editor.focusStart(x)
+  }
+
+  /**
+   * Focus and place cursor at the end of the last block.
+   * Pass `x` (client X) to land at the same horizontal column on the last visual line.
+   */
+  focusEnd(x?: number): void {
+    this.#editor.focusEnd(x)
+  }
+
+  /**
    * Remove the editor from the DOM and cancel any pending debounced events.
    *
    * @remarks

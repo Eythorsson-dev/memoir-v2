@@ -143,6 +143,34 @@ describe('DailyNoteEditor', () => {
     expect(provider.saveCalls[0].date).toBe('2024-01-15')
   })
 
+  it('focusStart places cursor at start of first block', async () => {
+    const blocks = [new TextBlock('b1', new Text('hello', []), [])]
+    const { container, editor } = make(makeProvider(blocks))
+    await vi.waitFor(() => expect(container.querySelector('[id="b1"]')).toBeTruthy())
+
+    editor.focusStart()
+
+    const sel = window.getSelection()!
+    expect(sel.rangeCount).toBeGreaterThan(0)
+    const range = sel.getRangeAt(0)
+    expect(range.collapsed).toBe(true)
+    expect(container.querySelector('[id="b1"]')!.contains(range.startContainer)).toBe(true)
+  })
+
+  it('focusEnd places cursor at end of last block', async () => {
+    const blocks = [new TextBlock('b1', new Text('hello', []), [])]
+    const { container, editor } = make(makeProvider(blocks))
+    await vi.waitFor(() => expect(container.querySelector('[id="b1"]')).toBeTruthy())
+
+    editor.focusEnd()
+
+    const sel = window.getSelection()!
+    expect(sel.rangeCount).toBeGreaterThan(0)
+    const range = sel.getRangeAt(0)
+    expect(range.collapsed).toBe(true)
+    expect(container.querySelector('[id="b1"]')!.contains(range.startContainer)).toBe(true)
+  })
+
   it('does not call setValue after destroy', async () => {
     const blocks = [new TextBlock('b1', new Text('loaded', []), [])]
     let resolveLoad!: (v: TextBlock[] | null) => void

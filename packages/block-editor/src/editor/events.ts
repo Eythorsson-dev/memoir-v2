@@ -26,6 +26,20 @@ export interface BlockEditorOptions {
    * @default 'previous-highlight'
    */
   highlightStorageKey?: string
+  /**
+   * Called when ArrowUp is pressed with the cursor on the first visual line of the
+   * first block. Lets a container (e.g. `DailyNoteScrollView`) move focus to the
+   * previous section. `x` is the client X coordinate of the cursor for same-column
+   * placement in the destination section.
+   */
+  onTopBoundaryEscape?: (x: number) => void
+  /**
+   * Called when ArrowDown is pressed with the cursor on the last visual line of the
+   * last block. Lets a container (e.g. `DailyNoteScrollView`) move focus to the
+   * next section. `x` is the client X coordinate of the cursor for same-column
+   * placement in the destination section.
+   */
+  onBottomBoundaryEscape?: (x: number) => void
 }
 
 export const BLOCK_EDITOR_EVENT_NAMES = [
