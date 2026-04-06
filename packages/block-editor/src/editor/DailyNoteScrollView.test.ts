@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { DailyNoteScrollView } from './DailyNoteScrollView'
+import { Blocks } from '../blocks/blocks'
 import type { NoteProvider } from './NoteProvider'
 
 // ─── IntersectionObserver mock ────────────────────────────────────────────────
@@ -317,6 +318,120 @@ describe('DailyNoteScrollView', () => {
 
     expect(preventDefaultSpy).toHaveBeenCalled()
     expect(container.querySelectorAll('.daily-note-section').length).toBe(3)
+  })
+
+  // ─── Undo / Redo ──────────────────────────────────────────────────────────
+
+  it('Cmd+Z always calls preventDefault even when there is nothing to undo', () => {
+    const { container } = make()
+    const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'z', metaKey: true, shiftKey: false,
+      bubbles: true, cancelable: true,
+    })
+    const spy = vi.spyOn(event, 'preventDefault')
+    editable.dispatchEvent(event)
+
+    expect(spy).toHaveBeenCalled()
+  })
+
+  it('Cmd+Shift+Z always calls preventDefault even when there is nothing to redo', () => {
+    const { container } = make()
+    const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'z', metaKey: true, shiftKey: true,
+      bubbles: true, cancelable: true,
+    })
+    const spy = vi.spyOn(event, 'preventDefault')
+    editable.dispatchEvent(event)
+
+    expect(spy).toHaveBeenCalled()
+  })
+
+  it('Cmd+Z after Enter restores the loaded note state, not the empty placeholder', async () => {
+    // Provider returns a note that already has 2 blocks (distinct from the 1-block placeholder)
+    const loadedBlocks = Blocks.from([
+      Blocks.createTextBlock(),
+      Blocks.createTextBlock(),
+    ]).blocks
+    const provider: NoteProvider = {
+      load: vi.fn().mockResolvedValue(loadedBlocks),
+      save: vi.fn().mockResolvedValue(undefined),
+    }
+    const { container } = make(provider, '2024-01-15', { windowSize: 1 })
+    const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
+
+    // Wait for the 2-block loaded note to render
+    await vi.waitFor(() => expect(container.querySelectorAll('[data-date="2024-01-15"] .block').length).toBe(2))
+
+    // Set cursor in the first loaded block
+    const block = container.querySelector('[data-date="2024-01-15"] .block')!
+    const p = block.querySelector('p, h1, h2, h3')!
+    const range = document.createRange()
+    range.setStart(p, 0)
+    range.setEnd(p, 0)
+    window.getSelection()!.removeAllRanges()
+    window.getSelection()!.addRange(range)
+
+    // Enter → 3 blocks
+    editable.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    expect(container.querySelectorAll('[data-date="2024-01-15"] .block').length).toBe(3)
+
+    // Cmd+Z must restore to 2 blocks (the loaded state), not 1 (the empty placeholder)
+    expect(() => {
+      editable.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'z', metaKey: true, shiftKey: false,
+        bubbles: true, cancelable: true,
+      }))
+    }).not.toThrow()
+    expect(container.querySelectorAll('[data-date="2024-01-15"] .block').length).toBe(2)
+  })
+
+  it('Cmd+Z undoes across days — most recent change first regardless of which day is active', async () => {
+    const { container } = make(makeProvider(), '2024-01-15', { windowSize: 3 })
+    // sections: 2024-01-14 | 2024-01-15 | 2024-01-16
+    const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
+    await vi.waitFor(() => expect(container.querySelectorAll('.block').length).toBe(3))
+
+    /** Place the cursor at offset 0 in the first block of `date`. */
+    function focusDay(date: string): void {
+      const block = container.querySelector(`[data-date="${date}"] .block`)!
+      const p = block.querySelector('p, h1, h2, h3')!
+      const range = document.createRange()
+      range.setStart(p, 0)
+      range.setEnd(p, 0)
+      window.getSelection()!.removeAllRanges()
+      window.getSelection()!.addRange(range)
+    }
+
+    // Edit day 2024-01-14: press Enter → 2 blocks
+    focusDay('2024-01-14')
+    editable.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    expect(container.querySelectorAll('[data-date="2024-01-14"] .block').length).toBe(2)
+
+    // Edit day 2024-01-15: press Enter → 2 blocks
+    focusDay('2024-01-15')
+    editable.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    expect(container.querySelectorAll('[data-date="2024-01-15"] .block').length).toBe(2)
+
+    // Focus day 2024-01-16 (a day we haven't edited), then press Cmd+Z
+    // Undo should still undo the most recent change (in 2024-01-15), not the focused day
+    focusDay('2024-01-16')
+    editable.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'z', metaKey: true, shiftKey: false,
+      bubbles: true, cancelable: true,
+    }))
+    expect(container.querySelectorAll('[data-date="2024-01-15"] .block').length).toBe(1)
+    expect(container.querySelectorAll('[data-date="2024-01-14"] .block').length).toBe(2)
+
+    // Second Cmd+Z undoes the day 2024-01-14 change
+    editable.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'z', metaKey: true, shiftKey: false,
+      bubbles: true, cancelable: true,
+    }))
+    expect(container.querySelectorAll('[data-date="2024-01-14"] .block').length).toBe(1)
   })
 
   // ─── Lifecycle ─────────────────────────────────────────────────────────────

@@ -1,10 +1,11 @@
-import { Blocks, BlockOffset, BlockRange, type BlockId } from '../blocks/blocks'
+import { Blocks, BlockOffset, BlockRange, type BlockId, BlockDataChanged } from '../blocks/blocks'
 import type { NoteProvider } from './NoteProvider'
 import type { BlockSelection } from './events'
 import { BlockRenderer, getBlockElement, getBlockElementContent, getCharOffset } from './BlockRenderer'
 import { BlockHistory } from './BlockHistory'
 import { BlockEventEmitter } from './BlockEventEmitter'
 import { InputHandler } from './InputHandler'
+import { DailyNoteHistory } from './DailyNoteHistory'
 import './daily-note-scroll-view.css'
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -113,6 +114,7 @@ export class DailyNoteScrollView {
   #opts: DailyNoteScrollViewOptions
   #composing = false
   #destroyed = false
+  #dailyNoteHistory = new DailyNoteHistory()
 
   constructor(
     container: HTMLElement,
@@ -305,6 +307,9 @@ export class DailyNoteScrollView {
       if (this.#destroyed) return
       if (loaded !== null) {
         ref.blocks = Blocks.from(loaded)
+        // Reset history so undo replays events against the loaded block IDs,
+        // not the empty placeholder created before the async load completed.
+        history.reset(ref.blocks)
         renderer.render(ref.blocks)
       }
     })
@@ -582,45 +587,70 @@ export class DailyNoteScrollView {
     const dayState = this.#getActiveDayState()
     if (!dayState) return
     dayState.input.composing = false
-    dayState.input.handleInput()
+    this.#recordInput(dayState)
   }
 
   #handleInput(): void {
     if (this.#composing) return
     const dayState = this.#getActiveDayState()
-    dayState?.input.handleInput()
+    if (!dayState) return
+    this.#recordInput(dayState)
+  }
+
+  #recordInput(dayState: DayState): void {
+    const blocksBefore = dayState.ref.blocks
+    const selBefore = dayState.input.pendingSelectionBefore
+    const currentSel = dayState.renderer.getSelection()
+    const blockId = currentSel instanceof BlockOffset ? currentSel.blockId : null
+
+    dayState.input.handleInput()
+
+    const blocksAfter = dayState.ref.blocks
+    if (blocksAfter !== blocksBefore) {
+      const selAfter = dayState.renderer.getSelection()
+      const diff = Blocks.diff(blocksBefore, blocksAfter)
+      if (diff.length === 1 && diff[0] instanceof BlockDataChanged && blockId) {
+        this.#dailyNoteHistory.updateOrAdd(dayState.date, blockId, blocksBefore, blocksAfter, selBefore, selAfter)
+      } else {
+        this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, selBefore, selAfter)
+      }
+    }
   }
 
   #handleKeyDown(e: KeyboardEvent): void {
     if (this.#composing) return
 
-    // Undo: Ctrl/Cmd+Z
+    // Undo: Ctrl/Cmd+Z — delegates to global DailyNoteHistory
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
-      const dayState = this.#getActiveDayState()
-      if (dayState?.history.canUndo()) {
-        e.preventDefault()
-        const oldBlocks = dayState.ref.blocks
-        const { blocks, selection } = dayState.history.undo()
-        dayState.ref.blocks = blocks
-        dayState.renderer.render(blocks, selection ?? undefined)
-        dayState.emitter.dispatchChanges(Blocks.diff(oldBlocks, blocks))
+      e.preventDefault()
+      if (this.#dailyNoteHistory.canUndo()) {
+        const { noteId, blocks: newBlocks, selection } = this.#dailyNoteHistory.undo()
+        const dayState = this.#dayStates.get(noteId)
+        if (dayState) {
+          const oldBlocks = dayState.ref.blocks
+          dayState.ref.blocks = newBlocks
+          dayState.renderer.render(newBlocks, selection ?? undefined)
+          dayState.emitter.dispatchChanges(Blocks.diff(oldBlocks, newBlocks))
+        }
       }
       return
     }
 
-    // Redo: Ctrl/Cmd+Shift+Z or Ctrl+Y
+    // Redo: Ctrl/Cmd+Shift+Z or Ctrl+Y — delegates to global DailyNoteHistory
     if (
       ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') ||
       (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'y')
     ) {
-      const dayState = this.#getActiveDayState()
-      if (dayState?.history.canRedo()) {
-        e.preventDefault()
-        const oldBlocks = dayState.ref.blocks
-        const { blocks, selection } = dayState.history.redo()
-        dayState.ref.blocks = blocks
-        dayState.renderer.render(blocks, selection ?? undefined)
-        dayState.emitter.dispatchChanges(Blocks.diff(oldBlocks, blocks))
+      e.preventDefault()
+      if (this.#dailyNoteHistory.canRedo()) {
+        const { noteId, blocks: newBlocks, selection } = this.#dailyNoteHistory.redo()
+        const dayState = this.#dayStates.get(noteId)
+        if (dayState) {
+          const oldBlocks = dayState.ref.blocks
+          dayState.ref.blocks = newBlocks
+          dayState.renderer.render(newBlocks, selection ?? undefined)
+          dayState.emitter.dispatchChanges(Blocks.diff(oldBlocks, newBlocks))
+        }
       }
       return
     }
@@ -655,7 +685,15 @@ export class DailyNoteScrollView {
 
     if (e.key === 'Enter') {
       e.preventDefault()
-      if (sel) dayState.input.handleEnter(sel)
+      if (sel) {
+        const blocksBefore = dayState.ref.blocks
+        dayState.input.handleEnter(sel)
+        const blocksAfter = dayState.ref.blocks
+        if (blocksAfter !== blocksBefore) {
+          const selAfter = dayState.renderer.getSelection()
+          this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+        }
+      }
       return
     }
 
@@ -696,13 +734,25 @@ export class DailyNoteScrollView {
     if (e.key === 'Backspace') {
       if (sel instanceof BlockRange) {
         e.preventDefault()
+        const blocksBefore = dayState.ref.blocks
         dayState.input.handleBackspace(sel)
+        const blocksAfter = dayState.ref.blocks
+        if (blocksAfter !== blocksBefore) {
+          const selAfter = dayState.renderer.getSelection()
+          this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+        }
         return
       }
       if (sel instanceof BlockOffset && sel.offset === 0) {
         // Prevent browser from merging across day boundaries
         e.preventDefault()
+        const blocksBefore = dayState.ref.blocks
         dayState.input.handleBackspace(sel)
+        const blocksAfter = dayState.ref.blocks
+        if (blocksAfter !== blocksBefore) {
+          const selAfter = dayState.renderer.getSelection()
+          this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+        }
         return
       }
       return
@@ -711,7 +761,13 @@ export class DailyNoteScrollView {
     if (e.key === 'Delete') {
       if (sel instanceof BlockRange) {
         e.preventDefault()
+        const blocksBefore = dayState.ref.blocks
         dayState.input.handleDelete(sel)
+        const blocksAfter = dayState.ref.blocks
+        if (blocksAfter !== blocksBefore) {
+          const selAfter = dayState.renderer.getSelection()
+          this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+        }
         return
       }
       if (sel instanceof BlockOffset) {
@@ -719,7 +775,13 @@ export class DailyNoteScrollView {
         if (sel.offset === block.getLength()) {
           // Prevent browser from merging across day boundaries
           e.preventDefault()
+          const blocksBefore = dayState.ref.blocks
           dayState.input.handleDelete(sel)
+          const blocksAfter = dayState.ref.blocks
+          if (blocksAfter !== blocksBefore) {
+            const selAfter = dayState.renderer.getSelection()
+            this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+          }
           return
         }
       }
@@ -735,7 +797,13 @@ export class DailyNoteScrollView {
       !e.altKey
     ) {
       e.preventDefault()
+      const blocksBefore = dayState.ref.blocks
       dayState.input.insertCharOverRange(sel, e.key)
+      const blocksAfter = dayState.ref.blocks
+      if (blocksAfter !== blocksBefore) {
+        const selAfter = dayState.renderer.getSelection()
+        this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+      }
       return
     }
   }
@@ -754,6 +822,7 @@ export class DailyNoteScrollView {
     if (changes.length > 0) {
       const selAfter = dayState.renderer.getSelection()
       dayState.history.add(changes, dayState.input.pendingSelectionBefore, selAfter)
+      this.#dailyNoteHistory.add(dayState.date, oldBlocks, dayState.ref.blocks, dayState.input.pendingSelectionBefore, selAfter)
     }
     dayState.input.pendingSelectionBefore = null
     dayState.emitter.dispatchChanges(changes)
