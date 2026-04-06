@@ -1,0 +1,820 @@
+import { Blocks, BlockOffset, BlockRange, BlockDataChanged, type BlockId } from '../blocks/blocks'
+import type { NoteProvider } from './NoteProvider'
+import type { BlockSelection } from './events'
+import { BlockRenderer, getBlockElement, getBlockElementContent, getCharOffset } from './BlockRenderer'
+import { BlockHistory } from './BlockHistory'
+import { BlockEventEmitter } from './BlockEventEmitter'
+import { InputHandler } from './InputHandler'
+import { DailyNoteHistory } from './DailyNoteHistory'
+import './daily-note-scroll-view.css'
+
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+
+function addDays(isoDate: string, days: number): string {
+  const [year, month, day] = isoDate.split('-').map(Number)
+  const d = new Date(year, month - 1, day)
+  d.setDate(d.getDate() + days)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
+}
+
+function formatDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-').map(Number)
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
+// ─── Options ──────────────────────────────────────────────────────────────────
+
+export interface DailyNoteScrollViewOptions {
+  /** Number of day sections to keep in the DOM. Default 7 (today ±3). */
+  windowSize?: number
+  dataUpdateDebounceMs?: number
+  dataUpdateMaxWaitMs?: number
+  /**
+   * Called with the ISO date strings of every section currently visible
+   * in the viewport, in document order, whenever that set changes.
+   *
+   * @param dates - ISO date strings of the visible sections, oldest → newest.
+   *
+   * @example
+   * onVisibleDatesChange: (dates) => {
+   *   const today = new Date().toISOString().slice(0, 10)
+   *   showJumpToToday = !dates.includes(today)
+   * }
+   */
+  onVisibleDatesChange?: (dates: readonly string[]) => void
+}
+
+// ─── Internal per-day state ───────────────────────────────────────────────────
+
+const DATA_EVENTS = ['blockCreated', 'blockDataUpdated', 'blockRemoved', 'blockMoved'] as const
+
+interface CrossDaySelection {
+  startDay: DayState
+  startBlockId: string
+  startOffset: number
+  endDay: DayState
+  endBlockId: string
+  endOffset: number
+  middleDays: DayState[]
+}
+
+interface DayState {
+  date: string
+  sectionEl: HTMLElement   // .daily-note-section wrapper
+  contentEl: HTMLElement   // .daily-note-content — BlockRenderer target
+  /** Mutable reference box so InputHandler closures always see the latest Blocks. */
+  ref: { blocks: Blocks }
+  history: BlockHistory
+  emitter: BlockEventEmitter
+  renderer: BlockRenderer
+  input: InputHandler
+}
+
+// ─── DailyNoteScrollView ──────────────────────────────────────────────────────
+
+/**
+ * Infinite-scroll journal rendered into a single `contenteditable` element.
+ *
+ * @remarks
+ * All day sections share one `<div contenteditable="true">`. Each section
+ * has a `<div contenteditable="false">` date header so the cursor moves
+ * freely across days while preventing header text from being edited.
+ *
+ * Sentinel elements outside the editable are observed by an
+ * `IntersectionObserver`; when a sentinel becomes visible the window slides
+ * in that direction — the oldest section is destroyed and a new one is added
+ * on the opposite end.
+ *
+ * Cross-day boundary protection is automatic: each day has its own `Blocks`
+ * state, so `InputHandler.handleBackspace` sees no previous block at offset 0
+ * of the first block and returns without merging.
+ *
+ * Undo/redo is managed by a single `DailyNoteHistory` instance that spans all
+ * loaded sections. Pressing Cmd/Ctrl+Z always undoes the most recent change
+ * regardless of which day it was in, and automatically saves the restored state
+ * via the `NoteProvider`.
+ */
+export class DailyNoteScrollView {
+  #provider: NoteProvider
+  #editable: HTMLElement               // the single shared contenteditable
+  #dates: string[]                     // oldest → newest
+  #dayStates: Map<string, DayState>    // date → state
+  #sections: Map<string, HTMLElement>  // date → sectionEl
+  #topSentinel: HTMLElement
+  #bottomSentinel: HTMLElement
+  #observer: IntersectionObserver
+  #visibilityObserver: IntersectionObserver | null = null
+  #visibleDates: Set<string> = new Set()
+  #scrollRoot: HTMLElement | null = null
+  #windowSize: number
+  #centerDate: string
+  #opts: DailyNoteScrollViewOptions
+  #composing = false
+  #destroyed = false
+  #dailyNoteHistory: DailyNoteHistory
+
+  constructor(
+    container: HTMLElement,
+    provider: NoteProvider,
+    centerDate: string,
+    opts: DailyNoteScrollViewOptions = {},
+  ) {
+    this.#provider = provider
+    this.#windowSize = opts.windowSize ?? 7
+    this.#centerDate = centerDate
+    this.#opts = opts
+    this.#dayStates = new Map()
+    this.#sections = new Map()
+    this.#dailyNoteHistory = new DailyNoteHistory(provider)
+
+    // Build initial date window centred on centerDate
+    const half = Math.floor(this.#windowSize / 2)
+    this.#dates = []
+    for (let i = -half; i <= half; i++) {
+      if (this.#dates.length < this.#windowSize) {
+        this.#dates.push(addDays(centerDate, i))
+      }
+    }
+    this.#dates = this.#dates.slice(0, this.#windowSize)
+
+    // Single shared contenteditable
+    this.#editable = document.createElement('div')
+    this.#editable.className = 'block-editor-editable'
+    this.#editable.contentEditable = 'true'
+    this.#editable.setAttribute('spellcheck', 'false')
+
+    // Sentinels live outside the editable so they don't interfere with editing
+    this.#topSentinel = document.createElement('div')
+    this.#topSentinel.className = 'daily-note-sentinel-top'
+    this.#bottomSentinel = document.createElement('div')
+    this.#bottomSentinel.className = 'daily-note-sentinel-bottom'
+
+    container.appendChild(this.#topSentinel)
+    container.appendChild(this.#editable)
+    container.appendChild(this.#bottomSentinel)
+
+    // Attach shared event handlers
+    this.#editable.addEventListener('keydown', (e) => this.#handleKeyDown(e))
+    this.#editable.addEventListener('input', () => this.#handleInput())
+    this.#editable.addEventListener('blur', () => this.#handleBlur())
+    this.#editable.addEventListener('compositionstart', () => this.#handleCompositionStart())
+    this.#editable.addEventListener('compositionend', () => this.#handleCompositionEnd())
+
+    // Mount initial sections
+    for (const date of this.#dates) {
+      this.#mountSection(date, 'append')
+    }
+
+    // The scroll root is the container's parent (e.g. .scroller). Using the
+    // viewport root would never fire because the sentinel elements are clipped
+    // inside the scroll container and never intersect the actual viewport.
+    const scrollRoot = container.parentElement
+    this.#scrollRoot = scrollRoot instanceof HTMLElement ? scrollRoot : null
+
+    // IntersectionObserver for infinite scroll
+    this.#observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue
+        if (entry.target === this.#topSentinel) this.#slideUp()
+        else if (entry.target === this.#bottomSentinel) this.#slideDown()
+      }
+    }, { root: scrollRoot })
+
+    // IntersectionObserver for viewport-visible date tracking
+    if (opts.onVisibleDatesChange) {
+      this.#visibilityObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          const date = (entry.target as HTMLElement).dataset.date
+          if (!date) continue
+          if (entry.isIntersecting) {
+            this.#visibleDates.add(date)
+          } else {
+            this.#visibleDates.delete(date)
+          }
+        }
+        this.#notifyVisibleDates()
+      }, { root: scrollRoot })
+      for (const sectionEl of this.#sections.values()) {
+        this.#visibilityObserver.observe(sectionEl)
+      }
+    }
+
+    // Scroll to today's section, then start watching sentinels.
+    // Sentinel observation must begin only after the initial scroll position
+    // is set — at scrollTop=0 the top sentinel is visible, which would
+    // immediately trigger a spurious #slideUp and start an oscillation loop.
+    requestAnimationFrame(() => {
+      this.#sections.get(centerDate)?.scrollIntoView({ block: 'start', behavior: 'instant' })
+      this.#observer.observe(this.#topSentinel)
+      this.#observer.observe(this.#bottomSentinel)
+    })
+  }
+
+  destroy(): void {
+    if (this.#destroyed) return
+    this.#destroyed = true
+    this.#observer.disconnect()
+    this.#visibilityObserver?.disconnect()
+    for (const dayState of this.#dayStates.values()) {
+      dayState.emitter.cancelAll()
+    }
+  }
+
+  // ─── Private: section lifecycle ──────────────────────────────────────────────
+
+  #mountSection(date: string, position: 'append' | 'prepend'): void {
+    const sectionEl = document.createElement('div')
+    sectionEl.className = 'daily-note-section'
+    sectionEl.setAttribute('data-date', date)
+
+    // Non-editable date header
+    const headerEl = document.createElement('div')
+    headerEl.className = 'daily-note-header'
+    headerEl.contentEditable = 'false'
+
+    const dateSpan = document.createElement('span')
+    dateSpan.className = 'daily-note-header-date'
+    dateSpan.textContent = formatDate(date)
+    headerEl.appendChild(dateSpan)
+
+    const todayDate = new Date().toISOString().slice(0, 10)
+    if (date === todayDate) {
+      sectionEl.setAttribute('data-today', 'true')
+      const badge = document.createElement('span')
+      badge.className = 'daily-note-today-badge'
+      badge.textContent = 'today'
+      headerEl.appendChild(badge)
+    }
+
+    sectionEl.appendChild(headerEl)
+
+    // Blocks container — BlockRenderer target
+    const contentEl = document.createElement('div')
+    contentEl.className = 'daily-note-content'
+    sectionEl.appendChild(contentEl)
+
+    this.#visibilityObserver?.observe(sectionEl)
+
+    // Insert into shared editable
+    if (position === 'append') {
+      this.#editable.appendChild(sectionEl)
+    } else {
+      const firstSection = this.#sections.size > 0 ? this.#sections.get(this.#dates[0]) : null
+      if (firstSection) {
+        this.#editable.insertBefore(sectionEl, firstSection)
+      } else {
+        this.#editable.appendChild(sectionEl)
+      }
+    }
+
+    // Per-day state
+    const initialBlocks = Blocks.from([Blocks.createTextBlock()])
+    const ref: { blocks: Blocks } = { blocks: initialBlocks }
+    const history = new BlockHistory(initialBlocks)
+    const emitter = new BlockEventEmitter(
+      (id: BlockId) => {
+        try {
+          const block = ref.blocks.getBlock(id)
+          return { id, blockType: block.blockType, data: block.data }
+        } catch {
+          return null
+        }
+      },
+      {
+        debounceMs: this.#opts.dataUpdateDebounceMs ?? 1000,
+        maxWaitMs:  this.#opts.dataUpdateMaxWaitMs  ?? 10000,
+      },
+    )
+    const renderer = new BlockRenderer(contentEl)
+    const input = new InputHandler(
+      renderer,
+      () => ref.blocks,
+      (b) => { ref.blocks = b },
+      history,
+      emitter,
+    )
+
+    renderer.render(ref.blocks)
+
+    const dayState: DayState = { date, sectionEl, contentEl, ref, history, emitter, renderer, input }
+    this.#dayStates.set(date, dayState)
+    this.#sections.set(date, sectionEl)
+
+    // Load from provider
+    this.#provider.load(date).then((loaded) => {
+      if (this.#destroyed) return
+      if (loaded !== null) {
+        ref.blocks = Blocks.from(loaded)
+        renderer.render(ref.blocks)
+      }
+    })
+
+    // Auto-save on data changes
+    for (const event of DATA_EVENTS) {
+      emitter.addEventListener(event, () => {
+        this.#provider.save(date, ref.blocks.blocks)
+      })
+    }
+  }
+
+  #unmountSection(date: string): void {
+    const dayState = this.#dayStates.get(date)
+    if (dayState) {
+      dayState.emitter.flushAll()
+      dayState.emitter.cancelAll()
+      this.#dayStates.delete(date)
+    }
+    const sectionEl = this.#sections.get(date)
+    if (sectionEl) {
+      this.#visibilityObserver?.unobserve(sectionEl)
+      this.#visibleDates.delete(date)
+      sectionEl.remove()
+      this.#sections.delete(date)
+    }
+  }
+
+  /**
+   * Scroll to today's section. If today has been slid out of the window,
+   * reinitializes the window around today first.
+   */
+  scrollToToday(): void {
+    const todaySection = this.#sections.get(this.#centerDate)
+    if (todaySection) {
+      todaySection.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      return
+    }
+
+    // Today is outside the current window — rebuild around it
+    const half = Math.floor(this.#windowSize / 2)
+    const newDates: string[] = []
+    for (let i = -half; i <= half; i++) {
+      if (newDates.length < this.#windowSize) newDates.push(addDays(this.#centerDate, i))
+    }
+
+    for (const date of [...this.#dates]) this.#unmountSection(date)
+    this.#dates = newDates.slice(0, this.#windowSize)
+    for (const date of this.#dates) this.#mountSection(date, 'append')
+
+    requestAnimationFrame(() => {
+      this.#sections.get(this.#centerDate)?.scrollIntoView({ block: 'start', behavior: 'instant' })
+    })
+  }
+
+  /** Slide window towards older dates (user scrolled up). */
+  #slideUp(): void {
+    const prevDate = addDays(this.#dates[0], -1)
+    this.#mountSection(prevDate, 'prepend')
+    this.#dates.unshift(prevDate)
+
+    const newEl = this.#sections.get(prevDate)
+    const newHeight = newEl?.offsetHeight ?? 0
+    if (this.#scrollRoot && newHeight > 0) {
+      this.#scrollRoot.scrollTo({ top: this.#scrollRoot.scrollTop + newHeight, behavior: 'instant' })
+    }
+
+    const removed = this.#dates.pop()!
+    this.#unmountSection(removed)
+  }
+
+  /** Slide window towards newer dates (user scrolled down). */
+  #slideDown(): void {
+    const nextDate = addDays(this.#dates[this.#dates.length - 1], 1)
+    this.#dates.push(nextDate)
+    this.#mountSection(nextDate, 'append')
+
+    const removed = this.#dates.shift()!
+    const removedEl = this.#sections.get(removed)
+    const removedHeight = removedEl?.offsetHeight ?? 0
+    this.#unmountSection(removed)
+    if (this.#scrollRoot && removedHeight > 0 && this.#scrollRoot.scrollTop >= removedHeight) {
+      this.#scrollRoot.scrollTo({ top: this.#scrollRoot.scrollTop - removedHeight, behavior: 'instant' })
+    }
+  }
+
+  #notifyVisibleDates(): void {
+    const ordered = this.#dates.filter((d) => this.#visibleDates.has(d))
+    this.#opts.onVisibleDatesChange?.(ordered)
+  }
+
+  // ─── Private: event routing ───────────────────────────────────────────────────
+
+  /** Walk up from `node` to find the `.daily-note-section[data-date]` ancestor. */
+  #getDayForNode(node: Node): DayState | null {
+    let current: Node | null = node
+    while (current) {
+      if (current.nodeType === Node.ELEMENT_NODE) {
+        const date = (current as Element).getAttribute?.('data-date')
+        if (date) return this.#dayStates.get(date) ?? null
+      }
+      current = current.parentNode
+    }
+    return null
+  }
+
+  /**
+   * Find the day state whose content element contains the current selection anchor.
+   * Returns null when the cursor is in a header or outside all sections.
+   */
+  #getActiveDayState(): DayState | null {
+    const domSel = window.getSelection()
+    if (!domSel || domSel.rangeCount === 0) return null
+    return this.#getDayForNode(domSel.getRangeAt(0).startContainer)
+  }
+
+  /** True when the DOM selection spans two different day sections. */
+  #isCrossDaySelection(): boolean {
+    const domSel = window.getSelection()
+    if (!domSel || domSel.isCollapsed || domSel.rangeCount === 0) return false
+    const a = this.#getDayForNode(domSel.anchorNode!)
+    const f = this.#getDayForNode(domSel.focusNode!)
+    return a !== null && f !== null && a !== f
+  }
+
+  /**
+   * Resolve a cross-day DOM selection into structured start/end state.
+   * Returns null if the selection is collapsed, same-day, or doesn't map to
+   * identifiable block elements.
+   */
+  #getCrossDaySelection(): CrossDaySelection | null {
+    const domSel = window.getSelection()
+    if (!domSel || domSel.isCollapsed || domSel.rangeCount === 0) return null
+
+    const anchorDay = this.#getDayForNode(domSel.anchorNode!)
+    const focusDay  = this.#getDayForNode(domSel.focusNode!)
+    if (!anchorDay || !focusDay || anchorDay === focusDay) return null
+
+    const anchorFirst = !!(
+      domSel.anchorNode!.compareDocumentPosition(domSel.focusNode!) &
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
+
+    const startDay  = anchorFirst ? anchorDay  : focusDay
+    const startNode = anchorFirst ? domSel.anchorNode! : domSel.focusNode!
+    const startOff  = anchorFirst ? domSel.anchorOffset : domSel.focusOffset
+    const endDay    = anchorFirst ? focusDay   : anchorDay
+    const endNode   = anchorFirst ? domSel.focusNode!  : domSel.anchorNode!
+    const endOff    = anchorFirst ? domSel.focusOffset : domSel.anchorOffset
+
+    const startBlockEl = getBlockElement(startNode)
+    const endBlockEl   = getBlockElement(endNode)
+    if (!startBlockEl || !endBlockEl) return null
+
+    const startP = getBlockElementContent(startBlockEl)
+    const endP   = getBlockElementContent(endBlockEl)
+    const startCharOff = getCharOffset(startP, startNode, startOff)
+    const endCharOff   = getCharOffset(endP,   endNode,   endOff)
+    if (startCharOff === -1 || endCharOff === -1) return null
+
+    const startIdx = this.#dates.indexOf(startDay.date)
+    const endIdx   = this.#dates.indexOf(endDay.date)
+    const middleDays: DayState[] = []
+    for (let i = startIdx + 1; i < endIdx; i++) {
+      const d = this.#dayStates.get(this.#dates[i])
+      if (d) middleDays.push(d)
+    }
+
+    return {
+      startDay, startBlockId: startBlockEl.id, startOffset: startCharOff,
+      endDay,   endBlockId:   endBlockEl.id,   endOffset:   endCharOff,
+      middleDays,
+    }
+  }
+
+  /**
+   * Delete the cross-day selection:
+   * 1. Trim start day: keep content before selection start.
+   * 2. Clear middle days to a single empty block.
+   * 3. Trim end day: remove content before selection end.
+   *
+   * Returns the cursor `BlockOffset` in the end day.
+   */
+  #handleCrossDayDeletion(cs: CrossDaySelection): BlockOffset {
+    // 1. Trim start day
+    const startLastBlock = cs.startDay.ref.blocks.blocks.at(-1)!
+    const needsStartTrim =
+      cs.startBlockId !== startLastBlock.id ||
+      cs.startOffset !== startLastBlock.getLength()
+    if (needsStartTrim) {
+      cs.startDay.input.pendingSelectionBefore = null
+      cs.startDay.input.deleteRange(new BlockRange(
+        new BlockOffset(cs.startBlockId, cs.startOffset),
+        new BlockOffset(startLastBlock.id, startLastBlock.getLength()),
+      ))
+      cs.startDay.renderer.render(cs.startDay.ref.blocks)
+    }
+
+    // 2. Clear middle days
+    for (const mid of cs.middleDays) {
+      const cleared = Blocks.from([Blocks.createTextBlock()])
+      const old = mid.ref.blocks
+      mid.ref.blocks = cleared
+      mid.renderer.render(cleared)
+      mid.emitter.dispatchChanges(Blocks.diff(old, cleared))
+    }
+
+    // 3. Trim end day
+    const endFirstBlock = cs.endDay.ref.blocks.blocks[0]
+    const endRangeCollapsed =
+      endFirstBlock.id === cs.endBlockId && cs.endOffset === 0
+    if (!endRangeCollapsed) {
+      cs.endDay.input.pendingSelectionBefore = null
+      const cursor = cs.endDay.input.deleteRange(new BlockRange(
+        new BlockOffset(endFirstBlock.id, 0),
+        new BlockOffset(cs.endBlockId, cs.endOffset),
+      ))
+      cs.endDay.renderer.render(cs.endDay.ref.blocks, cursor)
+      return cursor
+    }
+    const cursor = new BlockOffset(endFirstBlock.id, 0)
+    cs.endDay.renderer.render(cs.endDay.ref.blocks, cursor)
+    return cursor
+  }
+
+  #handleCrossDayEnter(cs: CrossDaySelection): void {
+    this.#handleCrossDayDeletion(cs)
+  }
+
+  #handleCrossDayCharInput(cs: CrossDaySelection, char: string): void {
+    const cursor = this.#handleCrossDayDeletion(cs)
+    const state = cs.endDay.ref.blocks
+    const block = state.getBlock(cursor.blockId)
+    const newText = block.getText().insert(cursor.offset, char)
+    const newCursor = new BlockOffset(cursor.blockId, cursor.offset + 1)
+    cs.endDay.ref.blocks = state.update(cursor.blockId, newText)
+    cs.endDay.renderer.render(cs.endDay.ref.blocks, newCursor)
+    cs.endDay.emitter.scheduleDataUpdated(cursor.blockId)
+  }
+
+  #handleBlur(): void {
+    for (const dayState of this.#dayStates.values()) {
+      dayState.emitter.flushAll()
+    }
+  }
+
+  #handleCompositionStart(): void {
+    const dayState = this.#getActiveDayState()
+    if (!dayState) return
+    const sel = dayState.renderer.getSelection()
+    dayState.input.pendingSelectionBefore = sel
+    if (sel instanceof BlockRange) {
+      const cursor = dayState.input.deleteRange(sel)
+      dayState.renderer.render(dayState.ref.blocks, cursor)
+    }
+    dayState.input.composing = true
+    this.#composing = true
+  }
+
+  #handleCompositionEnd(): void {
+    this.#composing = false
+    const dayState = this.#getActiveDayState()
+    if (!dayState) return
+    dayState.input.composing = false
+    dayState.input.handleInput()
+  }
+
+  #handleInput(): void {
+    if (this.#composing) return
+    const dayState = this.#getActiveDayState()
+    if (!dayState) return
+
+    // Capture before-state for DailyNoteHistory
+    const blocksBefore = dayState.ref.blocks
+    const selBefore = dayState.input.pendingSelectionBefore
+    // Get blockId from the current selection (set by the browser's input event)
+    const currentSel = dayState.renderer.getSelection()
+    const blockId = currentSel instanceof BlockOffset ? currentSel.blockId : null
+
+    dayState.input.handleInput()
+
+    // Record in DailyNoteHistory if state changed
+    const blocksAfter = dayState.ref.blocks
+    if (blocksAfter !== blocksBefore) {
+      const selAfter = dayState.renderer.getSelection()
+      const diff = Blocks.diff(blocksBefore, blocksAfter)
+      if (diff.length === 1 && diff[0] instanceof BlockDataChanged && blockId) {
+        // Single text change — coalesce with previous entry for the same block
+        this.#dailyNoteHistory.updateOrAdd(dayState.date, blockId, blocksBefore, blocksAfter, selBefore, selAfter)
+      } else {
+        // InputRule match or other multi-change — record as structural
+        this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, selBefore, selAfter)
+      }
+    }
+  }
+
+  #handleKeyDown(e: KeyboardEvent): void {
+    if (this.#composing) return
+
+    // Undo: Ctrl/Cmd+Z — delegates to global DailyNoteHistory
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+      if (this.#dailyNoteHistory.canUndo()) {
+        e.preventDefault()
+        const { noteId, blocks: newBlocks, selection } = this.#dailyNoteHistory.undo()
+        const dayState = this.#dayStates.get(noteId)
+        if (dayState) {
+          const oldBlocks = dayState.ref.blocks
+          dayState.ref.blocks = newBlocks
+          dayState.renderer.render(newBlocks, selection ?? undefined)
+          dayState.emitter.dispatchChanges(Blocks.diff(oldBlocks, newBlocks))
+        }
+      }
+      return
+    }
+
+    // Redo: Ctrl/Cmd+Shift+Z or Ctrl+Y — delegates to global DailyNoteHistory
+    if (
+      ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') ||
+      (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'y')
+    ) {
+      if (this.#dailyNoteHistory.canRedo()) {
+        e.preventDefault()
+        const { noteId, blocks: newBlocks, selection } = this.#dailyNoteHistory.redo()
+        const dayState = this.#dayStates.get(noteId)
+        if (dayState) {
+          const oldBlocks = dayState.ref.blocks
+          dayState.ref.blocks = newBlocks
+          dayState.renderer.render(newBlocks, selection ?? undefined)
+          dayState.emitter.dispatchChanges(Blocks.diff(oldBlocks, newBlocks))
+        }
+      }
+      return
+    }
+
+    // Cross-day selection: block destructive operations that would merge sections
+    if (this.#isCrossDaySelection()) {
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault()
+        const cs = this.#getCrossDaySelection()
+        if (cs) this.#handleCrossDayDeletion(cs)
+        return
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        const cs = this.#getCrossDaySelection()
+        if (cs) this.#handleCrossDayEnter(cs)
+        return
+      }
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault()
+        const cs = this.#getCrossDaySelection()
+        if (cs) this.#handleCrossDayCharInput(cs, e.key)
+        return
+      }
+    }
+
+    const dayState = this.#getActiveDayState()
+    if (!dayState) return
+
+    const sel = dayState.renderer.getSelection()
+    dayState.input.pendingSelectionBefore = sel
+
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (sel) {
+        const blocksBefore = dayState.ref.blocks
+        dayState.input.handleEnter(sel)
+        const blocksAfter = dayState.ref.blocks
+        if (blocksAfter !== blocksBefore) {
+          const selAfter = dayState.renderer.getSelection()
+          this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+        }
+      }
+      return
+    }
+
+    if (e.key === 'Tab') {
+      e.preventDefault()
+      if (sel) {
+        const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
+        const toId   = sel instanceof BlockRange ? sel.end.blockId   : sel.blockId
+        this.#applyBlocksChange(dayState, (b) => e.shiftKey ? b.unindent(fromId, toId) : b.indent(fromId, toId), sel)
+      }
+      return
+    }
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+      e.preventDefault()
+      if (sel instanceof BlockRange) {
+        this.#applyBlocksChange(dayState, (b) => b.toggleInline(sel, 'Bold'), sel)
+      }
+      return
+    }
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+      e.preventDefault()
+      if (sel instanceof BlockRange) {
+        this.#applyBlocksChange(dayState, (b) => b.toggleInline(sel, 'Italic'), sel)
+      }
+      return
+    }
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
+      e.preventDefault()
+      if (sel instanceof BlockRange) {
+        this.#applyBlocksChange(dayState, (b) => b.toggleInline(sel, 'Underline'), sel)
+      }
+      return
+    }
+
+    if (e.key === 'Backspace') {
+      if (sel instanceof BlockRange) {
+        e.preventDefault()
+        const blocksBefore = dayState.ref.blocks
+        dayState.input.handleBackspace(sel)
+        const blocksAfter = dayState.ref.blocks
+        if (blocksAfter !== blocksBefore) {
+          const selAfter = dayState.renderer.getSelection()
+          this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+        }
+        return
+      }
+      if (sel instanceof BlockOffset && sel.offset === 0) {
+        e.preventDefault()
+        const blocksBefore = dayState.ref.blocks
+        dayState.input.handleBackspace(sel)
+        const blocksAfter = dayState.ref.blocks
+        if (blocksAfter !== blocksBefore) {
+          const selAfter = dayState.renderer.getSelection()
+          this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+        }
+        return
+      }
+      return
+    }
+
+    if (e.key === 'Delete') {
+      if (sel instanceof BlockRange) {
+        e.preventDefault()
+        const blocksBefore = dayState.ref.blocks
+        dayState.input.handleDelete(sel)
+        const blocksAfter = dayState.ref.blocks
+        if (blocksAfter !== blocksBefore) {
+          const selAfter = dayState.renderer.getSelection()
+          this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+        }
+        return
+      }
+      if (sel instanceof BlockOffset) {
+        const block = dayState.ref.blocks.getBlock(sel.blockId)
+        if (sel.offset === block.getLength()) {
+          e.preventDefault()
+          const blocksBefore = dayState.ref.blocks
+          dayState.input.handleDelete(sel)
+          const blocksAfter = dayState.ref.blocks
+          if (blocksAfter !== blocksBefore) {
+            const selAfter = dayState.renderer.getSelection()
+            this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+          }
+          return
+        }
+      }
+      return
+    }
+
+    // Printable char with range selection — delete range then insert char
+    if (
+      sel instanceof BlockRange &&
+      e.key.length === 1 &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey
+    ) {
+      e.preventDefault()
+      const blocksBefore = dayState.ref.blocks
+      dayState.input.insertCharOverRange(sel, e.key)
+      const blocksAfter = dayState.ref.blocks
+      if (blocksAfter !== blocksBefore) {
+        const selAfter = dayState.renderer.getSelection()
+        this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+      }
+      return
+    }
+  }
+
+  // ─── Private: state mutation helpers ─────────────────────────────────────────
+
+  #applyBlocksChange(
+    dayState: DayState,
+    mutate: (b: Blocks) => Blocks,
+    sel: BlockSelection,
+  ): void {
+    const oldBlocks = dayState.ref.blocks
+    dayState.ref.blocks = mutate(oldBlocks)
+    dayState.renderer.render(dayState.ref.blocks, sel)
+    const changes = Blocks.diff(oldBlocks, dayState.ref.blocks)
+    if (changes.length > 0) {
+      const selAfter = dayState.renderer.getSelection()
+      dayState.history.add(changes, dayState.input.pendingSelectionBefore, selAfter)
+      this.#dailyNoteHistory.add(dayState.date, oldBlocks, dayState.ref.blocks, dayState.input.pendingSelectionBefore, selAfter)
+    }
+    dayState.input.pendingSelectionBefore = null
+    dayState.emitter.dispatchChanges(changes)
+  }
+}
