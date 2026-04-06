@@ -454,7 +454,7 @@ export class DailyNoteScrollView {
    */
   #handleCrossDayDeletion(cs: CrossDaySelection): BlockOffset {
     // 1. Trim start day: delete from selection start to end of start day
-    const startLastBlock = cs.startDay.blocks.blocks.at(-1)!
+    const startLastBlock = cs.startDay.blocks.lastBlock()
     const needsStartTrim =
       cs.startBlockId !== startLastBlock.id ||
       cs.startOffset !== startLastBlock.getLength()

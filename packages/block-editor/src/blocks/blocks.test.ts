@@ -803,6 +803,17 @@ describe('nextBlockId', () => {
   })
 })
 
+// ─── lastBlock ────────────────────────────────────────────────────────────────
+
+describe('lastBlock', () => {
+  it('returns an indented child when it is the flat-last block', () => {
+    // flat: [a:0, b:0, c:1]  — c is a child of b, last in flat order
+    // blocks.at(-1) returns 'b' (last root); lastBlock() must return 'c'
+    const b = Blocks.from([dto('a'), dto('b', '', [dto('c')])])
+    expect(b.lastBlock().id).toBe('c')
+  })
+})
+
 // ─── nextSiblingOrNextAscendantSiblingId ──────────────────────────────────────
 
 describe('nextSiblingOrNextAscendantSiblingId', () => {

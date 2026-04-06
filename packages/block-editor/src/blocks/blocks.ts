@@ -437,6 +437,22 @@ export class Blocks {
     return flatToDto(this.#blocks)
   }
 
+  /**
+   * Returns the last block in pre-order flat sequence.
+   *
+   * @remarks
+   * Unlike `blocks.at(-1)`, which returns the last root-level block in the
+   * tree DTO, this always returns the absolute last block — including indented
+   * children that appear after the final root in the flat array.
+   *
+   * @throws {Error} if there are no blocks.
+   */
+  lastBlock(): AnyBlock {
+    const last = this.#blocks.at(-1)
+    if (!last) throw new Error('Blocks is empty')
+    return this.getBlock(last.id)
+  }
+
   // ─── Navigation ──────────────────────────────────────────────────────────────
 
   /**
