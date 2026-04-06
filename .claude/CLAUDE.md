@@ -29,6 +29,28 @@ Use small, atomic commits. Follow the commit message and PR description conventi
 
 **Use the `frontend-design` skill** when building or significantly redesigning UI components, pages, or layouts in the demo application. Invoke it via the Skill tool before writing Svelte/CSS code for any non-trivial UI work.
 
+## GitHub Issue Creation
+
+When creating GitHub issues, always follow these conventions:
+
+**Project assignment:** Always add new issues to the Memoir project (project #3, owner: `Eythorsson-dev`) immediately after creation:
+
+```bash
+gh project item-add 3 --owner Eythorsson-dev --url <issue-url>
+```
+
+**Relationships:** Where applicable, set native GitHub issue relationships using the GraphQL API. Get the node ID of an issue with `gh issue view <number> --repo Eythorsson-dev/memoir-v2 --json id`.
+
+- `blocked by` — use the `addBlockedBy` mutation (`issueId`: the blocked issue, `blockingIssueId`: the blocker)
+- `blocks` — use `addBlockedBy` with the roles reversed
+- `parent issue` — use the `addSubIssue` mutation to nest this issue under a parent epic
+
+```bash
+# Mark issue as blocked by another
+gh api graphql -f query='mutation($issueId:ID!,$blockingIssueId:ID!){addBlockedBy(input:{issueId:$issueId,blockingIssueId:$blockingIssueId}){issue{number}}}' \
+  -f issueId=<node-id> -f blockingIssueId=<blocker-node-id>
+```
+
 ## Area-Specific Rules
 
 @rules/demo.md
