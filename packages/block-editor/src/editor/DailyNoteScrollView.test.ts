@@ -434,6 +434,41 @@ describe('DailyNoteScrollView', () => {
     expect(container.querySelectorAll('[data-date="2024-01-14"] .block').length).toBe(1)
   })
 
+  it('cross-day Backspace followed by Cmd+Z restores all affected sections', async () => {
+    // Day 2024-01-14 has 2 blocks; day 2024-01-15 has 1 block (default)
+    const provider: NoteProvider = {
+      load: vi.fn().mockImplementation(async (date: string) => {
+        if (date === '2024-01-14') {
+          return Blocks.from([Blocks.createTextBlock(), Blocks.createTextBlock()]).blocks
+        }
+        return null
+      }),
+      save: vi.fn().mockResolvedValue(undefined),
+    }
+
+    const { container } = make(provider, '2024-01-15', { windowSize: 3 })
+    const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
+
+    // Wait for 2024-01-14 to load its 2 blocks
+    await vi.waitFor(() =>
+      expect(container.querySelectorAll('[data-date="2024-01-14"] .block').length).toBe(2)
+    )
+
+    // Cross-day selection from start of 2024-01-14 to start of 2024-01-15
+    setCrossDayRange(container, '2024-01-14', '2024-01-15')
+
+    // Backspace trims day 14 (deletes from selection start to end of day 14), merging 2 → 1 block
+    editable.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }))
+    expect(container.querySelectorAll('[data-date="2024-01-14"] .block').length).toBe(1)
+
+    // Cmd+Z must restore day 14 to its pre-deletion state (2 blocks)
+    editable.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'z', metaKey: true, shiftKey: false,
+      bubbles: true, cancelable: true,
+    }))
+    expect(container.querySelectorAll('[data-date="2024-01-14"] .block').length).toBe(2)
+  })
+
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
   it('destroy disconnects the IntersectionObserver', () => {

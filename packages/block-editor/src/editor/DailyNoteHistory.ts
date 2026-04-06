@@ -3,12 +3,21 @@ import type { BlockSelection } from './events'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Entry {
+interface NoteSnapshot {
   noteId: string
   blocksBefore: Blocks
   blocksAfter: Blocks
-  selectionBefore: BlockSelection | null
-  selectionAfter: BlockSelection | null
+}
+
+interface SelectionPoint {
+  noteId: string
+  selection: BlockSelection | null
+}
+
+interface Entry {
+  notes: NoteSnapshot[]
+  selectionBefore: SelectionPoint | null
+  selectionAfter: SelectionPoint | null
   /**
    * Coalesce key for text-change merging.
    * Set to `"${noteId}:${blockId}"` for single-block text changes,
@@ -23,9 +32,10 @@ interface Entry {
  * Cross-day undo/redo history for a journal-style editor.
  *
  * @remarks
- * Each entry stores a `noteId` (ISO date string), a full `Blocks` snapshot
- * before and after the change, and optional selection positions for cursor
- * restoration.
+ * Each entry stores a list of `NoteSnapshot` objects (one per affected note),
+ * plus optional selection positions for cursor restoration. Single-note
+ * operations use one snapshot; cross-day operations use multiple snapshots
+ * so that undo/redo restores all affected sections atomically.
  *
  * Unlike `BlockHistory`, which reconstructs state from a change-event log,
  * `DailyNoteHistory` stores explicit snapshots. This allows a single stack
@@ -34,8 +44,8 @@ interface Entry {
  * @example
  * const history = new DailyNoteHistory()
  * history.add('2024-01-15', blocksBeforeEdit, blocksAfterEdit, selBefore, selAfter)
- * const { noteId, blocks, selection } = history.undo()
- * // noteId tells the caller which section to re-render
+ * const { notes, selectionNoteId, selection } = history.undo()
+ * // noteId in notes[0] tells the caller which section to re-render
  */
 export class DailyNoteHistory {
   static readonly MAX_DEPTH = 100
@@ -52,7 +62,7 @@ export class DailyNoteHistory {
   }
 
   /**
-   * Record a structural change (Enter, Backspace, indent, inline toggle, etc.)
+   * Record a structural change affecting a single note (Enter, Backspace, indent, etc.)
    *
    * @param noteId - ISO date of the affected note.
    * @param blocksBefore - Full `Blocks` snapshot before the change.
@@ -67,15 +77,35 @@ export class DailyNoteHistory {
     selectionBefore: BlockSelection | null,
     selectionAfter: BlockSelection | null,
   ): void {
-    // Clear redo stack
-    this.#entries.splice(this.#pointer)
-    this.#entries.push({ noteId, blocksBefore, blocksAfter, selectionBefore, selectionAfter, coalesceKey: null })
-    this.#pointer++
-    // Cap at MAX_DEPTH
-    if (this.#entries.length > DailyNoteHistory.MAX_DEPTH) {
-      this.#entries.shift()
-      this.#pointer--
-    }
+    this.#push({
+      notes: [{ noteId, blocksBefore, blocksAfter }],
+      selectionBefore: selectionBefore !== null ? { noteId, selection: selectionBefore } : null,
+      selectionAfter: selectionAfter !== null ? { noteId, selection: selectionAfter } : null,
+      coalesceKey: null,
+    })
+  }
+
+  /**
+   * Record a change that spans multiple notes atomically (e.g. cross-day deletion).
+   *
+   * @remarks
+   * Undo/redo restores every snapshot in `notes` in a single step, so all
+   * affected sections are updated together without requiring multiple Cmd+Z presses.
+   *
+   * @param notes - One snapshot per affected note, each with `noteId`, `blocksBefore`, `blocksAfter`.
+   * @param selectionAfter - Note and cursor position after the change, for redo cursor placement.
+   */
+  addMulti(
+    notes: Array<{ noteId: string; blocksBefore: Blocks; blocksAfter: Blocks }>,
+    selectionAfter: { noteId: string; selection: BlockSelection | null } | null,
+  ): void {
+    if (notes.length === 0) return
+    this.#push({
+      notes,
+      selectionBefore: null,
+      selectionAfter,
+      coalesceKey: null,
+    })
   }
 
   /**
@@ -110,8 +140,8 @@ export class DailyNoteHistory {
       // Coalesce: preserve original blocksBefore and selectionBefore
       this.#entries[this.#pointer - 1] = {
         ...lastEntry,
-        blocksAfter,
-        selectionAfter,
+        notes: [{ noteId, blocksBefore: lastEntry.notes[0].blocksBefore, blocksAfter }],
+        selectionAfter: selectionAfter !== null ? { noteId, selection: selectionAfter } : null,
       }
     } else {
       this.add(noteId, blocksBefore, blocksAfter, selectionBefore, selectionAfter)
@@ -123,35 +153,68 @@ export class DailyNoteHistory {
    * Undo the most recent change.
    *
    * @remarks
-   * The `noteId` in the return value tells the caller which day section to
-   * re-render and which `Blocks` snapshot to restore.
+   * `notes` contains one entry per affected section — callers must restore
+   * all of them. For single-note changes this is always a one-element array.
+   * `selectionNoteId` and `selection` indicate where to place the cursor after
+   * restoring state; both are null when no cursor position was recorded.
    *
    * @throws {Error} When there is nothing to undo.
-   * @returns `{ noteId, blocks, selection }` where `blocks` is the restored
-   *   snapshot and `selection` is the cursor position to restore.
+   * @returns `{ notes, selectionNoteId, selection }` where each `notes` entry
+   *   has `noteId` and `blocks` (the pre-change snapshot to restore).
    */
-  undo(): { noteId: string; blocks: Blocks; selection: BlockSelection | null } {
+  undo(): {
+    notes: Array<{ noteId: string; blocks: Blocks }>
+    selectionNoteId: string | null
+    selection: BlockSelection | null
+  } {
     if (!this.canUndo()) throw new Error('Nothing to undo')
     const entry = this.#entries[this.#pointer - 1]
     this.#pointer--
-    return { noteId: entry.noteId, blocks: entry.blocksBefore, selection: entry.selectionBefore }
+    return {
+      notes: entry.notes.map(n => ({ noteId: n.noteId, blocks: n.blocksBefore })),
+      selectionNoteId: entry.selectionBefore?.noteId ?? null,
+      selection: entry.selectionBefore?.selection ?? null,
+    }
   }
 
   /**
    * Redo the most recently undone change.
    *
    * @remarks
-   * The `noteId` in the return value identifies the correct day section to
-   * re-render, which may differ from the currently active section.
+   * `notes` contains one entry per affected section — callers must restore
+   * all of them. `selectionNoteId` and `selection` indicate where to place
+   * the cursor after restoring state.
    *
    * @throws {Error} When there is nothing to redo.
-   * @returns `{ noteId, blocks, selection }` where `blocks` is the reapplied
-   *   snapshot and `selection` is the cursor position to restore.
+   * @returns `{ notes, selectionNoteId, selection }` where each `notes` entry
+   *   has `noteId` and `blocks` (the post-change snapshot to restore).
    */
-  redo(): { noteId: string; blocks: Blocks; selection: BlockSelection | null } {
+  redo(): {
+    notes: Array<{ noteId: string; blocks: Blocks }>
+    selectionNoteId: string | null
+    selection: BlockSelection | null
+  } {
     if (!this.canRedo()) throw new Error('Nothing to redo')
     const entry = this.#entries[this.#pointer]
     this.#pointer++
-    return { noteId: entry.noteId, blocks: entry.blocksAfter, selection: entry.selectionAfter }
+    return {
+      notes: entry.notes.map(n => ({ noteId: n.noteId, blocks: n.blocksAfter })),
+      selectionNoteId: entry.selectionAfter?.noteId ?? null,
+      selection: entry.selectionAfter?.selection ?? null,
+    }
+  }
+
+  // ─── Private ──────────────────────────────────────────────────────────────────
+
+  #push(entry: Entry): void {
+    // Clear redo stack
+    this.#entries.splice(this.#pointer)
+    this.#entries.push(entry)
+    this.#pointer++
+    // Cap at MAX_DEPTH
+    if (this.#entries.length > DailyNoteHistory.MAX_DEPTH) {
+      this.#entries.shift()
+      this.#pointer--
+    }
   }
 }

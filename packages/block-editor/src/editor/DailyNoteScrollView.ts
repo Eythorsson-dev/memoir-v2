@@ -495,6 +495,29 @@ export class DailyNoteScrollView {
     return cursor
   }
 
+  /**
+   * Delete the cross-day selection and record the operation in history so
+   * Cmd+Z can restore all affected sections atomically.
+   */
+  #handleCrossDayDeletionWithHistory(cs: CrossDaySelection): void {
+    const snapshots = [cs.startDay, ...cs.middleDays, cs.endDay].map(s => ({
+      noteId: s.date,
+      blocksBefore: s.blocks,
+    }))
+
+    const cursor = this.#handleCrossDayDeletion(cs)
+
+    const notes = snapshots.map(({ noteId, blocksBefore }) => {
+      const section = this.#daySections.get(noteId)
+      return { noteId, blocksBefore, blocksAfter: section?.blocks ?? blocksBefore }
+    })
+
+    const hasChange = notes.some(n => n.blocksBefore !== n.blocksAfter)
+    if (hasChange) {
+      this.#dailyNoteHistory.addMulti(notes, { noteId: cs.endDay.date, selection: cursor })
+    }
+  }
+
   #handleCrossDayEnter(cs: CrossDaySelection): void {
     this.#handleCrossDayDeletion(cs)
   }
@@ -571,13 +594,15 @@ export class DailyNoteScrollView {
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
       e.preventDefault()
       if (this.#dailyNoteHistory.canUndo()) {
-        const { noteId, blocks: newBlocks, selection } = this.#dailyNoteHistory.undo()
-        const section = this.#daySections.get(noteId)
-        if (section) {
-          const oldBlocks = section.blocks
-          section.blocks = newBlocks
-          section.render(selection ?? undefined)
-          section.dispatchChanges(Blocks.diff(oldBlocks, newBlocks))
+        const { notes, selectionNoteId, selection } = this.#dailyNoteHistory.undo()
+        for (const { noteId, blocks: newBlocks } of notes) {
+          const section = this.#daySections.get(noteId)
+          if (section) {
+            const oldBlocks = section.blocks
+            section.blocks = newBlocks
+            section.render(noteId === selectionNoteId ? (selection ?? undefined) : undefined)
+            section.dispatchChanges(Blocks.diff(oldBlocks, newBlocks))
+          }
         }
       }
       return
@@ -590,13 +615,15 @@ export class DailyNoteScrollView {
     ) {
       e.preventDefault()
       if (this.#dailyNoteHistory.canRedo()) {
-        const { noteId, blocks: newBlocks, selection } = this.#dailyNoteHistory.redo()
-        const section = this.#daySections.get(noteId)
-        if (section) {
-          const oldBlocks = section.blocks
-          section.blocks = newBlocks
-          section.render(selection ?? undefined)
-          section.dispatchChanges(Blocks.diff(oldBlocks, newBlocks))
+        const { notes, selectionNoteId, selection } = this.#dailyNoteHistory.redo()
+        for (const { noteId, blocks: newBlocks } of notes) {
+          const section = this.#daySections.get(noteId)
+          if (section) {
+            const oldBlocks = section.blocks
+            section.blocks = newBlocks
+            section.render(noteId === selectionNoteId ? (selection ?? undefined) : undefined)
+            section.dispatchChanges(Blocks.diff(oldBlocks, newBlocks))
+          }
         }
       }
       return
@@ -607,7 +634,7 @@ export class DailyNoteScrollView {
       if (e.key === 'Backspace' || e.key === 'Delete') {
         e.preventDefault()
         const cs = this.#getCrossDaySelection()
-        if (cs) this.#handleCrossDayDeletion(cs)
+        if (cs) this.#handleCrossDayDeletionWithHistory(cs)
         return
       }
       if (e.key === 'Enter') {
