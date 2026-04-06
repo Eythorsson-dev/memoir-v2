@@ -1,11 +1,9 @@
-import { Blocks, BlockOffset, BlockRange, type BlockId, BlockDataChanged } from '../blocks/blocks'
+import { Blocks, BlockOffset, BlockRange, BlockDataChanged } from '../blocks/blocks'
 import type { NoteProvider } from './NoteProvider'
 import type { BlockSelection } from './events'
-import { BlockRenderer, getBlockElement, getBlockElementContent, getCharOffset } from './BlockRenderer'
-import { BlockHistory } from './BlockHistory'
-import { BlockEventEmitter } from './BlockEventEmitter'
-import { InputHandler } from './InputHandler'
+import { getBlockElement, getBlockElementContent, getCharOffset } from './BlockRenderer'
 import { DailyNoteHistory } from './DailyNoteHistory'
+import { DaySection } from './DaySection'
 import './daily-note-scroll-view.css'
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -54,28 +52,14 @@ export interface DailyNoteScrollViewOptions {
 
 // ─── Internal per-day state ───────────────────────────────────────────────────
 
-const DATA_EVENTS = ['blockCreated', 'blockDataUpdated', 'blockRemoved', 'blockMoved'] as const
-
 interface CrossDaySelection {
-  startDay: DayState
+  startDay: DaySection
   startBlockId: string
   startOffset: number
-  endDay: DayState
+  endDay: DaySection
   endBlockId: string
   endOffset: number
-  middleDays: DayState[]
-}
-
-interface DayState {
-  date: string
-  sectionEl: HTMLElement   // .daily-note-section wrapper
-  contentEl: HTMLElement   // .daily-note-content — BlockRenderer target
-  /** Mutable reference box so InputHandler closures always see the latest Blocks. */
-  ref: { blocks: Blocks }
-  history: BlockHistory
-  emitter: BlockEventEmitter
-  renderer: BlockRenderer
-  input: InputHandler
+  middleDays: DaySection[]
 }
 
 // ─── DailyNoteScrollView ──────────────────────────────────────────────────────
@@ -101,8 +85,8 @@ export class DailyNoteScrollView {
   #provider: NoteProvider
   #editable: HTMLElement               // the single shared contenteditable
   #dates: string[]                     // oldest → newest
-  #dayStates: Map<string, DayState>    // date → state
-  #sections: Map<string, HTMLElement>  // date → sectionEl
+  #daySections: Map<string, DaySection>   // date → DaySection
+  #sectionElements: Map<string, HTMLElement>  // date → sectionEl
   #topSentinel: HTMLElement
   #bottomSentinel: HTMLElement
   #observer: IntersectionObserver
@@ -126,8 +110,8 @@ export class DailyNoteScrollView {
     this.#windowSize = opts.windowSize ?? 7
     this.#centerDate = centerDate
     this.#opts = opts
-    this.#dayStates = new Map()
-    this.#sections = new Map()
+    this.#daySections = new Map()
+    this.#sectionElements = new Map()
 
     // Build initial date window centred on centerDate
     const half = Math.floor(this.#windowSize / 2)
@@ -196,7 +180,7 @@ export class DailyNoteScrollView {
         }
         this.#notifyVisibleDates()
       }, { root: scrollRoot })
-      for (const sectionEl of this.#sections.values()) {
+      for (const sectionEl of this.#sectionElements.values()) {
         this.#visibilityObserver.observe(sectionEl)
       }
     }
@@ -206,7 +190,7 @@ export class DailyNoteScrollView {
     // is set — at scrollTop=0 the top sentinel is visible, which would
     // immediately trigger a spurious #slideUp and start an oscillation loop.
     requestAnimationFrame(() => {
-      this.#sections.get(centerDate)?.scrollIntoView({ block: 'start', behavior: 'instant' })
+      this.#sectionElements.get(centerDate)?.scrollIntoView({ block: 'start', behavior: 'instant' })
       this.#observer.observe(this.#topSentinel)
       this.#observer.observe(this.#bottomSentinel)
     })
@@ -217,8 +201,8 @@ export class DailyNoteScrollView {
     this.#destroyed = true
     this.#observer.disconnect()
     this.#visibilityObserver?.disconnect()
-    for (const dayState of this.#dayStates.values()) {
-      dayState.emitter.cancelAll()
+    for (const section of this.#daySections.values()) {
+      section.destroy()
     }
   }
 
@@ -250,7 +234,7 @@ export class DailyNoteScrollView {
 
     sectionEl.appendChild(headerEl)
 
-    // Blocks container — BlockRenderer target
+    // Blocks container — DaySection target
     const contentEl = document.createElement('div')
     contentEl.className = 'daily-note-content'
     sectionEl.appendChild(contentEl)
@@ -261,7 +245,7 @@ export class DailyNoteScrollView {
     if (position === 'append') {
       this.#editable.appendChild(sectionEl)
     } else {
-      const firstSection = this.#sections.size > 0 ? this.#sections.get(this.#dates[0]) : null
+      const firstSection = this.#sectionElements.size > 0 ? this.#sectionElements.get(this.#dates[0]) : null
       if (firstSection) {
         this.#editable.insertBefore(sectionEl, firstSection)
       } else {
@@ -269,72 +253,35 @@ export class DailyNoteScrollView {
       }
     }
 
-    // Per-day state
-    const initialBlocks = Blocks.from([Blocks.createTextBlock()])
-    const ref: { blocks: Blocks } = { blocks: initialBlocks }
-    const history = new BlockHistory(initialBlocks)
-    const emitter = new BlockEventEmitter(
-      (id: BlockId) => {
-        try {
-          const block = ref.blocks.getBlock(id)
-          return { id, blockType: block.blockType, data: block.data }
-        } catch {
-          return null
-        }
-      },
-      {
-        debounceMs: this.#opts.dataUpdateDebounceMs ?? 1000,
-        maxWaitMs:  this.#opts.dataUpdateMaxWaitMs  ?? 10000,
-      },
-    )
-    const renderer = new BlockRenderer(contentEl)
-    const input = new InputHandler(
-      renderer,
-      () => ref.blocks,
-      (b) => { ref.blocks = b },
-      history,
-      emitter,
-    )
-
-    renderer.render(ref.blocks)
-
-    const dayState: DayState = { date, sectionEl, contentEl, ref, history, emitter, renderer, input }
-    this.#dayStates.set(date, dayState)
-    this.#sections.set(date, sectionEl)
+    const section = new DaySection(contentEl, date, {
+      debounceMs: this.#opts.dataUpdateDebounceMs ?? 1000,
+      maxWaitMs:  this.#opts.dataUpdateMaxWaitMs  ?? 10000,
+    })
+    section.onDataChange(() => this.#provider.save(date, section.blocks.blocks))
+    this.#daySections.set(date, section)
+    this.#sectionElements.set(date, sectionEl)
 
     // Load from provider
     this.#provider.load(date).then((loaded) => {
       if (this.#destroyed) return
       if (loaded !== null) {
-        ref.blocks = Blocks.from(loaded)
-        // Reset history so undo replays events against the loaded block IDs,
-        // not the empty placeholder created before the async load completed.
-        history.reset(ref.blocks)
-        renderer.render(ref.blocks)
+        section.load(Blocks.from(loaded))
       }
     })
-
-    // Auto-save on data changes
-    for (const event of DATA_EVENTS) {
-      emitter.addEventListener(event, () => {
-        this.#provider.save(date, ref.blocks.blocks)
-      })
-    }
   }
 
   #unmountSection(date: string): void {
-    const dayState = this.#dayStates.get(date)
-    if (dayState) {
-      dayState.emitter.flushAll()
-      dayState.emitter.cancelAll()
-      this.#dayStates.delete(date)
+    const section = this.#daySections.get(date)
+    if (section) {
+      section.destroy()
+      this.#daySections.delete(date)
     }
-    const sectionEl = this.#sections.get(date)
+    const sectionEl = this.#sectionElements.get(date)
     if (sectionEl) {
       this.#visibilityObserver?.unobserve(sectionEl)
       this.#visibleDates.delete(date)
       sectionEl.remove()
-      this.#sections.delete(date)
+      this.#sectionElements.delete(date)
     }
   }
 
@@ -343,7 +290,7 @@ export class DailyNoteScrollView {
    * reinitializes the window around today first.
    */
   scrollToToday(): void {
-    const todaySection = this.#sections.get(this.#centerDate)
+    const todaySection = this.#sectionElements.get(this.#centerDate)
     if (todaySection) {
       todaySection.scrollIntoView({ block: 'start', behavior: 'smooth' })
       return
@@ -361,7 +308,7 @@ export class DailyNoteScrollView {
     for (const date of this.#dates) this.#mountSection(date, 'append')
 
     requestAnimationFrame(() => {
-      this.#sections.get(this.#centerDate)?.scrollIntoView({ block: 'start', behavior: 'instant' })
+      this.#sectionElements.get(this.#centerDate)?.scrollIntoView({ block: 'start', behavior: 'instant' })
     })
   }
 
@@ -375,7 +322,7 @@ export class DailyNoteScrollView {
     // scrollTop is unchanged — the top sentinel stays visible and would fire
     // again immediately. Compensate by advancing scrollTop by the new section's
     // height so the viewport stays at the same visual position.
-    const newEl = this.#sections.get(prevDate)
+    const newEl = this.#sectionElements.get(prevDate)
     const newHeight = newEl?.offsetHeight ?? 0
     if (this.#scrollRoot && newHeight > 0) {
       this.#scrollRoot.scrollTo({ top: this.#scrollRoot.scrollTop + newHeight, behavior: 'instant' })
@@ -395,7 +342,7 @@ export class DailyNoteScrollView {
     // before it leaves the DOM, then subtract it from scrollTop so the user
     // stays at the same visual position.
     const removed = this.#dates.shift()!
-    const removedEl = this.#sections.get(removed)
+    const removedEl = this.#sectionElements.get(removed)
     const removedHeight = removedEl?.offsetHeight ?? 0
     this.#unmountSection(removed)
     // Only compensate when the removed section was fully above the viewport.
@@ -414,12 +361,12 @@ export class DailyNoteScrollView {
   // ─── Private: event routing ───────────────────────────────────────────────────
 
   /** Walk up from `node` to find the `.daily-note-section[data-date]` ancestor. */
-  #getDayForNode(node: Node): DayState | null {
+  #getDaySectionForNode(node: Node): DaySection | null {
     let current: Node | null = node
     while (current) {
       if (current.nodeType === Node.ELEMENT_NODE) {
         const date = (current as Element).getAttribute?.('data-date')
-        if (date) return this.#dayStates.get(date) ?? null
+        if (date) return this.#daySections.get(date) ?? null
       }
       current = current.parentNode
     }
@@ -427,21 +374,21 @@ export class DailyNoteScrollView {
   }
 
   /**
-   * Find the day state whose content element contains the current selection anchor.
+   * Find the day section whose content element contains the current selection anchor.
    * Returns null when the cursor is in a header or outside all sections.
    */
-  #getActiveDayState(): DayState | null {
+  #getActiveDaySection(): DaySection | null {
     const domSel = window.getSelection()
     if (!domSel || domSel.rangeCount === 0) return null
-    return this.#getDayForNode(domSel.getRangeAt(0).startContainer)
+    return this.#getDaySectionForNode(domSel.getRangeAt(0).startContainer)
   }
 
   /** True when the DOM selection spans two different day sections. */
   #isCrossDaySelection(): boolean {
     const domSel = window.getSelection()
     if (!domSel || domSel.isCollapsed || domSel.rangeCount === 0) return false
-    const a = this.#getDayForNode(domSel.anchorNode!)
-    const f = this.#getDayForNode(domSel.focusNode!)
+    const a = this.#getDaySectionForNode(domSel.anchorNode!)
+    const f = this.#getDaySectionForNode(domSel.focusNode!)
     return a !== null && f !== null && a !== f
   }
 
@@ -454,8 +401,8 @@ export class DailyNoteScrollView {
     const domSel = window.getSelection()
     if (!domSel || domSel.isCollapsed || domSel.rangeCount === 0) return null
 
-    const anchorDay = this.#getDayForNode(domSel.anchorNode!)
-    const focusDay  = this.#getDayForNode(domSel.focusNode!)
+    const anchorDay = this.#getDaySectionForNode(domSel.anchorNode!)
+    const focusDay  = this.#getDaySectionForNode(domSel.focusNode!)
     if (!anchorDay || !focusDay || anchorDay === focusDay) return null
 
     // Determine document order (anchor may come after focus for backwards selections)
@@ -483,9 +430,9 @@ export class DailyNoteScrollView {
 
     const startIdx = this.#dates.indexOf(startDay.date)
     const endIdx   = this.#dates.indexOf(endDay.date)
-    const middleDays: DayState[] = []
+    const middleDays: DaySection[] = []
     for (let i = startIdx + 1; i < endIdx; i++) {
-      const d = this.#dayStates.get(this.#dates[i])
+      const d = this.#daySections.get(this.#dates[i])
       if (d) middleDays.push(d)
     }
 
@@ -507,44 +454,44 @@ export class DailyNoteScrollView {
    */
   #handleCrossDayDeletion(cs: CrossDaySelection): BlockOffset {
     // 1. Trim start day: delete from selection start to end of start day
-    const startLastBlock = cs.startDay.ref.blocks.blocks.at(-1)!
+    const startLastBlock = cs.startDay.blocks.blocks.at(-1)!
     const needsStartTrim =
       cs.startBlockId !== startLastBlock.id ||
       cs.startOffset !== startLastBlock.getLength()
     if (needsStartTrim) {
-      cs.startDay.input.pendingSelectionBefore = null
-      cs.startDay.input.deleteRange(new BlockRange(
+      cs.startDay.pendingSelectionBefore = null
+      cs.startDay.deleteRange(new BlockRange(
         new BlockOffset(cs.startBlockId, cs.startOffset),
         new BlockOffset(startLastBlock.id, startLastBlock.getLength()),
       ))
-      cs.startDay.renderer.render(cs.startDay.ref.blocks)
+      cs.startDay.render()
     }
 
     // 2. Clear middle days
     for (const mid of cs.middleDays) {
       const cleared = Blocks.from([Blocks.createTextBlock()])
-      const old = mid.ref.blocks
-      mid.ref.blocks = cleared
-      mid.renderer.render(cleared)
-      mid.emitter.dispatchChanges(Blocks.diff(old, cleared))
+      const old = mid.blocks
+      mid.blocks = cleared
+      mid.render()
+      mid.dispatchChanges(Blocks.diff(old, cleared))
     }
 
     // 3. Trim end day: delete from start of end day to selection end
-    const endFirstBlock = cs.endDay.ref.blocks.blocks[0]
+    const endFirstBlock = cs.endDay.blocks.blocks[0]
     const endRangeCollapsed =
       endFirstBlock.id === cs.endBlockId && cs.endOffset === 0
     if (!endRangeCollapsed) {
-      cs.endDay.input.pendingSelectionBefore = null
-      const cursor = cs.endDay.input.deleteRange(new BlockRange(
+      cs.endDay.pendingSelectionBefore = null
+      const cursor = cs.endDay.deleteRange(new BlockRange(
         new BlockOffset(endFirstBlock.id, 0),
         new BlockOffset(cs.endBlockId, cs.endOffset),
       ))
-      cs.endDay.renderer.render(cs.endDay.ref.blocks, cursor)
+      cs.endDay.render(cursor)
       return cursor
     }
     // Nothing to trim — place cursor at start of first block in end day
     const cursor = new BlockOffset(endFirstBlock.id, 0)
-    cs.endDay.renderer.render(cs.endDay.ref.blocks, cursor)
+    cs.endDay.render(cursor)
     return cursor
   }
 
@@ -554,65 +501,65 @@ export class DailyNoteScrollView {
 
   #handleCrossDayCharInput(cs: CrossDaySelection, char: string): void {
     const cursor = this.#handleCrossDayDeletion(cs)
-    const state = cs.endDay.ref.blocks
+    const state = cs.endDay.blocks
     const block = state.getBlock(cursor.blockId)
     const newText = block.getText().insert(cursor.offset, char)
     const newCursor = new BlockOffset(cursor.blockId, cursor.offset + 1)
-    cs.endDay.ref.blocks = state.update(cursor.blockId, newText)
-    cs.endDay.renderer.render(cs.endDay.ref.blocks, newCursor)
-    cs.endDay.emitter.scheduleDataUpdated(cursor.blockId)
+    cs.endDay.blocks = state.update(cursor.blockId, newText)
+    cs.endDay.render(newCursor)
+    cs.endDay.scheduleDataUpdated(cursor.blockId)
   }
 
   #handleBlur(): void {
-    for (const dayState of this.#dayStates.values()) {
-      dayState.emitter.flushAll()
+    for (const section of this.#daySections.values()) {
+      section.flushAll()
     }
   }
 
   #handleCompositionStart(): void {
-    const dayState = this.#getActiveDayState()
-    if (!dayState) return
-    const sel = dayState.renderer.getSelection()
-    dayState.input.pendingSelectionBefore = sel
+    const section = this.#getActiveDaySection()
+    if (!section) return
+    const sel = section.getSelection()
+    section.pendingSelectionBefore = sel
     if (sel instanceof BlockRange) {
-      const cursor = dayState.input.deleteRange(sel)
-      dayState.renderer.render(dayState.ref.blocks, cursor)
+      const cursor = section.deleteRange(sel)
+      section.render(cursor)
     }
-    dayState.input.composing = true
+    section.composing = true
     this.#composing = true
   }
 
   #handleCompositionEnd(): void {
     this.#composing = false
-    const dayState = this.#getActiveDayState()
-    if (!dayState) return
-    dayState.input.composing = false
-    this.#recordInput(dayState)
+    const section = this.#getActiveDaySection()
+    if (!section) return
+    section.composing = false
+    this.#recordInput(section)
   }
 
   #handleInput(): void {
     if (this.#composing) return
-    const dayState = this.#getActiveDayState()
-    if (!dayState) return
-    this.#recordInput(dayState)
+    const section = this.#getActiveDaySection()
+    if (!section) return
+    this.#recordInput(section)
   }
 
-  #recordInput(dayState: DayState): void {
-    const blocksBefore = dayState.ref.blocks
-    const selBefore = dayState.input.pendingSelectionBefore
-    const currentSel = dayState.renderer.getSelection()
+  #recordInput(section: DaySection): void {
+    const blocksBefore = section.blocks
+    const selBefore = section.pendingSelectionBefore
+    const currentSel = section.getSelection()
     const blockId = currentSel instanceof BlockOffset ? currentSel.blockId : null
 
-    dayState.input.handleInput()
+    section.handleInput()
 
-    const blocksAfter = dayState.ref.blocks
+    const blocksAfter = section.blocks
     if (blocksAfter !== blocksBefore) {
-      const selAfter = dayState.renderer.getSelection()
+      const selAfter = section.getSelection()
       const diff = Blocks.diff(blocksBefore, blocksAfter)
       if (diff.length === 1 && diff[0] instanceof BlockDataChanged && blockId) {
-        this.#dailyNoteHistory.updateOrAdd(dayState.date, blockId, blocksBefore, blocksAfter, selBefore, selAfter)
+        this.#dailyNoteHistory.updateOrAdd(section.date, blockId, blocksBefore, blocksAfter, selBefore, selAfter)
       } else {
-        this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, selBefore, selAfter)
+        this.#dailyNoteHistory.add(section.date, blocksBefore, blocksAfter, selBefore, selAfter)
       }
     }
   }
@@ -625,12 +572,12 @@ export class DailyNoteScrollView {
       e.preventDefault()
       if (this.#dailyNoteHistory.canUndo()) {
         const { noteId, blocks: newBlocks, selection } = this.#dailyNoteHistory.undo()
-        const dayState = this.#dayStates.get(noteId)
-        if (dayState) {
-          const oldBlocks = dayState.ref.blocks
-          dayState.ref.blocks = newBlocks
-          dayState.renderer.render(newBlocks, selection ?? undefined)
-          dayState.emitter.dispatchChanges(Blocks.diff(oldBlocks, newBlocks))
+        const section = this.#daySections.get(noteId)
+        if (section) {
+          const oldBlocks = section.blocks
+          section.blocks = newBlocks
+          section.render(selection ?? undefined)
+          section.dispatchChanges(Blocks.diff(oldBlocks, newBlocks))
         }
       }
       return
@@ -644,12 +591,12 @@ export class DailyNoteScrollView {
       e.preventDefault()
       if (this.#dailyNoteHistory.canRedo()) {
         const { noteId, blocks: newBlocks, selection } = this.#dailyNoteHistory.redo()
-        const dayState = this.#dayStates.get(noteId)
-        if (dayState) {
-          const oldBlocks = dayState.ref.blocks
-          dayState.ref.blocks = newBlocks
-          dayState.renderer.render(newBlocks, selection ?? undefined)
-          dayState.emitter.dispatchChanges(Blocks.diff(oldBlocks, newBlocks))
+        const section = this.#daySections.get(noteId)
+        if (section) {
+          const oldBlocks = section.blocks
+          section.blocks = newBlocks
+          section.render(selection ?? undefined)
+          section.dispatchChanges(Blocks.diff(oldBlocks, newBlocks))
         }
       }
       return
@@ -677,21 +624,21 @@ export class DailyNoteScrollView {
       }
     }
 
-    const dayState = this.#getActiveDayState()
-    if (!dayState) return
+    const section = this.#getActiveDaySection()
+    if (!section) return
 
-    const sel = dayState.renderer.getSelection()
-    dayState.input.pendingSelectionBefore = sel
+    const sel = section.getSelection()
+    section.pendingSelectionBefore = sel
 
     if (e.key === 'Enter') {
       e.preventDefault()
       if (sel) {
-        const blocksBefore = dayState.ref.blocks
-        dayState.input.handleEnter(sel)
-        const blocksAfter = dayState.ref.blocks
+        const blocksBefore = section.blocks
+        section.handleEnter(sel)
+        const blocksAfter = section.blocks
         if (blocksAfter !== blocksBefore) {
-          const selAfter = dayState.renderer.getSelection()
-          this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+          const selAfter = section.getSelection()
+          this.#dailyNoteHistory.add(section.date, blocksBefore, blocksAfter, sel, selAfter)
         }
       }
       return
@@ -702,7 +649,7 @@ export class DailyNoteScrollView {
       if (sel) {
         const fromId = sel instanceof BlockRange ? sel.start.blockId : sel.blockId
         const toId   = sel instanceof BlockRange ? sel.end.blockId   : sel.blockId
-        this.#applyBlocksChange(dayState, (b) => e.shiftKey ? b.unindent(fromId, toId) : b.indent(fromId, toId), sel)
+        this.#applyBlocksChange(section, (b) => e.shiftKey ? b.unindent(fromId, toId) : b.indent(fromId, toId), sel)
       }
       return
     }
@@ -710,7 +657,7 @@ export class DailyNoteScrollView {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
       e.preventDefault()
       if (sel instanceof BlockRange) {
-        this.#applyBlocksChange(dayState, (b) => b.toggleInline(sel, 'Bold'), sel)
+        this.#applyBlocksChange(section, (b) => b.toggleInline(sel, 'Bold'), sel)
       }
       return
     }
@@ -718,7 +665,7 @@ export class DailyNoteScrollView {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
       e.preventDefault()
       if (sel instanceof BlockRange) {
-        this.#applyBlocksChange(dayState, (b) => b.toggleInline(sel, 'Italic'), sel)
+        this.#applyBlocksChange(section, (b) => b.toggleInline(sel, 'Italic'), sel)
       }
       return
     }
@@ -726,7 +673,7 @@ export class DailyNoteScrollView {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
       e.preventDefault()
       if (sel instanceof BlockRange) {
-        this.#applyBlocksChange(dayState, (b) => b.toggleInline(sel, 'Underline'), sel)
+        this.#applyBlocksChange(section, (b) => b.toggleInline(sel, 'Underline'), sel)
       }
       return
     }
@@ -734,24 +681,24 @@ export class DailyNoteScrollView {
     if (e.key === 'Backspace') {
       if (sel instanceof BlockRange) {
         e.preventDefault()
-        const blocksBefore = dayState.ref.blocks
-        dayState.input.handleBackspace(sel)
-        const blocksAfter = dayState.ref.blocks
+        const blocksBefore = section.blocks
+        section.handleBackspace(sel)
+        const blocksAfter = section.blocks
         if (blocksAfter !== blocksBefore) {
-          const selAfter = dayState.renderer.getSelection()
-          this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+          const selAfter = section.getSelection()
+          this.#dailyNoteHistory.add(section.date, blocksBefore, blocksAfter, sel, selAfter)
         }
         return
       }
       if (sel instanceof BlockOffset && sel.offset === 0) {
         // Prevent browser from merging across day boundaries
         e.preventDefault()
-        const blocksBefore = dayState.ref.blocks
-        dayState.input.handleBackspace(sel)
-        const blocksAfter = dayState.ref.blocks
+        const blocksBefore = section.blocks
+        section.handleBackspace(sel)
+        const blocksAfter = section.blocks
         if (blocksAfter !== blocksBefore) {
-          const selAfter = dayState.renderer.getSelection()
-          this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+          const selAfter = section.getSelection()
+          this.#dailyNoteHistory.add(section.date, blocksBefore, blocksAfter, sel, selAfter)
         }
         return
       }
@@ -761,26 +708,26 @@ export class DailyNoteScrollView {
     if (e.key === 'Delete') {
       if (sel instanceof BlockRange) {
         e.preventDefault()
-        const blocksBefore = dayState.ref.blocks
-        dayState.input.handleDelete(sel)
-        const blocksAfter = dayState.ref.blocks
+        const blocksBefore = section.blocks
+        section.handleDelete(sel)
+        const blocksAfter = section.blocks
         if (blocksAfter !== blocksBefore) {
-          const selAfter = dayState.renderer.getSelection()
-          this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+          const selAfter = section.getSelection()
+          this.#dailyNoteHistory.add(section.date, blocksBefore, blocksAfter, sel, selAfter)
         }
         return
       }
       if (sel instanceof BlockOffset) {
-        const block = dayState.ref.blocks.getBlock(sel.blockId)
+        const block = section.blocks.getBlock(sel.blockId)
         if (sel.offset === block.getLength()) {
           // Prevent browser from merging across day boundaries
           e.preventDefault()
-          const blocksBefore = dayState.ref.blocks
-          dayState.input.handleDelete(sel)
-          const blocksAfter = dayState.ref.blocks
+          const blocksBefore = section.blocks
+          section.handleDelete(sel)
+          const blocksAfter = section.blocks
           if (blocksAfter !== blocksBefore) {
-            const selAfter = dayState.renderer.getSelection()
-            this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+            const selAfter = section.getSelection()
+            this.#dailyNoteHistory.add(section.date, blocksBefore, blocksAfter, sel, selAfter)
           }
           return
         }
@@ -797,12 +744,12 @@ export class DailyNoteScrollView {
       !e.altKey
     ) {
       e.preventDefault()
-      const blocksBefore = dayState.ref.blocks
-      dayState.input.insertCharOverRange(sel, e.key)
-      const blocksAfter = dayState.ref.blocks
+      const blocksBefore = section.blocks
+      section.insertCharOverRange(sel, e.key)
+      const blocksAfter = section.blocks
       if (blocksAfter !== blocksBefore) {
-        const selAfter = dayState.renderer.getSelection()
-        this.#dailyNoteHistory.add(dayState.date, blocksBefore, blocksAfter, sel, selAfter)
+        const selAfter = section.getSelection()
+        this.#dailyNoteHistory.add(section.date, blocksBefore, blocksAfter, sel, selAfter)
       }
       return
     }
@@ -811,20 +758,19 @@ export class DailyNoteScrollView {
   // ─── Private: state mutation helpers ─────────────────────────────────────────
 
   #applyBlocksChange(
-    dayState: DayState,
+    section: DaySection,
     mutate: (b: Blocks) => Blocks,
     sel: BlockSelection,
   ): void {
-    const oldBlocks = dayState.ref.blocks
-    dayState.ref.blocks = mutate(oldBlocks)
-    dayState.renderer.render(dayState.ref.blocks, sel)
-    const changes = Blocks.diff(oldBlocks, dayState.ref.blocks)
+    const oldBlocks = section.blocks
+    section.blocks = mutate(oldBlocks)
+    section.render(sel)
+    const changes = Blocks.diff(oldBlocks, section.blocks)
     if (changes.length > 0) {
-      const selAfter = dayState.renderer.getSelection()
-      dayState.history.add(changes, dayState.input.pendingSelectionBefore, selAfter)
-      this.#dailyNoteHistory.add(dayState.date, oldBlocks, dayState.ref.blocks, dayState.input.pendingSelectionBefore, selAfter)
+      const selAfter = section.getSelection()
+      this.#dailyNoteHistory.add(section.date, oldBlocks, section.blocks, section.pendingSelectionBefore, selAfter)
     }
-    dayState.input.pendingSelectionBefore = null
-    dayState.emitter.dispatchChanges(changes)
+    section.pendingSelectionBefore = null
+    section.dispatchChanges(changes)
   }
 }
