@@ -36,6 +36,19 @@ export interface DailyNoteScrollViewOptions {
   windowSize?: number
   dataUpdateDebounceMs?: number
   dataUpdateMaxWaitMs?: number
+  /**
+   * Called with the ISO date strings of every section currently visible
+   * in the viewport, in document order, whenever that set changes.
+   *
+   * @param dates - ISO date strings of the visible sections, oldest → newest.
+   *
+   * @example
+   * onVisibleDatesChange: (dates) => {
+   *   const today = new Date().toISOString().slice(0, 10)
+   *   showJumpToToday = !dates.includes(today)
+   * }
+   */
+  onVisibleDatesChange?: (dates: readonly string[]) => void
 }
 
 // ─── Internal per-day state ───────────────────────────────────────────────────
@@ -92,7 +105,11 @@ export class DailyNoteScrollView {
   #topSentinel: HTMLElement
   #bottomSentinel: HTMLElement
   #observer: IntersectionObserver
+  #visibilityObserver: IntersectionObserver | null = null
+  #visibleDates: Set<string> = new Set()
+  #scrollRoot: HTMLElement | null = null
   #windowSize: number
+  #centerDate: string
   #opts: DailyNoteScrollViewOptions
   #composing = false
   #destroyed = false
@@ -105,6 +122,7 @@ export class DailyNoteScrollView {
   ) {
     this.#provider = provider
     this.#windowSize = opts.windowSize ?? 7
+    this.#centerDate = centerDate
     this.#opts = opts
     this.#dayStates = new Map()
     this.#sections = new Map()
@@ -147,6 +165,12 @@ export class DailyNoteScrollView {
       this.#mountSection(date, 'append')
     }
 
+    // The scroll root is the container's parent (e.g. .scroller). Using the
+    // viewport root would never fire because the sentinel elements are clipped
+    // inside the scroll container and never intersect the actual viewport.
+    const scrollRoot = container.parentElement
+    this.#scrollRoot = scrollRoot instanceof HTMLElement ? scrollRoot : null
+
     // IntersectionObserver for infinite scroll
     this.#observer = new IntersectionObserver((entries) => {
       for (const entry of entries) {
@@ -154,16 +178,43 @@ export class DailyNoteScrollView {
         if (entry.target === this.#topSentinel) this.#slideUp()
         else if (entry.target === this.#bottomSentinel) this.#slideDown()
       }
-    })
+    }, { root: scrollRoot })
 
-    this.#observer.observe(this.#topSentinel)
-    this.#observer.observe(this.#bottomSentinel)
+    // IntersectionObserver for viewport-visible date tracking
+    if (opts.onVisibleDatesChange) {
+      this.#visibilityObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          const date = (entry.target as HTMLElement).dataset.date
+          if (!date) continue
+          if (entry.isIntersecting) {
+            this.#visibleDates.add(date)
+          } else {
+            this.#visibleDates.delete(date)
+          }
+        }
+        this.#notifyVisibleDates()
+      }, { root: scrollRoot })
+      for (const sectionEl of this.#sections.values()) {
+        this.#visibilityObserver.observe(sectionEl)
+      }
+    }
+
+    // Scroll to today's section, then start watching sentinels.
+    // Sentinel observation must begin only after the initial scroll position
+    // is set — at scrollTop=0 the top sentinel is visible, which would
+    // immediately trigger a spurious #slideUp and start an oscillation loop.
+    requestAnimationFrame(() => {
+      this.#sections.get(centerDate)?.scrollIntoView({ block: 'start', behavior: 'instant' })
+      this.#observer.observe(this.#topSentinel)
+      this.#observer.observe(this.#bottomSentinel)
+    })
   }
 
   destroy(): void {
     if (this.#destroyed) return
     this.#destroyed = true
     this.#observer.disconnect()
+    this.#visibilityObserver?.disconnect()
     for (const dayState of this.#dayStates.values()) {
       dayState.emitter.cancelAll()
     }
@@ -180,13 +231,29 @@ export class DailyNoteScrollView {
     const headerEl = document.createElement('div')
     headerEl.className = 'daily-note-header'
     headerEl.contentEditable = 'false'
-    headerEl.textContent = formatDate(date)
+
+    const dateSpan = document.createElement('span')
+    dateSpan.className = 'daily-note-header-date'
+    dateSpan.textContent = formatDate(date)
+    headerEl.appendChild(dateSpan)
+
+    const todayDate = new Date().toISOString().slice(0, 10)
+    if (date === todayDate) {
+      sectionEl.setAttribute('data-today', 'true')
+      const badge = document.createElement('span')
+      badge.className = 'daily-note-today-badge'
+      badge.textContent = 'today'
+      headerEl.appendChild(badge)
+    }
+
     sectionEl.appendChild(headerEl)
 
     // Blocks container — BlockRenderer target
     const contentEl = document.createElement('div')
     contentEl.className = 'daily-note-content'
     sectionEl.appendChild(contentEl)
+
+    this.#visibilityObserver?.observe(sectionEl)
 
     // Insert into shared editable
     if (position === 'append') {
@@ -259,16 +326,55 @@ export class DailyNoteScrollView {
     }
     const sectionEl = this.#sections.get(date)
     if (sectionEl) {
+      this.#visibilityObserver?.unobserve(sectionEl)
+      this.#visibleDates.delete(date)
       sectionEl.remove()
       this.#sections.delete(date)
     }
   }
 
+  /**
+   * Scroll to today's section. If today has been slid out of the window,
+   * reinitializes the window around today first.
+   */
+  scrollToToday(): void {
+    const todaySection = this.#sections.get(this.#centerDate)
+    if (todaySection) {
+      todaySection.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      return
+    }
+
+    // Today is outside the current window — rebuild around it
+    const half = Math.floor(this.#windowSize / 2)
+    const newDates: string[] = []
+    for (let i = -half; i <= half; i++) {
+      if (newDates.length < this.#windowSize) newDates.push(addDays(this.#centerDate, i))
+    }
+
+    for (const date of [...this.#dates]) this.#unmountSection(date)
+    this.#dates = newDates.slice(0, this.#windowSize)
+    for (const date of this.#dates) this.#mountSection(date, 'append')
+
+    requestAnimationFrame(() => {
+      this.#sections.get(this.#centerDate)?.scrollIntoView({ block: 'start', behavior: 'instant' })
+    })
+  }
+
   /** Slide window towards older dates (user scrolled up). */
   #slideUp(): void {
     const prevDate = addDays(this.#dates[0], -1)
-    this.#dates.unshift(prevDate)
     this.#mountSection(prevDate, 'prepend')
+    this.#dates.unshift(prevDate)
+
+    // After prepending, the new section pushes all existing content down, but
+    // scrollTop is unchanged — the top sentinel stays visible and would fire
+    // again immediately. Compensate by advancing scrollTop by the new section's
+    // height so the viewport stays at the same visual position.
+    const newEl = this.#sections.get(prevDate)
+    const newHeight = newEl?.offsetHeight ?? 0
+    if (this.#scrollRoot && newHeight > 0) {
+      this.#scrollRoot.scrollTo({ top: this.#scrollRoot.scrollTop + newHeight, behavior: 'instant' })
+    }
 
     const removed = this.#dates.pop()!
     this.#unmountSection(removed)
@@ -280,8 +386,24 @@ export class DailyNoteScrollView {
     this.#dates.push(nextDate)
     this.#mountSection(nextDate, 'append')
 
+    // Read the height of the section we are about to remove from the top
+    // before it leaves the DOM, then subtract it from scrollTop so the user
+    // stays at the same visual position.
     const removed = this.#dates.shift()!
+    const removedEl = this.#sections.get(removed)
+    const removedHeight = removedEl?.offsetHeight ?? 0
     this.#unmountSection(removed)
+    // Only compensate when the removed section was fully above the viewport.
+    // If scrollTop < removedHeight the section was still partially visible and
+    // no correction is needed (or the result would be negative).
+    if (this.#scrollRoot && removedHeight > 0 && this.#scrollRoot.scrollTop >= removedHeight) {
+      this.#scrollRoot.scrollTo({ top: this.#scrollRoot.scrollTop - removedHeight, behavior: 'instant' })
+    }
+  }
+
+  #notifyVisibleDates(): void {
+    const ordered = this.#dates.filter((d) => this.#visibleDates.has(d))
+    this.#opts.onVisibleDatesChange?.(ordered)
   }
 
   // ─── Private: event routing ───────────────────────────────────────────────────

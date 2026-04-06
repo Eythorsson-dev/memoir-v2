@@ -228,6 +228,34 @@ describe('DailyNoteScrollView', () => {
     expect(dates).toContain('2024-01-13')
   })
 
+  it('renders sections in oldest-to-newest order after scrolling up', () => {
+    const { container } = make(makeProvider(), '2024-01-15', { windowSize: 3 })
+    // initial: [2024-01-14, 2024-01-15, 2024-01-16]
+
+    const io = MockIntersectionObserver.instances[0]
+    const topSentinel = container.querySelector('.daily-note-sentinel-top')!
+    io.triggerIntersect(topSentinel)
+    // expected: [2024-01-13, 2024-01-14, 2024-01-15]
+
+    const sections = Array.from(container.querySelectorAll('.daily-note-section'))
+    const dates = sections.map(s => s.getAttribute('data-date'))
+    expect(dates).toEqual(['2024-01-13', '2024-01-14', '2024-01-15'])
+  })
+
+  it('renders sections in oldest-to-newest order after multiple scroll-up slides', () => {
+    const { container } = make(makeProvider(), '2024-01-15', { windowSize: 3 })
+    // initial: [2024-01-14, 2024-01-15, 2024-01-16]
+
+    const io = MockIntersectionObserver.instances[0]
+    const topSentinel = container.querySelector('.daily-note-sentinel-top')!
+    io.triggerIntersect(topSentinel) // → [2024-01-13, 2024-01-14, 2024-01-15]
+    io.triggerIntersect(topSentinel) // → [2024-01-12, 2024-01-13, 2024-01-14]
+
+    const sections = Array.from(container.querySelectorAll('.daily-note-section'))
+    const dates = sections.map(s => s.getAttribute('data-date'))
+    expect(dates).toEqual(['2024-01-12', '2024-01-13', '2024-01-14'])
+  })
+
   // ─── Cross-day selection ──────────────────────────────────────────────────
 
   it('cross-day Backspace calls preventDefault and preserves all day sections', async () => {
