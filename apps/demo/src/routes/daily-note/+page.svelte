@@ -22,10 +22,15 @@
     const provider = new LocalStorageNoteProvider()
     const today = new Date().toISOString().slice(0, 10)
 
+    let view: DailyNoteScrollView | null = $state(null)
+    let showTodayBtn = $state(false)
+
     function mountScrollView(provider: NoteProvider, centerDate: string) {
         return (node: HTMLElement) => {
-            const view = new DailyNoteScrollView(node, provider, centerDate)
-            return () => view.destroy()
+            view = new DailyNoteScrollView(node, provider, centerDate, {
+                onVisibleDatesChange: (dates) => { showTodayBtn = !dates.includes(centerDate) },
+            })
+            return () => { view?.destroy(); view = null }
         }
     }
 </script>
@@ -50,6 +55,14 @@
     <div class="scroller">
         <div {@attach mountScrollView(provider, today)}></div>
     </div>
+
+    <!-- Scroll affordance: bottom fade hints that more days exist -->
+    <div class="fade-bottom" aria-hidden="true"></div>
+
+    <!-- Jump-to-today button -->
+    {#if showTodayBtn}
+        <button class="today-btn" onclick={() => view?.scrollToToday()}>Today</button>
+    {/if}
 </div>
 
 <style>
@@ -98,6 +111,11 @@
         height: 100%;
         overflow-y: auto;
         scroll-behavior: smooth;
+        /* Disable browser scroll anchoring so we control position correction
+           manually in DailyNoteScrollView. Without this, prepending a section
+           causes the browser to push scrollTop down automatically, keeping the
+           old visual position instead of revealing the newly loaded day. */
+        overflow-anchor: none;
     }
 
     .scroller::-webkit-scrollbar {
@@ -115,13 +133,30 @@
         background: #2e2c28;
     }
 
+    /* ── Scroll affordance: fade edges ──────────────────────────────────────── */
+
+    .fade-bottom {
+        position: absolute;
+        left: 0;
+        right: 0;
+        pointer-events: none;
+        z-index: 15;
+        bottom: 0;
+        height: 5rem;
+        background: linear-gradient(to top, #f9f7f4 15%, transparent 100%);
+    }
+
+    :global([data-theme="dark"]) .fade-bottom {
+        background: linear-gradient(to top, #1a1917 15%, transparent 100%);
+    }
+
     /* ── Day sections ────────────────────────────────────────────────────────── */
 
     .scroller :global(.daily-note-section) {
         max-width: 660px;
         margin: 0 auto;
-        padding: 0 2.5rem 8rem;
-        min-height: 100vh;
+        padding: 0 2.5rem 4rem;
+        min-height: 50vh;
         animation: section-appear 0.25s ease-out both;
     }
 
@@ -137,11 +172,12 @@
     }
 
     .scroller :global(.daily-note-section + .daily-note-section) {
-        border-top: 1px solid #ebe5de;
+        border-top: 1px solid #ddd6cc;
+        padding-top: 2rem;
     }
 
     :global([data-theme="dark"]) .scroller :global(.daily-note-section + .daily-note-section) {
-        border-top-color: #252320;
+        border-top-color: #2e2c28;
     }
 
     /* ── Date header ─────────────────────────────────────────────────────────── */
@@ -156,8 +192,11 @@
         top: 0;
         z-index: 10;
         background: #f9f7f4;
-        padding: 2.25rem 0 1.5rem;
-        margin-bottom: 0.25rem;
+        padding: 0.5rem 0 0.25rem;
+        margin-bottom: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
 
         /* Override library opacity */
         opacity: 1 !important;
@@ -168,10 +207,6 @@
         font-weight: 400;
         letter-spacing: 0.01em;
         color: #b0a090;
-
-        /* Fade out gracefully at the bottom edge */
-        -webkit-mask-image: linear-gradient(to bottom, black 75%, transparent 100%);
-        mask-image: linear-gradient(to bottom, black 75%, transparent 100%);
     }
 
     :global([data-theme="dark"]) .scroller :global(.daily-note-header) {
@@ -179,16 +214,50 @@
         color: #6a5f55;
     }
 
+    /* ── Today section ───────────────────────────────────────────────────────── */
+
+    .scroller :global(.daily-note-section[data-today="true"] .daily-note-header) {
+        color: #8b6f5a;
+    }
+
+    :global([data-theme="dark"]) .scroller :global(.daily-note-section[data-today="true"] .daily-note-header) {
+        color: #9a7f6a;
+    }
+
+    .scroller :global(.daily-note-today-badge) {
+        display: inline-block;
+        padding: 0.15em 0.6em 0.1em;
+        font-family: 'Lora', Georgia, serif;
+        font-style: normal;
+        font-size: 0.7rem;
+        font-weight: 500;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #8b6f5a;
+        border: 1px solid #c9a48a;
+        border-radius: 1em;
+        line-height: 1;
+    }
+
+    :global([data-theme="dark"]) .scroller :global(.daily-note-today-badge) {
+        color: #9a7f6a;
+        border-color: #5a4535;
+    }
+
     /* ── Content area ────────────────────────────────────────────────────────── */
 
     .scroller :global(.daily-note-content) {
-        padding-top: 0.75rem;
+        padding-top: 0.25rem;
         cursor: text;
     }
 
     /* ── Block editor typography ─────────────────────────────────────────────── */
 
     .scroller :global(.block-editor-editable) {
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        padding: 0;
         font-family: 'Lora', Georgia, serif;
         font-size: 1.0625rem;
         line-height: 1.95;
@@ -242,5 +311,52 @@
         .scroller
         :global(.daily-note-content .block:only-child > p:has(> br:only-child))::before {
         color: #3d3830;
+    }
+
+    /* ── Today button ────────────────────────────────────────────────────────── */
+
+    .today-btn {
+        position: absolute;
+        bottom: 1.75rem;
+        left: 50%;
+        translate: -50% 0;
+        z-index: 20;
+
+        padding: 0.4em 1.1em 0.35em;
+        font-family: 'Lora', Georgia, serif;
+        font-style: italic;
+        font-size: 0.875rem;
+        font-weight: 400;
+        letter-spacing: 0.02em;
+        color: #8b6f5a;
+        background: #f9f7f4;
+        border: 1px solid #c9a48a;
+        border-radius: 2em;
+        cursor: pointer;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+
+        animation: today-btn-in 0.2s ease-out both;
+    }
+
+    @keyframes today-btn-in {
+        from { opacity: 0; translate: -50% 6px; }
+        to   { opacity: 1; translate: -50% 0; }
+    }
+
+    .today-btn:hover {
+        background: #f3ede6;
+        border-color: #b8886e;
+    }
+
+    :global([data-theme="dark"]) .today-btn {
+        color: #9a7f6a;
+        background: #1a1917;
+        border-color: #5a4535;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    :global([data-theme="dark"]) .today-btn:hover {
+        background: #211f1c;
+        border-color: #7a5a45;
     }
 </style>
