@@ -1,4 +1,5 @@
 import { Blocks, BlockOffset, BlockRange, BlockDataChanged } from '../blocks/blocks'
+import { Text } from '../text/text'
 import type { NoteProvider } from './NoteProvider'
 import type { BlockSelection } from './events'
 import { getBlockElement, getBlockElementContent, getCharOffset } from './BlockRenderer'
@@ -447,10 +448,13 @@ export class DailyNoteScrollView {
    * Delete the cross-day selection:
    * 1. Trim start day: keep content before selection start.
    * 2. Clear middle days to a single empty block.
-   * 3. Trim end day: remove content before selection end; cursor lands at offset 0
-   *    of the first remaining block in the end day.
+   * 3. Trim end day: remove content before selection end.
+   * 4. Merge: append the end day's first block's surviving text into the start
+   *    day's last block, then empty the end day's first block. This mirrors
+   *    standard editor behaviour — text before and after the deleted range
+   *    joins into one block. Cursor lands at the merge point in the start day.
    *
-   * Returns the cursor `BlockOffset` in the end day, or null on failure.
+   * Returns the cursor `BlockOffset` in the start day.
    */
   #handleCrossDayDeletion(cs: CrossDaySelection): BlockOffset {
     // 1. Trim start day: delete from selection start to end of start day
@@ -464,7 +468,6 @@ export class DailyNoteScrollView {
         new BlockOffset(cs.startBlockId, cs.startOffset),
         new BlockOffset(startLastBlock.id, startLastBlock.getLength()),
       ))
-      cs.startDay.render()
     }
 
     // 2. Clear middle days
@@ -482,16 +485,32 @@ export class DailyNoteScrollView {
       endFirstBlock.id === cs.endBlockId && cs.endOffset === 0
     if (!endRangeCollapsed) {
       cs.endDay.pendingSelectionBefore = null
-      const cursor = cs.endDay.deleteRange(new BlockRange(
+      cs.endDay.deleteRange(new BlockRange(
         new BlockOffset(endFirstBlock.id, 0),
         new BlockOffset(cs.endBlockId, cs.endOffset),
       ))
-      cs.endDay.render(cursor)
-      return cursor
     }
-    // Nothing to trim — place cursor at start of first block in end day
-    const cursor = new BlockOffset(endFirstBlock.id, 0)
-    cs.endDay.render(cursor)
+
+    // 4. Merge: join end day's first block's surviving text into start day's last block.
+    //    After trimming both ends, the surviving text in start day and end day are
+    //    logically adjacent — standard editor semantics require them to land in one block.
+    const updatedStartLast = cs.startDay.blocks.lastBlock()
+    const updatedEndFirst  = cs.endDay.blocks.blocks[0]
+
+    const mergedText  = Text.merge(updatedStartLast.getText(), updatedEndFirst.getText())
+    const cursorOffset = updatedStartLast.getText().text.length
+
+    const startDayBefore = cs.startDay.blocks
+    cs.startDay.blocks = cs.startDay.blocks.update(updatedStartLast.id, mergedText)
+    const cursor = new BlockOffset(updatedStartLast.id, cursorOffset)
+    cs.startDay.render(cursor)
+    cs.startDay.dispatchChanges(Blocks.diff(startDayBefore, cs.startDay.blocks))
+
+    const endDayBefore = cs.endDay.blocks
+    cs.endDay.blocks = cs.endDay.blocks.update(updatedEndFirst.id, new Text('', []))
+    cs.endDay.render()
+    cs.endDay.dispatchChanges(Blocks.diff(endDayBefore, cs.endDay.blocks))
+
     return cursor
   }
 
@@ -524,13 +543,14 @@ export class DailyNoteScrollView {
 
   #handleCrossDayCharInput(cs: CrossDaySelection, char: string): void {
     const cursor = this.#handleCrossDayDeletion(cs)
-    const state = cs.endDay.blocks
+    // After the deletion+merge, the cursor is in the start day's last block.
+    const state = cs.startDay.blocks
     const block = state.getBlock(cursor.blockId)
     const newText = block.getText().insert(cursor.offset, char)
     const newCursor = new BlockOffset(cursor.blockId, cursor.offset + 1)
-    cs.endDay.blocks = state.update(cursor.blockId, newText)
-    cs.endDay.render(newCursor)
-    cs.endDay.scheduleDataUpdated(cursor.blockId)
+    cs.startDay.blocks = state.update(cursor.blockId, newText)
+    cs.startDay.render(newCursor)
+    cs.startDay.scheduleDataUpdated(cursor.blockId)
   }
 
   #handleBlur(): void {

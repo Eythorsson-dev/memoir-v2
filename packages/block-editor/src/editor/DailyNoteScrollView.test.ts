@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { DailyNoteScrollView } from './DailyNoteScrollView'
 import { Blocks } from '../blocks/blocks'
+import { Text } from '../text/text'
 import type { NoteProvider } from './NoteProvider'
 
 // ─── IntersectionObserver mock ────────────────────────────────────────────────
@@ -63,6 +64,45 @@ function makeContainer(): HTMLElement {
   const div = document.createElement('div')
   document.body.appendChild(div)
   return div
+}
+
+/**
+ * Set a DOM selection that spans from one day section to another,
+ * anchoring at specific character offsets within the first block of each day.
+ */
+function setCrossDayRangeWithOffsets(
+  container: HTMLElement,
+  startDate: string,
+  startCharOffset: number,
+  endDate: string,
+  endCharOffset: number,
+): void {
+  const startBlockEl = container.querySelector(`[data-date="${startDate}"] .daily-note-content .block`)!
+  const endBlockEl   = container.querySelector(`[data-date="${endDate}"] .daily-note-content .block`)!
+  const startP = startBlockEl.querySelector('p, h1, h2, h3')!
+  const endP   = endBlockEl.querySelector('p, h1, h2, h3')!
+
+  function textNodeAtOffset(root: Node, targetOffset: number): { node: Node; offset: number } {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+    let acc = 0
+    let node: Node | null = walker.nextNode()
+    while (node !== null) {
+      const len = (node.textContent ?? '').length
+      if (acc + len >= targetOffset) return { node, offset: targetOffset - acc }
+      acc += len
+      node = walker.nextNode()
+    }
+    return { node: root, offset: targetOffset }
+  }
+
+  const { node: sNode, offset: sOff } = textNodeAtOffset(startP, startCharOffset)
+  const { node: eNode, offset: eOff } = textNodeAtOffset(endP, endCharOffset)
+
+  const range = document.createRange()
+  range.setStart(sNode, sOff)
+  range.setEnd(eNode, eOff)
+  window.getSelection()!.removeAllRanges()
+  window.getSelection()!.addRange(range)
 }
 
 /** Set a DOM selection that spans from one day section to another. */
@@ -276,7 +316,7 @@ describe('DailyNoteScrollView', () => {
     expect(container.querySelector('[data-date="2024-01-15"]')).toBeTruthy()
   })
 
-  it('cross-day Backspace places the cursor in the end day', async () => {
+  it('cross-day Backspace places the cursor in the start day', async () => {
     const { container } = make(makeProvider(), '2024-01-15', { windowSize: 3 })
     const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
     await vi.waitFor(() => expect(container.querySelectorAll('.block').length).toBe(3))
@@ -284,10 +324,11 @@ describe('DailyNoteScrollView', () => {
     setCrossDayRange(container, '2024-01-14', '2024-01-15')
     editable.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }))
 
-    const endSection = container.querySelector('[data-date="2024-01-15"]')!
-    const endContent = endSection.querySelector('.daily-note-content')!
+    // After the deletion+merge, cursor lands in the start day at the merge point
+    const startSection = container.querySelector('[data-date="2024-01-14"]')!
+    const startContent = startSection.querySelector('.daily-note-content')!
     const anchor = window.getSelection()!.anchorNode
-    expect(endContent.contains(anchor)).toBe(true)
+    expect(startContent.contains(anchor)).toBe(true)
   })
 
   it('cross-day Enter calls preventDefault and preserves all day sections', async () => {
@@ -467,6 +508,39 @@ describe('DailyNoteScrollView', () => {
       bubbles: true, cancelable: true,
     }))
     expect(container.querySelectorAll('[data-date="2024-01-14"] .block').length).toBe(2)
+  })
+
+  // ─── Cross-day merge ──────────────────────────────────────────────────────
+
+  it('cross-day Backspace merges pre-selection text from start day with post-selection text from end day', async () => {
+    // Day14: "Hello" — selection starts at offset 2 → "He" survives
+    // Day15: "World" — selection ends at offset 3 → "ld" survives
+    // Expected: start day block becomes "Held" (merge), end day block is empty
+    const provider: NoteProvider = {
+      load: vi.fn().mockImplementation(async (date: string) => {
+        if (date === '2024-01-14') return Blocks.from([Blocks.createTextBlock(new Text('Hello', []))]).blocks
+        if (date === '2024-01-15') return Blocks.from([Blocks.createTextBlock(new Text('World', []))]).blocks
+        return null
+      }),
+      save: vi.fn().mockResolvedValue(undefined),
+    }
+
+    const { container } = make(provider, '2024-01-15', { windowSize: 3 })
+    const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-date="2024-01-14"] .block p')?.textContent).toBe('Hello')
+      expect(container.querySelector('[data-date="2024-01-15"] .block p')?.textContent).toBe('World')
+    })
+
+    // Select from "He|llo" in Day14 to "Wor|ld" in Day15
+    setCrossDayRangeWithOffsets(container, '2024-01-14', 2, '2024-01-15', 3)
+    editable.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }))
+
+    // Pre-selection text ("He") and post-selection text ("ld") should be merged
+    // into the start day's block. The end day's block should be emptied.
+    expect(container.querySelector('[data-date="2024-01-14"] .block p')?.textContent).toBe('Held')
+    expect(container.querySelector('[data-date="2024-01-15"] .block p')?.textContent).toBe('')
   })
 
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
