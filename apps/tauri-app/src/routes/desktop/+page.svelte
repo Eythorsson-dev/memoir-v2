@@ -7,7 +7,7 @@
 </script>
 
 <div class="min-h-dvh">
-	<div class="mx-auto max-w-3xl px-8 pt-12 pb-8">
+	<div class="mx-auto max-w-3xl px-8 pt-6 pb-8">
 		<DailyNote {provider} date={today} />
 	</div>
 </div>

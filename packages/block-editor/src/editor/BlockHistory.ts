@@ -18,6 +18,22 @@ export class BlockHistory {
     this.#base = base
   }
 
+  /**
+   * Reset the history to a new base state, discarding all recorded transactions.
+   *
+   * @remarks
+   * Call this when the note content is replaced externally (e.g. after an
+   * async load from the provider) so that subsequent undo steps replay events
+   * against the correct base block IDs.
+   *
+   * @param base - The new base state to use as the undo floor.
+   */
+  reset(base: Blocks): void {
+    this.#base = base
+    this.#transactions = []
+    this.#pointer = 0
+  }
+
   canUndo(): boolean {
     return this.#pointer > 0
   }
