@@ -1,9 +1,9 @@
-import { Blocks, BlockOffset, BlockRange, BlockDataChanged } from '../blocks/blocks'
+import { Blocks, BlockOffset, BlockRange } from '../blocks/blocks'
 import { Text } from '../text/text'
 import type { NoteProvider } from './NoteProvider'
 import type { BlockSelection } from './events'
 import { getBlockElement, getBlockElementContent, getCharOffset } from './BlockRenderer'
-import { DailyNoteHistory } from './DailyNoteHistory'
+import { EditorHistory, type ISectionHistory } from './EditorHistory'
 import { DaySection } from './DaySection'
 import './daily-note-scroll-view.css'
 
@@ -99,7 +99,8 @@ export class DailyNoteScrollView {
   #opts: DailyNoteScrollViewOptions
   #composing = false
   #destroyed = false
-  #dailyNoteHistory = new DailyNoteHistory()
+  #history = new EditorHistory()
+  #sectionHistories: Map<string, ISectionHistory> = new Map()
 
   constructor(
     container: HTMLElement,
@@ -254,10 +255,15 @@ export class DailyNoteScrollView {
       }
     }
 
+    let sectionRef: DaySection | undefined
+    const sectionHistory = this.#history.forSection(date, (blocks, sel) => sectionRef?.applyBlocks(blocks, sel))
+    this.#sectionHistories.set(date, sectionHistory)
     const section = new DaySection(contentEl, date, {
       debounceMs: this.#opts.dataUpdateDebounceMs ?? 1000,
       maxWaitMs:  this.#opts.dataUpdateMaxWaitMs  ?? 10000,
+      history: sectionHistory,
     })
+    sectionRef = section
     section.onDataChange(() => this.#provider.save(date, section.blocks.blocks))
     this.#daySections.set(date, section)
     this.#sectionElements.set(date, sectionEl)
@@ -277,6 +283,7 @@ export class DailyNoteScrollView {
       section.destroy()
       this.#daySections.delete(date)
     }
+    this.#sectionHistories.delete(date)
     const sectionEl = this.#sectionElements.get(date)
     if (sectionEl) {
       this.#visibilityObserver?.unobserve(sectionEl)
@@ -476,7 +483,9 @@ export class DailyNoteScrollView {
       const old = mid.blocks
       mid.blocks = cleared
       mid.render()
-      mid.dispatchChanges(Blocks.diff(old, cleared))
+      const midChanges = Blocks.diff(old, cleared)
+      mid.dispatchChanges(midChanges)
+      this.#sectionHistories.get(mid.date)?.add(old, midChanges, null, null)
     }
 
     // 3. Trim end day: delete from start of end day to selection end
@@ -504,12 +513,16 @@ export class DailyNoteScrollView {
     cs.startDay.blocks = cs.startDay.blocks.update(updatedStartLast.id, mergedText)
     const cursor = new BlockOffset(updatedStartLast.id, cursorOffset)
     cs.startDay.render(cursor)
-    cs.startDay.dispatchChanges(Blocks.diff(startDayBefore, cs.startDay.blocks))
+    const startChanges = Blocks.diff(startDayBefore, cs.startDay.blocks)
+    cs.startDay.dispatchChanges(startChanges)
+    this.#sectionHistories.get(cs.startDay.date)?.add(startDayBefore, startChanges, null, cursor)
 
     const endDayBefore = cs.endDay.blocks
     cs.endDay.blocks = cs.endDay.blocks.update(updatedEndFirst.id, new Text('', []))
     cs.endDay.render()
-    cs.endDay.dispatchChanges(Blocks.diff(endDayBefore, cs.endDay.blocks))
+    const endChanges = Blocks.diff(endDayBefore, cs.endDay.blocks)
+    cs.endDay.dispatchChanges(endChanges)
+    this.#sectionHistories.get(cs.endDay.date)?.add(endDayBefore, endChanges, null, null)
 
     return cursor
   }
@@ -519,22 +532,7 @@ export class DailyNoteScrollView {
    * Cmd+Z can restore all affected sections atomically.
    */
   #handleCrossDayDeletionWithHistory(cs: CrossDaySelection): void {
-    const snapshots = [cs.startDay, ...cs.middleDays, cs.endDay].map(s => ({
-      noteId: s.date,
-      blocksBefore: s.blocks,
-    }))
-
-    const cursor = this.#handleCrossDayDeletion(cs)
-
-    const notes = snapshots.map(({ noteId, blocksBefore }) => {
-      const section = this.#daySections.get(noteId)
-      return { noteId, blocksBefore, blocksAfter: section?.blocks ?? blocksBefore }
-    })
-
-    const hasChange = notes.some(n => n.blocksBefore !== n.blocksAfter)
-    if (hasChange) {
-      this.#dailyNoteHistory.addMulti(notes, { noteId: cs.endDay.date, selection: cursor })
-    }
+    this.#history.batch(() => { this.#handleCrossDayDeletion(cs) })
   }
 
   #handleCrossDayEnter(cs: CrossDaySelection): void {
@@ -542,15 +540,19 @@ export class DailyNoteScrollView {
   }
 
   #handleCrossDayCharInput(cs: CrossDaySelection, char: string): void {
-    const cursor = this.#handleCrossDayDeletion(cs)
-    // After the deletion+merge, the cursor is in the start day's last block.
-    const state = cs.startDay.blocks
-    const block = state.getBlock(cursor.blockId)
-    const newText = block.getText().insert(cursor.offset, char)
-    const newCursor = new BlockOffset(cursor.blockId, cursor.offset + 1)
-    cs.startDay.blocks = state.update(cursor.blockId, newText)
-    cs.startDay.render(newCursor)
-    cs.startDay.scheduleDataUpdated(cursor.blockId)
+    this.#history.batch(() => {
+      const cursor = this.#handleCrossDayDeletion(cs)
+      // After the deletion+merge, the cursor is in the start day's last block.
+      const stateBefore = cs.startDay.blocks
+      const block = stateBefore.getBlock(cursor.blockId)
+      const newText = block.getText().insert(cursor.offset, char)
+      const newCursor = new BlockOffset(cursor.blockId, cursor.offset + 1)
+      cs.startDay.blocks = stateBefore.update(cursor.blockId, newText)
+      cs.startDay.render(newCursor)
+      const charChanges = Blocks.diff(stateBefore, cs.startDay.blocks)
+      cs.startDay.dispatchChanges(charChanges)
+      this.#sectionHistories.get(cs.startDay.date)?.add(stateBefore, charChanges, null, newCursor)
+    })
   }
 
   #handleBlur(): void {
@@ -577,75 +579,33 @@ export class DailyNoteScrollView {
     const section = this.#getActiveDaySection()
     if (!section) return
     section.composing = false
-    this.#recordInput(section)
+    section.handleInput()
   }
 
   #handleInput(): void {
     if (this.#composing) return
     const section = this.#getActiveDaySection()
     if (!section) return
-    this.#recordInput(section)
-  }
-
-  #recordInput(section: DaySection): void {
-    const blocksBefore = section.blocks
-    const selBefore = section.pendingSelectionBefore
-    const currentSel = section.getSelection()
-    const blockId = currentSel instanceof BlockOffset ? currentSel.blockId : null
-
     section.handleInput()
-
-    const blocksAfter = section.blocks
-    if (blocksAfter !== blocksBefore) {
-      const selAfter = section.getSelection()
-      const diff = Blocks.diff(blocksBefore, blocksAfter)
-      if (diff.length === 1 && diff[0] instanceof BlockDataChanged && blockId) {
-        this.#dailyNoteHistory.updateOrAdd(section.date, blockId, blocksBefore, blocksAfter, selBefore, selAfter)
-      } else {
-        this.#dailyNoteHistory.add(section.date, blocksBefore, blocksAfter, selBefore, selAfter)
-      }
-    }
   }
 
   #handleKeyDown(e: KeyboardEvent): void {
     if (this.#composing) return
 
-    // Undo: Ctrl/Cmd+Z — delegates to global DailyNoteHistory
+    // Undo: Ctrl/Cmd+Z
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
       e.preventDefault()
-      if (this.#dailyNoteHistory.canUndo()) {
-        const { notes, selectionNoteId, selection } = this.#dailyNoteHistory.undo()
-        for (const { noteId, blocks: newBlocks } of notes) {
-          const section = this.#daySections.get(noteId)
-          if (section) {
-            const oldBlocks = section.blocks
-            section.blocks = newBlocks
-            section.render(noteId === selectionNoteId ? (selection ?? undefined) : undefined)
-            section.dispatchChanges(Blocks.diff(oldBlocks, newBlocks))
-          }
-        }
-      }
+      if (this.#history.canUndo()) this.#history.undo()
       return
     }
 
-    // Redo: Ctrl/Cmd+Shift+Z or Ctrl+Y — delegates to global DailyNoteHistory
+    // Redo: Ctrl/Cmd+Shift+Z or Ctrl+Y
     if (
       ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') ||
       (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'y')
     ) {
       e.preventDefault()
-      if (this.#dailyNoteHistory.canRedo()) {
-        const { notes, selectionNoteId, selection } = this.#dailyNoteHistory.redo()
-        for (const { noteId, blocks: newBlocks } of notes) {
-          const section = this.#daySections.get(noteId)
-          if (section) {
-            const oldBlocks = section.blocks
-            section.blocks = newBlocks
-            section.render(noteId === selectionNoteId ? (selection ?? undefined) : undefined)
-            section.dispatchChanges(Blocks.diff(oldBlocks, newBlocks))
-          }
-        }
-      }
+      if (this.#history.canRedo()) this.#history.redo()
       return
     }
 
@@ -679,15 +639,7 @@ export class DailyNoteScrollView {
 
     if (e.key === 'Enter') {
       e.preventDefault()
-      if (sel) {
-        const blocksBefore = section.blocks
-        section.handleEnter(sel)
-        const blocksAfter = section.blocks
-        if (blocksAfter !== blocksBefore) {
-          const selAfter = section.getSelection()
-          this.#dailyNoteHistory.add(section.date, blocksBefore, blocksAfter, sel, selAfter)
-        }
-      }
+      if (sel) section.handleEnter(sel)
       return
     }
 
@@ -728,25 +680,13 @@ export class DailyNoteScrollView {
     if (e.key === 'Backspace') {
       if (sel instanceof BlockRange) {
         e.preventDefault()
-        const blocksBefore = section.blocks
         section.handleBackspace(sel)
-        const blocksAfter = section.blocks
-        if (blocksAfter !== blocksBefore) {
-          const selAfter = section.getSelection()
-          this.#dailyNoteHistory.add(section.date, blocksBefore, blocksAfter, sel, selAfter)
-        }
         return
       }
       if (sel instanceof BlockOffset && sel.offset === 0) {
         // Prevent browser from merging across day boundaries
         e.preventDefault()
-        const blocksBefore = section.blocks
         section.handleBackspace(sel)
-        const blocksAfter = section.blocks
-        if (blocksAfter !== blocksBefore) {
-          const selAfter = section.getSelection()
-          this.#dailyNoteHistory.add(section.date, blocksBefore, blocksAfter, sel, selAfter)
-        }
         return
       }
       return
@@ -755,13 +695,7 @@ export class DailyNoteScrollView {
     if (e.key === 'Delete') {
       if (sel instanceof BlockRange) {
         e.preventDefault()
-        const blocksBefore = section.blocks
         section.handleDelete(sel)
-        const blocksAfter = section.blocks
-        if (blocksAfter !== blocksBefore) {
-          const selAfter = section.getSelection()
-          this.#dailyNoteHistory.add(section.date, blocksBefore, blocksAfter, sel, selAfter)
-        }
         return
       }
       if (sel instanceof BlockOffset) {
@@ -769,13 +703,7 @@ export class DailyNoteScrollView {
         if (sel.offset === block.getLength()) {
           // Prevent browser from merging across day boundaries
           e.preventDefault()
-          const blocksBefore = section.blocks
           section.handleDelete(sel)
-          const blocksAfter = section.blocks
-          if (blocksAfter !== blocksBefore) {
-            const selAfter = section.getSelection()
-            this.#dailyNoteHistory.add(section.date, blocksBefore, blocksAfter, sel, selAfter)
-          }
           return
         }
       }
@@ -791,13 +719,7 @@ export class DailyNoteScrollView {
       !e.altKey
     ) {
       e.preventDefault()
-      const blocksBefore = section.blocks
       section.insertCharOverRange(sel, e.key)
-      const blocksAfter = section.blocks
-      if (blocksAfter !== blocksBefore) {
-        const selAfter = section.getSelection()
-        this.#dailyNoteHistory.add(section.date, blocksBefore, blocksAfter, sel, selAfter)
-      }
       return
     }
   }
@@ -815,7 +737,7 @@ export class DailyNoteScrollView {
     const changes = Blocks.diff(oldBlocks, section.blocks)
     if (changes.length > 0) {
       const selAfter = section.getSelection()
-      this.#dailyNoteHistory.add(section.date, oldBlocks, section.blocks, section.pendingSelectionBefore, selAfter)
+      this.#sectionHistories.get(section.date)?.add(oldBlocks, changes, section.pendingSelectionBefore, selAfter)
     }
     section.pendingSelectionBefore = null
     section.dispatchChanges(changes)

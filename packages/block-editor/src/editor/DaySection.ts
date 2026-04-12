@@ -1,7 +1,7 @@
 import { Blocks, BlockOffset, BlockRange, type BlockId, type BlocksChange } from '../blocks/blocks'
 import type { BlockSelection } from './events'
 import { BlockRenderer } from './BlockRenderer'
-import { BlockHistory } from './BlockHistory'
+import type { ISectionHistory } from './EditorHistory'
 import { BlockEventEmitter } from './BlockEventEmitter'
 import { InputHandler } from './InputHandler'
 
@@ -12,20 +12,16 @@ const DATA_EVENTS = ['blockCreated', 'blockDataUpdated', 'blockRemoved', 'blockM
  *
  * @remarks
  * Accepts a `contentEl` already created by the scroll view and internally
- * wires `BlockHistory`, `BlockEventEmitter`, `BlockRenderer`, and
- * `InputHandler`. Extracting this removes the repetitive per-section wiring
- * from `DailyNoteScrollView#mountSection` without touching the shared
- * contenteditable model.
- *
- * `BlockHistory` is kept internally only to satisfy `InputHandler`'s
- * interface; undo/redo is owned by `DailyNoteHistory` at the scroll-view
- * level and never calls `history.undo()` / `history.redo()` here.
+ * wires `ISectionHistory`, `BlockEventEmitter`, `BlockRenderer`, and
+ * `InputHandler`. The `history` handle is obtained from a shared
+ * `EditorHistory` instance via `EditorHistory.forSection` and passed in via
+ * `opts`; undo/redo is owned at the scroll-view level.
  */
 export class DaySection {
   readonly date: string
 
   #blocks: Blocks
-  #history: BlockHistory
+  #history: ISectionHistory
   #emitter: BlockEventEmitter
   #renderer: BlockRenderer
   #input: InputHandler
@@ -33,13 +29,13 @@ export class DaySection {
   constructor(
     contentEl: HTMLElement,
     date: string,
-    opts: { debounceMs: number; maxWaitMs: number },
+    opts: { debounceMs: number; maxWaitMs: number; history: ISectionHistory },
   ) {
     this.date = date
 
     const initialBlocks = Blocks.from([Blocks.createTextBlock()])
     this.#blocks = initialBlocks
-    this.#history = new BlockHistory(initialBlocks)
+    this.#history = opts.history
     this.#emitter = new BlockEventEmitter(
       (id: BlockId) => {
         try {
@@ -73,11 +69,28 @@ export class DaySection {
    * Replace the current blocks without rendering or resetting history.
    *
    * @remarks
-   * Used by undo/redo and cross-day operations in `DailyNoteScrollView`
-   * where the caller handles rendering and event dispatch separately.
+   * Used by cross-day operations in `DailyNoteScrollView` where the caller
+   * handles rendering and event dispatch separately.
    */
   set blocks(value: Blocks) {
     this.#blocks = value
+  }
+
+  /**
+   * Apply new blocks, re-render, and dispatch change events.
+   *
+   * @remarks
+   * Called by `EditorHistory` `applyFn` callbacks on undo/redo. Sets state,
+   * renders, and fires `dispatchChanges` so auto-save listeners are notified.
+   *
+   * @param blocks - The new block state to apply.
+   * @param selection - Optional cursor/selection to restore.
+   */
+  applyBlocks(blocks: Blocks, selection?: BlockSelection): void {
+    const old = this.#blocks
+    this.#blocks = blocks
+    this.#renderer.render(blocks, selection)
+    this.#emitter.dispatchChanges(Blocks.diff(old, blocks))
   }
 
   // ─── Lifecycle ──────────────────────────────────────────────────────────────

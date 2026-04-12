@@ -1,10 +1,9 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { DaySection } from './DaySection'
+import { EditorHistory } from './EditorHistory'
 import { Blocks, BlockDataChanged, BlockOffset } from '../blocks/blocks'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
-
-const OPTS = { debounceMs: 50, maxWaitMs: 500 }
 
 function makeContentEl(): HTMLElement {
   const div = document.createElement('div')
@@ -13,9 +12,14 @@ function makeContentEl(): HTMLElement {
   return div
 }
 
-function makeSection(date = '2024-01-15', contentEl?: HTMLElement): { section: DaySection; contentEl: HTMLElement } {
+function makeSection(date = '2024-01-15', contentEl?: HTMLElement): { section: DaySection; contentEl: HTMLElement; history: EditorHistory } {
   const el = contentEl ?? makeContentEl()
-  return { section: new DaySection(el, date, OPTS), contentEl: el }
+  const history = new EditorHistory()
+  let sectionRef: DaySection | undefined
+  const sectionHistory = history.forSection(date, (blocks, sel) => sectionRef?.applyBlocks(blocks, sel))
+  const section = new DaySection(el, date, { debounceMs: 50, maxWaitMs: 500, history: sectionHistory })
+  sectionRef = section
+  return { section, contentEl: el, history }
 }
 
 const contentEls: HTMLElement[] = []
@@ -236,6 +240,52 @@ describe('DaySection', () => {
 
     section.handleDelete(new BlockOffset(firstId, 0))
     expect(section.blocks.blocks.length).toBe(1)
+  })
+
+  // ─── applyBlocks ────────────────────────────────────────────────────────────
+
+  it('applyBlocks() sets state, re-renders, and fires onDataChange', () => {
+    const contentEl = makeContentEl()
+    contentEls.push(contentEl)
+    const { section } = makeSection('2024-01-15', contentEl)
+
+    const handler = vi.fn()
+    section.onDataChange(handler)
+
+    const two = Blocks.from([Blocks.createTextBlock(), Blocks.createTextBlock()])
+    section.applyBlocks(two)
+
+    expect(section.blocks).toBe(two)
+    expect(contentEl.querySelectorAll('.block').length).toBe(2)
+    expect(handler).toHaveBeenCalled()
+  })
+
+  it('applyBlocks() does not fire onDataChange when blocks are identical', () => {
+    const contentEl = makeContentEl()
+    contentEls.push(contentEl)
+    const { section } = makeSection('2024-01-15', contentEl)
+
+    const handler = vi.fn()
+    section.onDataChange(handler)
+
+    // Apply the same blocks — no diff → no events
+    section.applyBlocks(section.blocks)
+
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('load() calls reset on the injected history', () => {
+    const contentEl = makeContentEl()
+    contentEls.push(contentEl)
+    const { section, history } = makeSection('2024-01-15', contentEl)
+
+    // Record an entry so the stack is non-empty
+    section.handleEnter(new BlockOffset(section.blocks.blocks[0].id, 0))
+    expect(history.canUndo()).toBe(true)
+
+    // load() should reset the history
+    section.load(Blocks.from([Blocks.createTextBlock()]))
+    expect(history.canUndo()).toBe(false)
   })
 
   // ─── flushAll ────────────────────────────────────────────────────────────────

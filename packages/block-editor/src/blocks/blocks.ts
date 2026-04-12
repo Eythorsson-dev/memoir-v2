@@ -1024,7 +1024,7 @@ export class Blocks {
 
   /**
    * Replays a sequence of `BlocksChange` events onto `base`, returning the
-   * resulting `Blocks` state. Used by `BlockHistory` to reconstruct states
+   * resulting `Blocks` state. Used by `EditorHistory` to reconstruct states
    * without storing snapshots.
    */
   static fromEvents(base: Blocks, changes: readonly BlocksChange[]): Blocks {

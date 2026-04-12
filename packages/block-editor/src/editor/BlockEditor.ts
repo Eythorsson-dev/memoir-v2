@@ -2,7 +2,7 @@ import { type InlineTypes, type InlineDtoMap, type InlineDto } from '../text/tex
 import { Blocks, type BlockId, type BlockTypes, type HeaderLevel, BlockOffset, BlockRange } from '../blocks/blocks'
 import type { BlockEditorEventDtoMap, BlockEditorOptions, BlockSelection } from './events'
 import { BlockEventEmitter } from './BlockEventEmitter'
-import { BlockHistory } from './BlockHistory'
+import { EditorHistory, type ISectionHistory } from './EditorHistory'
 import { BlockRenderer } from './BlockRenderer'
 import { InputHandler } from './InputHandler'
 import './block-editor.css'
@@ -26,7 +26,8 @@ type DataPayloadTypes = Exclude<InlineTypes, NeverPayloadTypes>
 
 export class BlockEditor {
   #state: Blocks
-  #history: BlockHistory
+  #history: EditorHistory
+  #sectionHistory!: ISectionHistory
   #emitter: BlockEventEmitter
   #renderer: BlockRenderer
   #input: InputHandler
@@ -48,7 +49,7 @@ export class BlockEditor {
     this.#onTopBoundaryEscape    = opts.onTopBoundaryEscape    as ((x: number) => void) | undefined
     this.#onBottomBoundaryEscape = opts.onBottomBoundaryEscape as ((x: number) => void) | undefined
     this.#state = initial ?? Blocks.from([Blocks.createTextBlock()])
-    this.#history = new BlockHistory(this.#state)
+    this.#history = new EditorHistory()
     this.#emitter = new BlockEventEmitter(
       (id) => {
         try {
@@ -70,11 +71,17 @@ export class BlockEditor {
     editable.contentEditable = 'true'
 
     this.#renderer = new BlockRenderer(editable)
+    this.#sectionHistory = this.#history.forSection('default', (blocks, sel) => {
+      const oldState = this.#state
+      this.#state = blocks
+      this.#renderer.render(this.#state, sel)
+      this.#emitter.dispatchChanges(Blocks.diff(oldState, this.#state))
+    })
     this.#input = new InputHandler(
       this.#renderer,
       () => this.#state,
       (s) => { this.#state = s },
-      this.#history,
+      this.#sectionHistory,
       this.#emitter,
     )
 
@@ -325,20 +332,12 @@ export class BlockEditor {
 
   undo(): void {
     if (!this.#history.canUndo()) return
-    const oldState = this.#state
-    const { blocks, selection } = this.#history.undo()
-    this.#state = blocks
-    this.#renderer.render(this.#state, selection ?? undefined)
-    this.#emitter.dispatchChanges(Blocks.diff(oldState, this.#state))
+    this.#history.undo()
   }
 
   redo(): void {
     if (!this.#history.canRedo()) return
-    const oldState = this.#state
-    const { blocks, selection } = this.#history.redo()
-    this.#state = blocks
-    this.#renderer.render(this.#state, selection ?? undefined)
-    this.#emitter.dispatchChanges(Blocks.diff(oldState, this.#state))
+    this.#history.redo()
   }
 
   /**
@@ -445,7 +444,7 @@ export class BlockEditor {
     const changes = Blocks.diff(oldState, this.#state)
     if (changes.length > 0) {
       const selAfter = this.#renderer.getSelection()
-      this.#history.add(changes, this.#input.pendingSelectionBefore, selAfter)
+      this.#sectionHistory.add(oldState, changes, this.#input.pendingSelectionBefore, selAfter)
     }
     this.#input.pendingSelectionBefore = null
     this.#emitter.dispatchChanges(changes)
