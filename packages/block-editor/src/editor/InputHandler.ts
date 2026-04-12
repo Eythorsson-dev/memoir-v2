@@ -3,7 +3,7 @@ import { Blocks, BlockOffset, BlockRange, BlockDataChanged, type HeaderLevel } f
 import type { BlockSelection } from './events'
 import type { BlockRenderer } from './BlockRenderer'
 import { getBlockElementContent } from './BlockRenderer'
-import type { BlockHistory } from './BlockHistory'
+import type { ISectionHistory } from './EditorHistory'
 import type { BlockEventEmitter } from './BlockEventEmitter'
 import { InputRules } from './InputRules'
 
@@ -21,7 +21,7 @@ export class InputHandler {
   #renderer: BlockRenderer
   #getState: () => Blocks
   #setState: (blocks: Blocks) => void
-  #history: BlockHistory
+  #history: ISectionHistory
   #emitter: BlockEventEmitter
   #pendingSelectionBefore: BlockSelection | null = null
 
@@ -36,7 +36,7 @@ export class InputHandler {
     renderer: BlockRenderer,
     getState: () => Blocks,
     setState: (blocks: Blocks) => void,
-    history: BlockHistory,
+    history: ISectionHistory,
     emitter: BlockEventEmitter,
   ) {
     this.#renderer = renderer
@@ -206,9 +206,15 @@ export class InputHandler {
 
     const match = InputRules.match(newText.text, sel.offset, currentType)
     if (match) {
+      // Capture the state with the typed text before the rule converts it.
+      // This becomes the base for the rule-conversion entry so that a single
+      // undo step restores the typed text (e.g. "- ") rather than the
+      // pre-keystroke state.
+      const stateBeforeRule = newState
       this.#history.updateOrAdd(
         blockId,
-        new BlockDataChanged(blockId, 'text', newText),
+        oldState,
+        [new BlockDataChanged(blockId, 'text', newText)],
         this.#pendingSelectionBefore,
         sel,
       )
@@ -223,15 +229,15 @@ export class InputHandler {
       this.#setState(newState)
 
       const cursorAfter = new BlockOffset(blockId, 0)
-      const changes = Blocks.diff(oldState, newState)
-      this.#history.add(changes, sel, cursorAfter)
+      const changes = Blocks.diff(stateBeforeRule, newState)
+      this.#history.add(stateBeforeRule, changes, sel, cursorAfter)
       this.#pendingSelectionBefore = null
       this.#renderer.render(newState, cursorAfter)
       this.#emitter.scheduleDataUpdated(blockId)
       return
     }
 
-    this.#history.updateOrAdd(blockId, new BlockDataChanged(blockId, currentType, newText), this.#pendingSelectionBefore, sel)
+    this.#history.updateOrAdd(blockId, oldState, [new BlockDataChanged(blockId, currentType, newText)], this.#pendingSelectionBefore, sel)
     this.#pendingSelectionBefore = null
     this.#renderer.render(newState, sel)
     this.#emitter.scheduleDataUpdated(blockId)
@@ -242,7 +248,7 @@ export class InputHandler {
     const changes = Blocks.diff(oldState, newState)
     if (changes.length > 0) {
       const selAfter = this.#renderer.getSelection()
-      this.#history.add(changes, this.#pendingSelectionBefore, selAfter)
+      this.#history.add(oldState, changes, this.#pendingSelectionBefore, selAfter)
     }
     this.#pendingSelectionBefore = null
     this.#emitter.dispatchChanges(changes)

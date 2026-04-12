@@ -2,7 +2,7 @@ import { type InlineTypes, type InlineDtoMap, type InlineDto } from '../text/tex
 import { Blocks, type BlockId, type BlockTypes, type HeaderLevel, BlockOffset, BlockRange } from '../blocks/blocks'
 import type { BlockEditorEventDtoMap, BlockEditorOptions, BlockSelection } from './events'
 import { BlockEventEmitter } from './BlockEventEmitter'
-import { BlockHistory } from './BlockHistory'
+import { EditorHistory, type ISectionHistory } from './EditorHistory'
 import { BlockRenderer } from './BlockRenderer'
 import { InputHandler } from './InputHandler'
 import './block-editor.css'
@@ -26,10 +26,13 @@ type DataPayloadTypes = Exclude<InlineTypes, NeverPayloadTypes>
 
 export class BlockEditor {
   #state: Blocks
-  #history: BlockHistory
+  #history: EditorHistory
+  #sectionHistory!: ISectionHistory
   #emitter: BlockEventEmitter
   #renderer: BlockRenderer
   #input: InputHandler
+  #onTopBoundaryEscape: ((x: number) => void) | undefined
+  #onBottomBoundaryEscape: ((x: number) => void) | undefined
 
   #onSelectionChange = (): void => {
     if (document.activeElement === this.#renderer.editable) {
@@ -43,8 +46,10 @@ export class BlockEditor {
   }
 
   constructor(container: HTMLElement, initial?: Blocks, opts: BlockEditorOptions = {}) {
+    this.#onTopBoundaryEscape    = opts.onTopBoundaryEscape    as ((x: number) => void) | undefined
+    this.#onBottomBoundaryEscape = opts.onBottomBoundaryEscape as ((x: number) => void) | undefined
     this.#state = initial ?? Blocks.from([Blocks.createTextBlock()])
-    this.#history = new BlockHistory(this.#state)
+    this.#history = new EditorHistory()
     this.#emitter = new BlockEventEmitter(
       (id) => {
         try {
@@ -66,11 +71,17 @@ export class BlockEditor {
     editable.contentEditable = 'true'
 
     this.#renderer = new BlockRenderer(editable)
+    this.#sectionHistory = this.#history.forSection('default', (blocks, sel) => {
+      const oldState = this.#state
+      this.#state = blocks
+      this.#renderer.render(this.#state, sel)
+      this.#emitter.dispatchChanges(Blocks.diff(oldState, this.#state))
+    })
     this.#input = new InputHandler(
       this.#renderer,
       () => this.#state,
       (s) => { this.#state = s },
-      this.#history,
+      this.#sectionHistory,
       this.#emitter,
     )
 
@@ -289,25 +300,44 @@ export class BlockEditor {
     }
   }
 
+  /**
+   * Focus the editable and place the cursor at the start of the first block.
+   * If `x` is provided, use it as the client X coordinate to position the cursor
+   * on the first visual line at the same column (mirrors the ArrowDown position).
+   */
+  focusStart(x?: number): void {
+    const firstBlock = this.#state.blocks[0]
+    if (!firstBlock) return
+    this.#renderer.editable.focus()
+    if (x !== undefined && this.#placeCaretAtX(firstBlock.id, x, 'start')) return
+    this.#renderer.restoreSelection(new BlockOffset(firstBlock.id, 0))
+  }
+
+  /**
+   * Focus the editable and place the cursor at the end of the last block.
+   * If `x` is provided, use it as the client X coordinate to position the cursor
+   * on the last visual line at the same column (mirrors the ArrowUp position).
+   */
+  focusEnd(x?: number): void {
+    const blocks = this.#state.blocks
+    const lastBlock = blocks[blocks.length - 1]
+    if (!lastBlock) return
+    this.#renderer.editable.focus()
+    if (x !== undefined && this.#placeCaretAtX(lastBlock.id, x, 'end')) return
+    this.#renderer.restoreSelection(new BlockOffset(lastBlock.id, lastBlock.getLength()))
+  }
+
   canUndo(): boolean { return this.#history.canUndo() }
   canRedo(): boolean { return this.#history.canRedo() }
 
   undo(): void {
     if (!this.#history.canUndo()) return
-    const oldState = this.#state
-    const { blocks, selection } = this.#history.undo()
-    this.#state = blocks
-    this.#renderer.render(this.#state, selection ?? undefined)
-    this.#emitter.dispatchChanges(Blocks.diff(oldState, this.#state))
+    this.#history.undo()
   }
 
   redo(): void {
     if (!this.#history.canRedo()) return
-    const oldState = this.#state
-    const { blocks, selection } = this.#history.redo()
-    this.#state = blocks
-    this.#renderer.render(this.#state, selection ?? undefined)
-    this.#emitter.dispatchChanges(Blocks.diff(oldState, this.#state))
+    this.#history.redo()
   }
 
   /**
@@ -324,11 +354,97 @@ export class BlockEditor {
 
   // ─── Private helpers ────────────────────────────────────────────────────────
 
+  /**
+   * Returns the client X coordinate of the current cursor or focus end of a selection.
+   * Used to preserve horizontal position when crossing section boundaries.
+   */
+  #getCursorClientX(): number {
+    const domSel = window.getSelection()
+    if (!domSel) return 0
+    // For a non-collapsed selection, use the focus node (where the user last clicked/arrowed)
+    if (!domSel.isCollapsed && domSel.focusNode) {
+      try {
+        const focusRange = document.createRange()
+        focusRange.setStart(domSel.focusNode, domSel.focusOffset)
+        focusRange.collapse(true)
+        const rect = focusRange.getBoundingClientRect()
+        if (rect.height > 0) return rect.left
+      } catch { /* fall through */ }
+    }
+    if (domSel.rangeCount === 0) return 0
+    return domSel.getRangeAt(0).getBoundingClientRect().left
+  }
+
+  /**
+   * Returns true if the cursor is visually on the first line of the given block.
+   * Falls back to false when `getBoundingClientRect` is unavailable (e.g. jsdom).
+   */
+  #isOnFirstVisualLine(blockId: BlockId): boolean {
+    const domSel = window.getSelection()
+    if (!domSel || domSel.rangeCount === 0) return false
+    const cursorRect = domSel.getRangeAt(0).getBoundingClientRect()
+    if (cursorRect.height === 0) return false
+    const blockEl = this.#renderer.editable.querySelector(`[id="${blockId}"]`)
+    const textEl = blockEl?.querySelector('p, h1, h2, h3')
+    if (!textEl) return false
+    const textRect = textEl.getBoundingClientRect()
+    return cursorRect.top - cursorRect.height < textRect.top
+  }
+
+  /**
+   * Returns true if the cursor is visually on the last line of the given block.
+   * Falls back to false when `getBoundingClientRect` is unavailable (e.g. jsdom).
+   */
+  #isOnLastVisualLine(blockId: BlockId): boolean {
+    const domSel = window.getSelection()
+    if (!domSel || domSel.rangeCount === 0) return false
+    const cursorRect = domSel.getRangeAt(0).getBoundingClientRect()
+    if (cursorRect.height === 0) return false
+    const blockEl = this.#renderer.editable.querySelector(`[id="${blockId}"]`)
+    const textEl = blockEl?.querySelector('p, h1, h2, h3')
+    if (!textEl) return false
+    const textRect = textEl.getBoundingClientRect()
+    return cursorRect.bottom + cursorRect.height > textRect.bottom
+  }
+
+  /**
+   * Places the caret at client X `x` on the first or last line of `blockId`.
+   * Returns true on success; false if the element is not visible (fallback needed).
+   */
+  #placeCaretAtX(blockId: BlockId, x: number, line: 'start' | 'end'): boolean {
+    const blockEl = this.#renderer.editable.querySelector(`[id="${blockId}"]`)
+    const textEl = blockEl?.querySelector('p, h1, h2, h3')
+    if (!textEl) return false
+    const rect = textEl.getBoundingClientRect()
+    if (rect.height === 0) return false
+    const y = line === 'start'
+      ? rect.top + rect.height * 0.5
+      : rect.bottom - rect.height * 0.5
+    const range = document.caretRangeFromPoint?.(x, y)
+      ?? this.#caretRangeFromPointFallback(x, y)
+    if (!range || !this.#renderer.editable.contains(range.startContainer)) return false
+    const domSel = window.getSelection()
+    if (!domSel) return false
+    domSel.removeAllRanges()
+    domSel.addRange(range)
+    return true
+  }
+
+  /** Firefox polyfill for `document.caretRangeFromPoint`. */
+  #caretRangeFromPointFallback(x: number, y: number): Range | null {
+    const pos = (document as { caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null }).caretPositionFromPoint?.(x, y)
+    if (!pos) return null
+    const range = document.createRange()
+    range.setStart(pos.offsetNode, pos.offset)
+    range.collapse(true)
+    return range
+  }
+
   #emitEvents(oldState: Blocks): void {
     const changes = Blocks.diff(oldState, this.#state)
     if (changes.length > 0) {
       const selAfter = this.#renderer.getSelection()
-      this.#history.add(changes, this.#input.pendingSelectionBefore, selAfter)
+      this.#sectionHistory.add(oldState, changes, this.#input.pendingSelectionBefore, selAfter)
     }
     this.#input.pendingSelectionBefore = null
     this.#emitter.dispatchChanges(changes)
@@ -358,6 +474,43 @@ export class BlockEditor {
 
     const sel = this.#renderer.getSelection()
     this.#input.pendingSelectionBefore = sel
+
+    if (e.key === 'ArrowUp' && this.#onTopBoundaryEscape) {
+      const firstBlock = this.#state.blocks[0]
+      if (firstBlock) {
+        let shouldEscape = false
+        if (sel instanceof BlockOffset && sel.blockId === firstBlock.id) {
+          shouldEscape = sel.offset === 0 || this.#isOnFirstVisualLine(firstBlock.id)
+        } else if (sel instanceof BlockRange && sel.start.blockId === firstBlock.id && sel.start.offset === 0) {
+          // Range whose visual top is at the section boundary — escape regardless of Shift
+          shouldEscape = true
+        }
+        if (shouldEscape) {
+          e.preventDefault()
+          this.#onTopBoundaryEscape(this.#getCursorClientX())
+          return
+        }
+      }
+    }
+
+    if (e.key === 'ArrowDown' && this.#onBottomBoundaryEscape) {
+      const blocks = this.#state.blocks
+      const lastBlock = blocks[blocks.length - 1]
+      if (lastBlock) {
+        let shouldEscape = false
+        if (sel instanceof BlockOffset && sel.blockId === lastBlock.id) {
+          shouldEscape = sel.offset === lastBlock.getLength() || this.#isOnLastVisualLine(lastBlock.id)
+        } else if (sel instanceof BlockRange && sel.end.blockId === lastBlock.id && sel.end.offset === lastBlock.getLength()) {
+          // Range whose visual bottom is at the section boundary — escape regardless of Shift
+          shouldEscape = true
+        }
+        if (shouldEscape) {
+          e.preventDefault()
+          this.#onBottomBoundaryEscape(this.#getCursorClientX())
+          return
+        }
+      }
+    }
 
     if (e.key === 'Enter') {
       e.preventDefault()

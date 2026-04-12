@@ -1,0 +1,25 @@
+.daily-note-scroll-view {
+  display: flex;
+  flex-direction: column;
+}
+
+.daily-note-sentinel-top,
+.daily-note-sentinel-bottom {
+  height: 1px;
+  flex-shrink: 0;
+}
+
+.daily-note-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.daily-note-section + .daily-note-section {
+  margin-top: 3rem;
+  padding-top: 2.5rem;
+  border-top: 1px solid rgba(0 0 0 / 0.08);
+}
+
+[data-theme="dark"] .daily-note-section + .daily-note-section {
+  border-top-color: rgba(255 255 255 / 0.1);
+}

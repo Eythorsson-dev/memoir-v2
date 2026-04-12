@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { InputHandler } from './InputHandler'
 import { BlockRenderer } from './BlockRenderer'
-import { BlockHistory } from './BlockHistory'
+import { EditorHistory } from './EditorHistory'
 import { BlockEventEmitter } from './BlockEventEmitter'
 import { Blocks, TextBlock, BlockOffset, BlockRange } from '../blocks/blocks'
 import { Text } from '../text/text'
@@ -54,7 +54,6 @@ interface TestContext {
   editable: HTMLDivElement
   renderer: BlockRenderer
   state: Blocks
-  history: BlockHistory
   emitter: BlockEventEmitter
   handler: InputHandler
 }
@@ -63,11 +62,13 @@ function setup(blocks: Blocks): TestContext {
   const editable = makeEditable()
   const renderer = new BlockRenderer(editable)
   const state = blocks
-  const history = new BlockHistory(state)
+  const editorHistory = new EditorHistory()
+  const ctx: TestContext = { editable, renderer, state, emitter: null!, handler: null! }
+  const sectionHistory = editorHistory.forSection('test', (b) => { ctx.state = b })
   const emitter = new BlockEventEmitter(
     (id) => {
       try {
-        const block = state.getBlock(id)
+        const block = ctx.state.getBlock(id)
         return { id, blockType: block.blockType, data: block.data }
       } catch {
         return null
@@ -75,9 +76,9 @@ function setup(blocks: Blocks): TestContext {
     },
     { debounceMs: 1000, maxWaitMs: 10000 },
   )
+  ctx.emitter = emitter
   renderer.render(state)
-  const ctx: TestContext = { editable, renderer, state, history, emitter, handler: null! }
-  const handler = new InputHandler(renderer, () => ctx.state, (s) => { ctx.state = s }, history, emitter)
+  const handler = new InputHandler(renderer, () => ctx.state, (s) => { ctx.state = s }, sectionHistory, emitter)
   ctx.handler = handler
   return ctx
 }

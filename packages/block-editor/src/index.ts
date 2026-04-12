@@ -3,6 +3,8 @@ export { BlockEditor } from "./editor/BlockEditor";
 export { BlockRenderer } from "./editor/BlockRenderer";
 export { InputHandler } from "./editor/InputHandler";
 export { DailyNoteEditor } from "./editor/DailyNoteEditor";
+export { DailyNoteScrollView } from "./editor/DailyNoteScrollView";
+export type { DailyNoteScrollViewOptions } from "./editor/DailyNoteScrollView";
 export type { NoteProvider } from "./editor/NoteProvider";
 export { BLOCK_EDITOR_EVENT_NAMES } from "./editor/events"
 export type {
