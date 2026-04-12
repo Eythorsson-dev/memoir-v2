@@ -292,4 +292,54 @@ describe('EditorHistory — multi-section', () => {
     h.batch(() => { /* nothing */ })
     expect(h.canUndo()).toBe(false)
   })
+
+  it('batch: postUndo callback fires once after undo, not before, not on redo', () => {
+    const base = makeBlocks('a')
+    const h = new EditorHistory()
+    const sh = h.forSection('s1', () => {})
+    const postUndo = vi.fn()
+    h.batch(
+      () => { sh.add(base, [new BlockDataChanged('a', 'text', new Text('x', []))], null, null) },
+      { postUndo },
+    )
+    expect(postUndo).not.toHaveBeenCalled()
+    h.undo()
+    expect(postUndo).toHaveBeenCalledTimes(1)
+    h.redo()
+    expect(postUndo).toHaveBeenCalledTimes(1)
+  })
+
+  it('batch: duplicate section adds merge — first selBefore is preserved on undo', () => {
+    const base = makeBlocks('a')
+    const mid  = makeBlocks('a')
+    const applied: Array<{ blocks: Blocks; sel: BlockSelection | undefined }> = []
+    const h = new EditorHistory()
+    const sh = h.forSection('s1', (blocks, sel) => applied.push({ blocks, sel }))
+    const firstSel = sel('a', 3)
+    h.batch(() => {
+      sh.add(base, [new BlockDataChanged('a', 'text', new Text('x', []))], firstSel, null)
+      sh.add(mid,  [new BlockDataChanged('a', 'text', new Text('xy', []))], null, sel('a', 4))
+    })
+    h.undo()
+    expect(applied).toHaveLength(1)
+    expect(applied[0].blocks).toBe(base)
+    expect(applied[0].sel).toBe(firstSel)
+  })
+
+  it('batch: duplicate section adds merge — last selAfter is used on redo', () => {
+    const base = makeBlocks('a')
+    const mid  = makeBlocks('a')
+    const applied: Array<{ blocks: Blocks; sel: BlockSelection | undefined }> = []
+    const h = new EditorHistory()
+    const sh = h.forSection('s1', (blocks, sel) => applied.push({ blocks, sel }))
+    const finalSel = sel('a', 4)
+    h.batch(() => {
+      sh.add(base, [new BlockDataChanged('a', 'text', new Text('x', []))], sel('a', 3), null)
+      sh.add(mid,  [new BlockDataChanged('a', 'text', new Text('xy', []))], null, finalSel)
+    })
+    h.undo()
+    applied.length = 0
+    h.redo()
+    expect(applied[0].sel).toBe(finalSel)
+  })
 })

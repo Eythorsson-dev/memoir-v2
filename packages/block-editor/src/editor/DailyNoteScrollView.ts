@@ -2,7 +2,7 @@ import { Blocks, BlockOffset, BlockRange } from '../blocks/blocks'
 import { Text } from '../text/text'
 import type { NoteProvider } from './NoteProvider'
 import type { BlockSelection } from './events'
-import { getBlockElement, getBlockElementContent, getCharOffset } from './BlockRenderer'
+import { findNodeAtOffset, getBlockElement, getBlockElementContent, getCharOffset } from './BlockRenderer'
 import { EditorHistory, type ISectionHistory } from './EditorHistory'
 import { DaySection } from './DaySection'
 import './daily-note-scroll-view.css'
@@ -464,13 +464,16 @@ export class DailyNoteScrollView {
    * Returns the cursor `BlockOffset` in the start day.
    */
   #handleCrossDayDeletion(cs: CrossDaySelection): BlockOffset {
-    // 1. Trim start day: delete from selection start to end of start day
+    // 1. Trim start day: delete from selection start to end of start day.
+    //    Record the selection start as selBefore so undo restores the cursor
+    //    to the beginning of where the cross-day selection started.
     const startLastBlock = cs.startDay.blocks.lastBlock()
     const needsStartTrim =
       cs.startBlockId !== startLastBlock.id ||
       cs.startOffset !== startLastBlock.getLength()
+    const selAtCrossDayStart = new BlockOffset(cs.startBlockId, cs.startOffset)
     if (needsStartTrim) {
-      cs.startDay.pendingSelectionBefore = null
+      cs.startDay.pendingSelectionBefore = selAtCrossDayStart
       cs.startDay.deleteRange(new BlockRange(
         new BlockOffset(cs.startBlockId, cs.startOffset),
         new BlockOffset(startLastBlock.id, startLastBlock.getLength()),
@@ -515,7 +518,7 @@ export class DailyNoteScrollView {
     cs.startDay.render(cursor)
     const startChanges = Blocks.diff(startDayBefore, cs.startDay.blocks)
     cs.startDay.dispatchChanges(startChanges)
-    this.#sectionHistories.get(cs.startDay.date)?.add(startDayBefore, startChanges, null, cursor)
+    this.#sectionHistories.get(cs.startDay.date)?.add(startDayBefore, startChanges, selAtCrossDayStart, cursor)
 
     const endDayBefore = cs.endDay.blocks
     cs.endDay.blocks = cs.endDay.blocks.update(updatedEndFirst.id, new Text('', []))
@@ -527,12 +530,34 @@ export class DailyNoteScrollView {
     return cursor
   }
 
+  #restoreCrossDayDomSelection(
+    startBlockId: string, startOffset: number,
+    endBlockId: string, endOffset: number,
+  ): void {
+    const startEl = this.#editable.querySelector(`[id="${startBlockId}"]`)
+    const endEl   = this.#editable.querySelector(`[id="${endBlockId}"]`)
+    if (!startEl || !endEl) return
+    const startPos = findNodeAtOffset(getBlockElementContent(startEl), startOffset)
+    const endPos   = findNodeAtOffset(getBlockElementContent(endEl), endOffset)
+    const range = document.createRange()
+    range.setStart(startPos.node, startPos.offset)
+    range.setEnd(endPos.node, endPos.offset)
+    const sel = window.getSelection()
+    if (!sel) return
+    sel.removeAllRanges()
+    sel.addRange(range)
+  }
+
   /**
    * Delete the cross-day selection and record the operation in history so
    * Cmd+Z can restore all affected sections atomically.
    */
   #handleCrossDayDeletionWithHistory(cs: CrossDaySelection): void {
-    this.#history.batch(() => { this.#handleCrossDayDeletion(cs) })
+    const { startBlockId, startOffset, endBlockId, endOffset } = cs
+    this.#history.batch(
+      () => { this.#handleCrossDayDeletion(cs) },
+      { postUndo: () => this.#restoreCrossDayDomSelection(startBlockId, startOffset, endBlockId, endOffset) },
+    )
   }
 
   #handleCrossDayEnter(cs: CrossDaySelection): void {

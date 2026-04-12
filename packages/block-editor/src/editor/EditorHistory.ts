@@ -40,6 +40,7 @@ interface SectionEntry {
 interface StackEntry {
   sections:    SectionEntry[]
   coalesceKey: string | null
+  postUndo?:   () => void
 }
 
 // ─── EditorHistory ────────────────────────────────────────────────────────────
@@ -105,9 +106,9 @@ export class EditorHistory implements IEditorHistory {
    *
    * @param fn - Synchronous function containing the grouped mutations.
    */
-  batch(fn: () => void): void {
+  batch(fn: () => void, opts?: { postUndo?: () => void }): void {
     this.#batching = true
-    this.#batchEntry = { sections: [], coalesceKey: null }
+    this.#batchEntry = { sections: [], coalesceKey: null, postUndo: opts?.postUndo }
     try {
       fn()
     } finally {
@@ -140,6 +141,7 @@ export class EditorHistory implements IEditorHistory {
       const applyFn = this.#applyFns.get(section.scopeId)
       applyFn?.(section.base, section.selBefore ?? undefined)
     }
+    entry.postUndo?.()
   }
 
   /**
