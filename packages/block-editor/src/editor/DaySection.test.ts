@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest'
 import { DaySection } from './DaySection'
 import { EditorHistory } from './EditorHistory'
 import { Blocks, BlockDataChanged, BlockOffset } from '../blocks/blocks'
+import { Text } from '../text/text'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -92,21 +93,6 @@ describe('DaySection', () => {
     expect(section.blocks.blocks.length).toBe(3)
   })
 
-  // ─── blocks getter / setter ──────────────────────────────────────────────────
-
-  it('blocks setter updates state without rendering', () => {
-    const contentEl = makeContentEl()
-    contentEls.push(contentEl)
-    const { section } = makeSection('2024-01-15', contentEl)
-
-    const two = Blocks.from([Blocks.createTextBlock(), Blocks.createTextBlock()])
-    section.blocks = two
-
-    // State changed but DOM still shows 1 block (no render was called)
-    expect(section.blocks).toBe(two)
-    expect(contentEl.querySelectorAll('.block').length).toBe(1)
-  })
-
   // ─── onDataChange ────────────────────────────────────────────────────────────
 
   it('onDataChange handler fires when dispatchChanges is called with a data change', () => {
@@ -167,7 +153,7 @@ describe('DaySection', () => {
     const { section } = makeSection('2024-01-15', contentEl)
 
     const two = Blocks.from([Blocks.createTextBlock(), Blocks.createTextBlock()])
-    section.blocks = two
+    section.load(two)
     section.render()
 
     expect(contentEl.querySelectorAll('.block').length).toBe(2)
@@ -305,5 +291,218 @@ describe('DaySection', () => {
 
     section.flushAll()
     expect(handler).toHaveBeenCalledOnce()
+  })
+
+  // ─── clearFirstBlock() ───────────────────────────────────────────────────────
+
+  it('clearFirstBlock() sets first block text to empty and leaves other blocks', () => {
+    const contentEl = makeContentEl()
+    contentEls.push(contentEl)
+    const { section } = makeSection('2024-01-15', contentEl)
+
+    const firstId = section.blocks.blocks[0].id
+    section.handleEnter(new BlockOffset(firstId, 0))
+    expect(section.blocks.blocks.length).toBe(2)
+    const secondId = section.blocks.blocks[1].id
+
+    section.clearFirstBlock()
+
+    expect(section.blocks.blocks.length).toBe(2)
+    expect(section.blocks.getBlock(firstId).getText().text).toBe('')
+    expect(section.blocks.getBlock(secondId)).toBeTruthy() // second block untouched
+  })
+
+  it('clearFirstBlock() undo restores original blocks', () => {
+    const contentEl = makeContentEl()
+    contentEls.push(contentEl)
+    const { section, history } = makeSection('2024-01-15', contentEl)
+
+    const firstId = section.blocks.blocks[0].id
+    section.handleEnter(new BlockOffset(firstId, 0))
+    const blocksBefore = section.blocks
+
+    section.clearFirstBlock()
+    history.undo()
+
+    expect(section.blocks).toBe(blocksBefore)
+  })
+
+  // ─── clearToEmpty() ──────────────────────────────────────────────────────────
+
+  it('clearToEmpty() replaces all blocks with a single empty text block', () => {
+    const contentEl = makeContentEl()
+    contentEls.push(contentEl)
+    const { section } = makeSection('2024-01-15', contentEl)
+
+    section.handleEnter(new BlockOffset(section.blocks.blocks[0].id, 0))
+    expect(section.blocks.blocks.length).toBe(2)
+
+    section.clearToEmpty()
+
+    expect(section.blocks.blocks.length).toBe(1)
+    expect(section.blocks.blocks[0].getText().text).toBe('')
+  })
+
+  it('clearToEmpty() re-renders into DOM', () => {
+    const contentEl = makeContentEl()
+    contentEls.push(contentEl)
+    const { section } = makeSection('2024-01-15', contentEl)
+
+    section.handleEnter(new BlockOffset(section.blocks.blocks[0].id, 0))
+    section.clearToEmpty()
+
+    expect(contentEl.querySelectorAll('.block').length).toBe(1)
+  })
+
+  it('clearToEmpty() undo restores original blocks', () => {
+    const contentEl = makeContentEl()
+    contentEls.push(contentEl)
+    const { section, history } = makeSection('2024-01-15', contentEl)
+
+    section.handleEnter(new BlockOffset(section.blocks.blocks[0].id, 0))
+    const blocksBefore = section.blocks
+
+    section.clearToEmpty()
+    expect(section.blocks.blocks.length).toBe(1)
+
+    history.undo()
+    expect(section.blocks).toBe(blocksBefore)
+  })
+
+  // ─── mergeIntoLastBlock() ────────────────────────────────────────────────────
+
+  it('mergeIntoLastBlock() appends text to the last block', () => {
+    const contentEl = makeContentEl()
+    contentEls.push(contentEl)
+    const { section } = makeSection('2024-01-15', contentEl)
+
+    section.load(Blocks.from([Blocks.createTextBlock(new Text('hello', []))]))
+    const lastId = section.blocks.lastBlock().id
+
+    section.mergeIntoLastBlock(new Text(' world', []), null)
+
+    expect(section.blocks.getBlock(lastId).getText().text).toBe('hello world')
+  })
+
+  it('mergeIntoLastBlock() returns cursor at join point (length of original last text)', () => {
+    const contentEl = makeContentEl()
+    contentEls.push(contentEl)
+    const { section } = makeSection('2024-01-15', contentEl)
+
+    section.load(Blocks.from([Blocks.createTextBlock(new Text('abc', []))]))
+    const lastId = section.blocks.lastBlock().id
+
+    const cursor = section.mergeIntoLastBlock(new Text('def', []), null)
+
+    expect(cursor.blockId).toBe(lastId)
+    expect(cursor.offset).toBe(3)
+  })
+
+  it('mergeIntoLastBlock() undo restores original blocks', () => {
+    const contentEl = makeContentEl()
+    contentEls.push(contentEl)
+    const { section, history } = makeSection('2024-01-15', contentEl)
+
+    section.load(Blocks.from([Blocks.createTextBlock(new Text('hello', []))]))
+    const blocksBefore = section.blocks
+
+    section.mergeIntoLastBlock(new Text(' world', []), null)
+    expect(section.blocks.lastBlock().getText().text).toBe('hello world')
+
+    history.undo()
+    expect(section.blocks).toBe(blocksBefore)
+  })
+
+  // ─── trimFromEnd() ───────────────────────────────────────────────────────────
+
+  it('trimFromEnd() removes content from start offset to end of day', () => {
+    const contentEl = makeContentEl()
+    contentEls.push(contentEl)
+    const { section } = makeSection('2024-01-15', contentEl)
+
+    // Load two blocks: "hello" and "world"
+    const block1 = Blocks.createTextBlock(new Text('hello', []))
+    const block2 = Blocks.createTextBlock(new Text('world', []))
+    section.load(Blocks.from([block1, block2]))
+
+    // Trim from offset 2 of block1 (after "he") to end
+    section.trimFromEnd(new BlockOffset(block1.id, 2), null)
+
+    expect(section.blocks.blocks.length).toBe(1)
+    expect(section.blocks.blocks[0].getText().text).toBe('he')
+  })
+
+  it('trimFromEnd() is a no-op when start is already at end of day', () => {
+    const contentEl = makeContentEl()
+    contentEls.push(contentEl)
+    const { section } = makeSection('2024-01-15', contentEl)
+
+    section.load(Blocks.from([Blocks.createTextBlock(new Text('hello', []))]))
+    const blocksBefore = section.blocks
+    const lastBlock = section.blocks.lastBlock()
+
+    section.trimFromEnd(new BlockOffset(lastBlock.id, lastBlock.getLength()), null)
+
+    expect(section.blocks).toBe(blocksBefore)
+  })
+
+  it('trimFromEnd() undo restores original blocks', () => {
+    const contentEl = makeContentEl()
+    contentEls.push(contentEl)
+    const { section, history } = makeSection('2024-01-15', contentEl)
+
+    section.load(Blocks.from([Blocks.createTextBlock(new Text('hello', []))]))
+    const blocksBefore = section.blocks
+
+    section.trimFromEnd(new BlockOffset(section.blocks.blocks[0].id, 2), null)
+    history.undo()
+
+    expect(section.blocks).toBe(blocksBefore)
+  })
+
+  // ─── trimFromStart() ─────────────────────────────────────────────────────────
+
+  it('trimFromStart() removes content from start of day to end offset', () => {
+    const contentEl = makeContentEl()
+    contentEls.push(contentEl)
+    const { section } = makeSection('2024-01-15', contentEl)
+
+    const block1 = Blocks.createTextBlock(new Text('hello', []))
+    const block2 = Blocks.createTextBlock(new Text('world', []))
+    section.load(Blocks.from([block1, block2]))
+
+    // Trim from start to offset 2 of block2 (removes "helloXXwo" where X is block boundary)
+    section.trimFromStart(new BlockOffset(block2.id, 2))
+
+    expect(section.blocks.blocks.length).toBe(1)
+    expect(section.blocks.blocks[0].getText().text).toBe('rld')
+  })
+
+  it('trimFromStart() is a no-op when end is offset 0 on the first block', () => {
+    const contentEl = makeContentEl()
+    contentEls.push(contentEl)
+    const { section } = makeSection('2024-01-15', contentEl)
+
+    section.load(Blocks.from([Blocks.createTextBlock(new Text('hello', []))]))
+    const blocksBefore = section.blocks
+    const firstId = section.blocks.blocks[0].id
+
+    section.trimFromStart(new BlockOffset(firstId, 0))
+
+    expect(section.blocks).toBe(blocksBefore)
+  })
+
+  it('trimFromStart() undo restores original blocks', () => {
+    const contentEl = makeContentEl()
+    contentEls.push(contentEl)
+    const { section, history } = makeSection('2024-01-15', contentEl)
+
+    section.load(Blocks.from([Blocks.createTextBlock(new Text('hello', []))]))
+    const blocksBefore = section.blocks
+
+    section.trimFromStart(new BlockOffset(section.blocks.blocks[0].id, 3))
+    history.undo()
+
+    expect(section.blocks).toBe(blocksBefore)
   })
 })

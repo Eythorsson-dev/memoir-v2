@@ -1,8 +1,7 @@
 import { Blocks, BlockOffset, BlockRange } from '../blocks/blocks'
-import { Text } from '../text/text'
 import type { NoteProvider } from './NoteProvider'
 import type { BlockSelection } from './events'
-import { findNodeAtOffset, getBlockElement, getBlockElementContent, getCharOffset } from './BlockRenderer'
+import { getBlockElement, getBlockElementContent, getCharOffset, restoreSelectionInRoot } from './BlockRenderer'
 import { EditorHistory, type ISectionHistory } from './EditorHistory'
 import { DaySection } from './DaySection'
 import './daily-note-scroll-view.css'
@@ -464,69 +463,13 @@ export class DailyNoteScrollView {
    * Returns the cursor `BlockOffset` in the start day.
    */
   #handleCrossDayDeletion(cs: CrossDaySelection): BlockOffset {
-    // 1. Trim start day: delete from selection start to end of start day.
-    //    Record the selection start as selBefore so undo restores the cursor
-    //    to the beginning of where the cross-day selection started.
-    const startLastBlock = cs.startDay.blocks.lastBlock()
-    const needsStartTrim =
-      cs.startBlockId !== startLastBlock.id ||
-      cs.startOffset !== startLastBlock.getLength()
-    const selAtCrossDayStart = new BlockOffset(cs.startBlockId, cs.startOffset)
-    if (needsStartTrim) {
-      cs.startDay.pendingSelectionBefore = selAtCrossDayStart
-      cs.startDay.deleteRange(new BlockRange(
-        new BlockOffset(cs.startBlockId, cs.startOffset),
-        new BlockOffset(startLastBlock.id, startLastBlock.getLength()),
-      ))
-    }
-
-    // 2. Clear middle days
-    for (const mid of cs.middleDays) {
-      const cleared = Blocks.from([Blocks.createTextBlock()])
-      const old = mid.blocks
-      mid.blocks = cleared
-      mid.render()
-      const midChanges = Blocks.diff(old, cleared)
-      mid.dispatchChanges(midChanges)
-      this.#sectionHistories.get(mid.date)?.add(old, midChanges, null, null)
-    }
-
-    // 3. Trim end day: delete from start of end day to selection end
-    const endFirstBlock = cs.endDay.blocks.blocks[0]
-    const endRangeCollapsed =
-      endFirstBlock.id === cs.endBlockId && cs.endOffset === 0
-    if (!endRangeCollapsed) {
-      cs.endDay.pendingSelectionBefore = null
-      cs.endDay.deleteRange(new BlockRange(
-        new BlockOffset(endFirstBlock.id, 0),
-        new BlockOffset(cs.endBlockId, cs.endOffset),
-      ))
-    }
-
-    // 4. Merge: join end day's first block's surviving text into start day's last block.
-    //    After trimming both ends, the surviving text in start day and end day are
-    //    logically adjacent — standard editor semantics require them to land in one block.
-    const updatedStartLast = cs.startDay.blocks.lastBlock()
-    const updatedEndFirst  = cs.endDay.blocks.blocks[0]
-
-    const mergedText  = Text.merge(updatedStartLast.getText(), updatedEndFirst.getText())
-    const cursorOffset = updatedStartLast.getText().text.length
-
-    const startDayBefore = cs.startDay.blocks
-    cs.startDay.blocks = cs.startDay.blocks.update(updatedStartLast.id, mergedText)
-    const cursor = new BlockOffset(updatedStartLast.id, cursorOffset)
-    cs.startDay.render(cursor)
-    const startChanges = Blocks.diff(startDayBefore, cs.startDay.blocks)
-    cs.startDay.dispatchChanges(startChanges)
-    this.#sectionHistories.get(cs.startDay.date)?.add(startDayBefore, startChanges, selAtCrossDayStart, cursor)
-
-    const endDayBefore = cs.endDay.blocks
-    cs.endDay.blocks = cs.endDay.blocks.update(updatedEndFirst.id, new Text('', []))
-    cs.endDay.render()
-    const endChanges = Blocks.diff(endDayBefore, cs.endDay.blocks)
-    cs.endDay.dispatchChanges(endChanges)
-    this.#sectionHistories.get(cs.endDay.date)?.add(endDayBefore, endChanges, null, null)
-
+    const selAtStart = new BlockOffset(cs.startBlockId, cs.startOffset)
+    cs.startDay.trimFromEnd(selAtStart, selAtStart)
+    for (const mid of cs.middleDays) mid.clearToEmpty()
+    cs.endDay.trimFromStart(new BlockOffset(cs.endBlockId, cs.endOffset))
+    const endFirstText = cs.endDay.blocks.blocks[0].getText()
+    const cursor = cs.startDay.mergeIntoLastBlock(endFirstText, null)
+    cs.endDay.clearFirstBlock()
     return cursor
   }
 
@@ -534,18 +477,13 @@ export class DailyNoteScrollView {
     startBlockId: string, startOffset: number,
     endBlockId: string, endOffset: number,
   ): void {
-    const startEl = this.#editable.querySelector(`[id="${startBlockId}"]`)
-    const endEl   = this.#editable.querySelector(`[id="${endBlockId}"]`)
-    if (!startEl || !endEl) return
-    const startPos = findNodeAtOffset(getBlockElementContent(startEl), startOffset)
-    const endPos   = findNodeAtOffset(getBlockElementContent(endEl), endOffset)
-    const range = document.createRange()
-    range.setStart(startPos.node, startPos.offset)
-    range.setEnd(endPos.node, endPos.offset)
-    const sel = window.getSelection()
-    if (!sel) return
-    sel.removeAllRanges()
-    sel.addRange(range)
+    restoreSelectionInRoot(
+      this.#editable,
+      new BlockRange(
+        new BlockOffset(startBlockId, startOffset),
+        new BlockOffset(endBlockId, endOffset),
+      ),
+    )
   }
 
   /**
@@ -578,10 +516,9 @@ export class DailyNoteScrollView {
         const block = stateBefore.getBlock(cursor.blockId)
         const newText = block.getText().insert(cursor.offset, char)
         const newCursor = new BlockOffset(cursor.blockId, cursor.offset + 1)
-        cs.startDay.blocks = stateBefore.update(cursor.blockId, newText)
-        cs.startDay.render(newCursor)
-        const charChanges = Blocks.diff(stateBefore, cs.startDay.blocks)
-        cs.startDay.dispatchChanges(charChanges)
+        const updatedBlocks = stateBefore.update(cursor.blockId, newText)
+        const charChanges = Blocks.diff(stateBefore, updatedBlocks)
+        cs.startDay.applyBlocks(updatedBlocks, newCursor)
         this.#sectionHistories.get(cs.startDay.date)?.add(stateBefore, charChanges, null, newCursor)
       },
       { postUndo: () => this.#restoreCrossDayDomSelection(startBlockId, startOffset, endBlockId, endOffset) },
@@ -765,14 +702,14 @@ export class DailyNoteScrollView {
     sel: BlockSelection,
   ): void {
     const oldBlocks = section.blocks
-    section.blocks = mutate(oldBlocks)
-    section.render(sel)
-    const changes = Blocks.diff(oldBlocks, section.blocks)
-    if (changes.length > 0) {
-      const selAfter = section.getSelection()
-      this.#sectionHistories.get(section.date)?.add(oldBlocks, changes, section.pendingSelectionBefore, selAfter)
-    }
+    const newBlocks = mutate(oldBlocks)
+    const changes = Blocks.diff(oldBlocks, newBlocks)
+    const selBefore = section.pendingSelectionBefore
     section.pendingSelectionBefore = null
-    section.dispatchChanges(changes)
+    if (changes.length > 0) {
+      section.applyBlocks(newBlocks, sel)
+      const selAfter = section.getSelection()
+      this.#sectionHistories.get(section.date)?.add(oldBlocks, changes, selBefore, selAfter)
+    }
   }
 }

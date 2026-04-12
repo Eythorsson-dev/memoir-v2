@@ -180,31 +180,39 @@ export class BlockRenderer {
    *   found in the editable.
    */
   restoreSelection(sel: BlockSelection): void {
-    const domSel = window.getSelection()
-    if (!domSel) return
-
-    const range = document.createRange()
-
-    if (sel instanceof BlockOffset) {
-      const blockEl = this.#editable.querySelector(`[id="${sel.blockId}"]`)
-      if (!blockEl) return
-      const p = getBlockElementContent(blockEl)
-      const { node, offset } = findNodeAtOffset(p, sel.offset)
-      range.setStart(node, offset)
-      range.setEnd(node, offset)
-    } else {
-      const startBlockEl = this.#editable.querySelector(`[id="${sel.start.blockId}"]`)
-      const endBlockEl = this.#editable.querySelector(`[id="${sel.end.blockId}"]`)
-      if (!startBlockEl || !endBlockEl) return
-      const startP = getBlockElementContent(startBlockEl)
-      const endP = getBlockElementContent(endBlockEl)
-      const startPos = findNodeAtOffset(startP, sel.start.offset)
-      const endPos = findNodeAtOffset(endP, sel.end.offset)
-      range.setStart(startPos.node, startPos.offset)
-      range.setEnd(endPos.node, endPos.offset)
-    }
-
-    domSel.removeAllRanges()
-    domSel.addRange(range)
+    restoreSelectionInRoot(this.#editable, sel)
   }
+}
+
+/**
+ * Restore a BlockSelection to the DOM within `root`.
+ * Shared by BlockRenderer (single-section) and DailyNoteScrollView (cross-section).
+ */
+export function restoreSelectionInRoot(root: HTMLElement, sel: BlockSelection): void {
+  const domSel = window.getSelection()
+  if (!domSel) return
+
+  const range = document.createRange()
+
+  if (sel instanceof BlockOffset) {
+    const blockEl = root.querySelector(`[id="${sel.blockId}"]`)
+    if (!blockEl) return
+    const p = getBlockElementContent(blockEl)
+    const { node, offset } = findNodeAtOffset(p, sel.offset)
+    range.setStart(node, offset)
+    range.setEnd(node, offset)
+  } else {
+    const startBlockEl = root.querySelector(`[id="${sel.start.blockId}"]`)
+    const endBlockEl = root.querySelector(`[id="${sel.end.blockId}"]`)
+    if (!startBlockEl || !endBlockEl) return
+    const startP = getBlockElementContent(startBlockEl)
+    const endP = getBlockElementContent(endBlockEl)
+    const startPos = findNodeAtOffset(startP, sel.start.offset)
+    const endPos = findNodeAtOffset(endP, sel.end.offset)
+    range.setStart(startPos.node, startPos.offset)
+    range.setEnd(endPos.node, endPos.offset)
+  }
+
+  domSel.removeAllRanges()
+  domSel.addRange(range)
 }

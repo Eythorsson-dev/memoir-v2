@@ -1,4 +1,5 @@
 import { Blocks, BlockOffset, BlockRange, type BlockId, type BlocksChange } from '../blocks/blocks'
+import { Text as RichText } from '../text/text'
 import type { BlockSelection } from './events'
 import { BlockRenderer } from './BlockRenderer'
 import type { ISectionHistory } from './EditorHistory'
@@ -65,15 +66,81 @@ export class DaySection {
     return this.#blocks
   }
 
+  // ─── Cross-day operations ────────────────────────────────────────────────────
+
   /**
-   * Replace the current blocks without rendering or resetting history.
-   *
-   * @remarks
-   * Used by cross-day operations in `DailyNoteScrollView` where the caller
-   * handles rendering and event dispatch separately.
+   * Remove content from `start` to end of day. Records history with `selBefore`.
+   * No-op when `start` is already at end-of-day.
    */
-  set blocks(value: Blocks) {
-    this.#blocks = value
+  trimFromEnd(start: BlockOffset, selBefore: BlockOffset | null): void {
+    const lastBlock = this.#blocks.lastBlock()
+    const atEnd =
+      start.blockId === lastBlock.id && start.offset === lastBlock.getLength()
+    if (atEnd) return
+    this.#input.pendingSelectionBefore = selBefore
+    this.#input.deleteRange(new BlockRange(
+      start,
+      new BlockOffset(lastBlock.id, lastBlock.getLength()),
+    ))
+  }
+
+  /**
+   * Remove content from start of day to `end`. Records history.
+   * No-op when `end` is offset 0 on the first block.
+   */
+  trimFromStart(end: BlockOffset): void {
+    const firstBlock = this.#blocks.blocks[0]
+    const atStart = end.blockId === firstBlock.id && end.offset === 0
+    if (atStart) return
+    this.#input.pendingSelectionBefore = null
+    this.#input.deleteRange(new BlockRange(
+      new BlockOffset(firstBlock.id, 0),
+      end,
+    ))
+  }
+
+  /** Clear the first block's text to empty string. Records history. */
+  clearFirstBlock(): void {
+    const old = this.#blocks
+    const firstId = old.blocks[0].id
+    const updated = old.update(firstId, new RichText('', []))
+    this.#blocks = updated
+    this.#renderer.render(updated)
+    const changes = Blocks.diff(old, updated)
+    this.#emitter.dispatchChanges(changes)
+    this.#history.add(old, changes, null, null)
+  }
+
+  /**
+   * Merge `text` into this day's last block and render. Returns cursor at merge point.
+   *
+   * @param text - Text to append to the last block's content.
+   * @param selBefore - Cursor position before the operation (for undo restoration).
+   */
+  mergeIntoLastBlock(text: RichText, selBefore: BlockOffset | null): BlockOffset {
+    const old = this.#blocks
+    const lastBlock = old.lastBlock()
+    const cursorOffset = lastBlock.getText().text.length
+    const mergedText = RichText.merge(lastBlock.getText(), text)
+    const updated = old.update(lastBlock.id, mergedText)
+    const cursor = new BlockOffset(lastBlock.id, cursorOffset)
+    this.#blocks = updated
+    this.#renderer.render(updated, cursor)
+    const changes = Blocks.diff(old, updated)
+    this.#emitter.dispatchChanges(changes)
+    this.#history.add(old, changes, selBefore, cursor)
+    return cursor
+  }
+
+  /** Replace all blocks with a single empty text block. Records history. */
+  clearToEmpty(): void {
+    const old = this.#blocks
+    const cleared = Blocks.from([Blocks.createTextBlock()])
+    this.#blocks = cleared
+    this.#renderer.render(cleared)
+    const changes = Blocks.diff(old, cleared)
+    this.#emitter.dispatchChanges(changes)
+    this.#history.add(old, changes, null, null)
   }
 
   /**

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { BlockRenderer } from './BlockRenderer'
+import { BlockRenderer, restoreSelectionInRoot } from './BlockRenderer'
 import { Blocks, TextBlock, BlockOffset, BlockRange } from '../blocks/blocks'
 import { Text } from '../text/text'
 
@@ -215,6 +215,40 @@ describe('BlockRenderer', () => {
       expect(r.start.offset).toBe(2)
       expect(r.end.blockId).toBe('b2')
       expect(r.end.offset).toBe(3)
+    })
+
+    it('restoreSelectionInRoot restores a collapsed BlockOffset cursor in the given root', () => {
+      const blocks = Blocks.from([dto('b1', 'Hello')])
+      const renderer = new BlockRenderer(editable)
+      renderer.render(blocks)
+      editable.focus()
+
+      restoreSelectionInRoot(editable, new BlockOffset('b1', 3))
+
+      const sel = renderer.getSelection()
+      expect(sel).toBeInstanceOf(BlockOffset)
+      expect((sel as BlockOffset).blockId).toBe('b1')
+      expect((sel as BlockOffset).offset).toBe(3)
+    })
+
+    it('restoreSelectionInRoot restores a BlockRange spanning two blocks', () => {
+      const blocks = Blocks.from([dto('b1', 'Hello'), dto('b2', 'World')])
+      const renderer = new BlockRenderer(editable)
+      renderer.render(blocks)
+      editable.focus()
+
+      restoreSelectionInRoot(
+        editable,
+        new BlockRange(new BlockOffset('b1', 1), new BlockOffset('b2', 4)),
+      )
+
+      const sel = renderer.getSelection()
+      expect(sel).toBeInstanceOf(BlockRange)
+      const r = sel as BlockRange
+      expect(r.start.blockId).toBe('b1')
+      expect(r.start.offset).toBe(1)
+      expect(r.end.blockId).toBe('b2')
+      expect(r.end.offset).toBe(4)
     })
 
     it('returns null when selection is outside the editable', () => {
