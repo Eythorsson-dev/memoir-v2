@@ -346,6 +346,75 @@ describe('DailyNoteScrollView', () => {
     expect(container.querySelectorAll('.daily-note-section').length).toBe(3)
   })
 
+  it('cross-day Enter undoes atomically — single Cmd+Z restores all affected sections', async () => {
+    const provider: NoteProvider = {
+      load: vi.fn().mockImplementation(async (date: string) => {
+        if (date === '2024-01-14') return Blocks.from([Blocks.createTextBlock(new Text('Hello', []))]).blocks
+        if (date === '2024-01-15') return Blocks.from([Blocks.createTextBlock(new Text('World', []))]).blocks
+        return null
+      }),
+      save: vi.fn().mockResolvedValue(undefined),
+    }
+
+    const { container } = make(provider, '2024-01-15', { windowSize: 3 })
+    const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-date="2024-01-14"] .block p')?.textContent).toBe('Hello')
+      expect(container.querySelector('[data-date="2024-01-15"] .block p')?.textContent).toBe('World')
+    })
+
+    // Select from "He|llo" (offset 2) in Day14 to "Wor|ld" (offset 3) in Day15
+    setCrossDayRangeWithOffsets(container, '2024-01-14', 2, '2024-01-15', 3)
+    editable.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+
+    // Single Cmd+Z must restore both days in one step
+    editable.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'z', metaKey: true, shiftKey: false,
+      bubbles: true, cancelable: true,
+    }))
+
+    expect(container.querySelector('[data-date="2024-01-14"] .block p')?.textContent).toBe('Hello')
+    expect(container.querySelector('[data-date="2024-01-15"] .block p')?.textContent).toBe('World')
+  })
+
+  it('Cmd+Z after cross-day Enter restores the cross-day range selection', async () => {
+    const provider: NoteProvider = {
+      load: vi.fn().mockImplementation(async (date: string) => {
+        if (date === '2024-01-14') return Blocks.from([Blocks.createTextBlock(new Text('Hello', []))]).blocks
+        if (date === '2024-01-15') return Blocks.from([Blocks.createTextBlock(new Text('World', []))]).blocks
+        return null
+      }),
+      save: vi.fn().mockResolvedValue(undefined),
+    }
+
+    const { container } = make(provider, '2024-01-15', { windowSize: 3 })
+    const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-date="2024-01-14"] .block p')?.textContent).toBe('Hello')
+      expect(container.querySelector('[data-date="2024-01-15"] .block p')?.textContent).toBe('World')
+    })
+
+    // Select from "He|llo" (offset 2) in Day14 to "Wor|ld" (offset 3) in Day15
+    setCrossDayRangeWithOffsets(container, '2024-01-14', 2, '2024-01-15', 3)
+    editable.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+
+    // Undo
+    editable.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'z', metaKey: true, shiftKey: false,
+      bubbles: true, cancelable: true,
+    }))
+
+    // After undo the selection must be a range spanning start day → end day
+    const sel = window.getSelection()!
+    expect(sel.isCollapsed).toBe(false)
+    const startContent = container.querySelector('[data-date="2024-01-14"] .daily-note-content')!
+    const endContent   = container.querySelector('[data-date="2024-01-15"] .daily-note-content')!
+    expect(startContent.contains(sel.anchorNode)).toBe(true)
+    expect(endContent.contains(sel.focusNode)).toBe(true)
+  })
+
   it('cross-day character input calls preventDefault and preserves all day sections', async () => {
     const { container } = make(makeProvider(), '2024-01-15', { windowSize: 3 })
     const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
@@ -359,6 +428,75 @@ describe('DailyNoteScrollView', () => {
 
     expect(preventDefaultSpy).toHaveBeenCalled()
     expect(container.querySelectorAll('.daily-note-section').length).toBe(3)
+  })
+
+  it('cross-day character input undoes atomically — single Cmd+Z restores all affected sections', async () => {
+    const provider: NoteProvider = {
+      load: vi.fn().mockImplementation(async (date: string) => {
+        if (date === '2024-01-14') return Blocks.from([Blocks.createTextBlock(new Text('Hello', []))]).blocks
+        if (date === '2024-01-15') return Blocks.from([Blocks.createTextBlock(new Text('World', []))]).blocks
+        return null
+      }),
+      save: vi.fn().mockResolvedValue(undefined),
+    }
+
+    const { container } = make(provider, '2024-01-15', { windowSize: 3 })
+    const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-date="2024-01-14"] .block p')?.textContent).toBe('Hello')
+      expect(container.querySelector('[data-date="2024-01-15"] .block p')?.textContent).toBe('World')
+    })
+
+    // Select from "He|llo" (offset 2) in Day14 to "Wor|ld" (offset 3) in Day15
+    setCrossDayRangeWithOffsets(container, '2024-01-14', 2, '2024-01-15', 3)
+    editable.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true }))
+
+    // Single Cmd+Z must restore both days in one step
+    editable.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'z', metaKey: true, shiftKey: false,
+      bubbles: true, cancelable: true,
+    }))
+
+    expect(container.querySelector('[data-date="2024-01-14"] .block p')?.textContent).toBe('Hello')
+    expect(container.querySelector('[data-date="2024-01-15"] .block p')?.textContent).toBe('World')
+  })
+
+  it('Cmd+Z after cross-day character input restores the cross-day range selection', async () => {
+    const provider: NoteProvider = {
+      load: vi.fn().mockImplementation(async (date: string) => {
+        if (date === '2024-01-14') return Blocks.from([Blocks.createTextBlock(new Text('Hello', []))]).blocks
+        if (date === '2024-01-15') return Blocks.from([Blocks.createTextBlock(new Text('World', []))]).blocks
+        return null
+      }),
+      save: vi.fn().mockResolvedValue(undefined),
+    }
+
+    const { container } = make(provider, '2024-01-15', { windowSize: 3 })
+    const editable = container.querySelector('[contenteditable="true"]') as HTMLElement
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-date="2024-01-14"] .block p')?.textContent).toBe('Hello')
+      expect(container.querySelector('[data-date="2024-01-15"] .block p')?.textContent).toBe('World')
+    })
+
+    // Select from "He|llo" (offset 2) in Day14 to "Wor|ld" (offset 3) in Day15
+    setCrossDayRangeWithOffsets(container, '2024-01-14', 2, '2024-01-15', 3)
+    editable.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true }))
+
+    // Undo
+    editable.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'z', metaKey: true, shiftKey: false,
+      bubbles: true, cancelable: true,
+    }))
+
+    // After undo the selection must be a range spanning start day → end day
+    const sel = window.getSelection()!
+    expect(sel.isCollapsed).toBe(false)
+    const startContent = container.querySelector('[data-date="2024-01-14"] .daily-note-content')!
+    const endContent   = container.querySelector('[data-date="2024-01-15"] .daily-note-content')!
+    expect(startContent.contains(sel.anchorNode)).toBe(true)
+    expect(endContent.contains(sel.focusNode)).toBe(true)
   })
 
   // ─── Undo / Redo ──────────────────────────────────────────────────────────

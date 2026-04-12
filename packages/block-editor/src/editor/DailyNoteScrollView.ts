@@ -561,23 +561,31 @@ export class DailyNoteScrollView {
   }
 
   #handleCrossDayEnter(cs: CrossDaySelection): void {
-    this.#handleCrossDayDeletion(cs)
+    const { startBlockId, startOffset, endBlockId, endOffset } = cs
+    this.#history.batch(
+      () => { this.#handleCrossDayDeletion(cs) },
+      { postUndo: () => this.#restoreCrossDayDomSelection(startBlockId, startOffset, endBlockId, endOffset) },
+    )
   }
 
   #handleCrossDayCharInput(cs: CrossDaySelection, char: string): void {
-    this.#history.batch(() => {
-      const cursor = this.#handleCrossDayDeletion(cs)
-      // After the deletion+merge, the cursor is in the start day's last block.
-      const stateBefore = cs.startDay.blocks
-      const block = stateBefore.getBlock(cursor.blockId)
-      const newText = block.getText().insert(cursor.offset, char)
-      const newCursor = new BlockOffset(cursor.blockId, cursor.offset + 1)
-      cs.startDay.blocks = stateBefore.update(cursor.blockId, newText)
-      cs.startDay.render(newCursor)
-      const charChanges = Blocks.diff(stateBefore, cs.startDay.blocks)
-      cs.startDay.dispatchChanges(charChanges)
-      this.#sectionHistories.get(cs.startDay.date)?.add(stateBefore, charChanges, null, newCursor)
-    })
+    const { startBlockId, startOffset, endBlockId, endOffset } = cs
+    this.#history.batch(
+      () => {
+        const cursor = this.#handleCrossDayDeletion(cs)
+        // After the deletion+merge, the cursor is in the start day's last block.
+        const stateBefore = cs.startDay.blocks
+        const block = stateBefore.getBlock(cursor.blockId)
+        const newText = block.getText().insert(cursor.offset, char)
+        const newCursor = new BlockOffset(cursor.blockId, cursor.offset + 1)
+        cs.startDay.blocks = stateBefore.update(cursor.blockId, newText)
+        cs.startDay.render(newCursor)
+        const charChanges = Blocks.diff(stateBefore, cs.startDay.blocks)
+        cs.startDay.dispatchChanges(charChanges)
+        this.#sectionHistories.get(cs.startDay.date)?.add(stateBefore, charChanges, null, newCursor)
+      },
+      { postUndo: () => this.#restoreCrossDayDomSelection(startBlockId, startOffset, endBlockId, endOffset) },
+    )
   }
 
   #handleBlur(): void {
